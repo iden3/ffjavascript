@@ -23,5 +23,8 @@
   "bugs": {
     "url": "https://github.com/iden3/ffjs/issues"
   },
-  "homepage": "https://github.com/iden3/ffjs#readme"
+  "homepage": "https://github.com/iden3/ffjs#readme",
+  "dependencies": {
+    "big-integer": "^1.6.48"
+  }
 }
