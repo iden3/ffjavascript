@@ -1,5 +1,5 @@
 {
-  "name": "ffjs",
+  "name": "ffjavascript",
   "version": "0.0.1",
   "description": "Finite Field Library in Javascript",
   "main": "index.js",

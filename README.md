@@ -1,4 +1,4 @@
-# ffjs
+# ffjavascript
 Finite Field Library in Javascript
 
 ## License
