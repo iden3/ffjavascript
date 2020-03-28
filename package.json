@@ -1,6 +1,6 @@
 {
   "name": "ffjavascript",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Finite Field Library in Javascript",
   "main": "index.js",
   "scripts": {
