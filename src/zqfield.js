@@ -72,40 +72,44 @@ module.exports = class ZqField {
         return a.times(b).mod(this.p);
     }
 
+    mulScalar(base, s) {
+        return base.times(s).mod(this.p);
+    }
+
     square(a) {
         return a.square().mod(this.p);
     }
 
     eq(a, b) {
-        return a.eq(b) ? bigInt.one : bigInt.zero;
+        return a.eq(b);
     }
 
     neq(a, b) {
-        return a.neq(b) ? bigInt.one : bigInt.zero;
+        return a.neq(b);
     }
 
     lt(a, b) {
         const aa = a.gt(this.half) ? a.minus(this.p) : a;
         const bb = b.gt(this.half) ? b.minus(this.p) : b;
-        return aa.lt(bb) ? bigInt.one : bigInt.zero;
+        return aa.lt(bb);
     }
 
     gt(a, b) {
         const aa = a.gt(this.half) ? a.minus(this.p) : a;
         const bb = b.gt(this.half) ? b.minus(this.p) : b;
-        return aa.gt(bb) ? bigInt.one : bigInt.zero;
+        return aa.gt(bb);
     }
 
     leq(a, b) {
         const aa = a.gt(this.half) ? a.minus(this.p) : a;
         const bb = b.gt(this.half) ? b.minus(this.p) : b;
-        return aa.leq(bb) ? bigInt.one : bigInt.zero;
+        return aa.leq(bb);
     }
 
     geq(a, b) {
         const aa = a.gt(this.half) ? a.minus(this.p) : a;
         const bb = b.gt(this.half) ? b.minus(this.p) : b;
-        return aa.geq(bb) ? bigInt.one : bigInt.zero;
+        return aa.geq(bb);
     }
 
     div(a, b) {
@@ -240,6 +244,10 @@ module.exports = class ZqField {
             n = n.shiftRight(8);
         }
         return res.mod(this.p);
+    }
+
+    toString(a, base) {
+        return a.toString(base);
     }
 
 };
