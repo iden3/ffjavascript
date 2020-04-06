@@ -154,6 +154,40 @@ class GCurve {
         }
     }
 
+    multiAffine(arr) {
+        const keys = Object.keys(arr);
+        const F = this.F;
+        const accMul = new Array(keys.length+1);
+        accMul[0] = F.one;
+        for (let i = 0; i< keys.length; i++) {
+            if (F.eq(arr[keys[i]][2], F.zero)) {
+                accMul[i+1] = accMul[i];
+            } else {
+                accMul[i+1] = F.mul(accMul[i], arr[keys[i]][2]);
+            }
+        }
+
+        accMul[keys.length] = F.inv(accMul[keys.length]);
+
+        for (let i = keys.length-1; i>=0; i--) {
+            if (F.eq(arr[keys[i]][2], F.zero)) {
+                accMul[i] = accMul[i+1];
+                arr[keys[i]] = this.zero;
+            } else {
+                const Z_inv = F.mul(accMul[i], accMul[i+1]);
+                accMul[i] = F.mul(arr[keys[i]][2], accMul[i+1]);
+
+                const Z2_inv = F.square(Z_inv);
+                const Z3_inv = F.mul(Z2_inv, Z_inv);
+
+                arr[keys[i]][0] = F.mul(arr[keys[i]][0],Z2_inv);
+                arr[keys[i]][1] = F.mul(arr[keys[i]][1],Z3_inv);
+                arr[keys[i]][2] = F.one;
+            }
+        }
+
+    }
+
     eq(p1, p2) {
         const F = this.F;
 

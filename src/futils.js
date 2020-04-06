@@ -18,7 +18,57 @@
 */
 
 const bigInt = require("big-integer");
+const assert = require("assert");
 
+function naf(n) {
+    let E = n;
+    const res = [];
+    while (E.gt(bigInt.zero)) {
+        if (E.isOdd()) {
+            const z = 2 - E.mod(4).toJSNumber();
+            res.push( z );
+            E = E.minus(z);
+        } else {
+            res.push( 0 );
+        }
+        E = E.shiftRight(1);
+    }
+    return res;
+}
+
+
+exports.mulScalar = (F, base, e) => {
+    let res;
+
+    e = bigInt(e);
+    if (e.eq(bigInt.zero)) return F.zero;
+
+    const n = naf(e);
+
+    if (n[n.length-1] == 1) {
+        res = base;
+    } else if (n[n.length-1] == -1) {
+        res = F.neg(base);
+    } else {
+        assert(false);
+    }
+
+    for (let i=n.length-2; i>=0; i--) {
+
+        res = F.double(res);
+
+        if (n[i] == 1) {
+            res = F.add(res, base);
+        } else if (n[i] == -1) {
+            res = F.sub(res, base);
+        }
+    }
+
+    return res;
+};
+
+
+/*
 exports.mulScalar = (F, base, e) =>{
     let res = F.zero;
     let rem = bigInt(e);
@@ -34,7 +84,7 @@ exports.mulScalar = (F, base, e) =>{
 
     return res;
 };
-
+*/
 
 exports.exp = (F, base, e) =>{
     let res = F.one;
