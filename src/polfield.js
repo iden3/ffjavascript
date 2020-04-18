@@ -24,19 +24,12 @@
     by the array [ p0, p1, p2, ... , pn ].
  */
 
-const bigInt = require("big-integer");
-
 class PolField {
     constructor (F) {
         this.F = F;
 
-        const q = this.F.p;
-        let rem = q.minus(bigInt(1));
-        let s = 0;
-        while (!rem.isOdd()) {
-            s ++;
-            rem = rem.shiftRight(1);
-        }
+        let rem = F.t;
+        let s = F.s;
 
         const five = this.F.add(this.F.add(this.F.two, this.F.two), this.F.one);
 
@@ -464,12 +457,12 @@ class PolField {
 
     computeVanishingPolinomial(bits, t) {
         const m = 1 << bits;
-        return this.F.sub(this.F.pow(t, bigInt(m)), this.F.one);
+        return this.F.sub(this.F.pow(t, m), this.F.one);
     }
 
     evaluateLagrangePolynomials(bits, t) {
         const m= 1 << bits;
-        const tm = this.F.pow(t, bigInt(m));
+        const tm = this.F.pow(t, m);
         const u= new Array(m).fill(this.F.zero);
         this._setRoots(bits);
         const omega = this.w[bits];
@@ -485,7 +478,7 @@ class PolField {
 
         const z = this.F.sub(tm, this.F.one);
 //        let l = this.F.mul(z,  this.F.pow(this.F.twoinv, m));
-        let l = this.F.mul(z,  this.F.inv(bigInt(m)));
+        let l = this.F.mul(z,  this.F.inv(this.F.e(m)));
         for (let i = 0; i < m; i++) {
             u[i] = this.F.mul(l, this.F.inv(this.F.sub(t,this.roots[bits][i])));
             l = this.F.mul(l, omega);

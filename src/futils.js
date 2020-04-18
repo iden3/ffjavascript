@@ -17,33 +17,16 @@
     snarkjs. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const bigInt = require("big-integer");
+const Scalar = require("./scalar.js");
 const assert = require("assert");
-
-function naf(n) {
-    let E = n;
-    const res = [];
-    while (E.gt(bigInt.zero)) {
-        if (E.isOdd()) {
-            const z = 2 - E.mod(4).toJSNumber();
-            res.push( z );
-            E = E.minus(z);
-        } else {
-            res.push( 0 );
-        }
-        E = E.shiftRight(1);
-    }
-    return res;
-}
 
 
 exports.mulScalar = (F, base, e) => {
     let res;
 
-    e = bigInt(e);
-    if (e.eq(bigInt.zero)) return F.zero;
+    if (Scalar.isZero(e)) return F.zero;
 
-    const n = naf(e);
+    const n = Scalar.naf(e);
 
     if (n[n.length-1] == 1) {
         res = base;
@@ -86,18 +69,27 @@ exports.mulScalar = (F, base, e) =>{
 };
 */
 
-exports.exp = (F, base, e) =>{
-    let res = F.one;
-    let rem = bigInt(e);
-    let exp = base;
 
-    while (! rem.eq(bigInt.zero)) {
-        if (rem.and(bigInt.one).eq(bigInt.one)) {
-            res = F.mul(res, exp);
+exports.exp = (F, base, e) => {
+
+    if (Scalar.isZero(e)) return F.one;
+
+    const n = Scalar.bits(e);
+
+    if (n.legth==0) return F.one;
+
+    let res = base;
+
+    for (let i=n.length-2; i>=0; i--) {
+
+        res = F.square(res);
+
+        if (n[i]) {
+            res = F.mul(res, base);
         }
-        exp = F.square(exp);
-        rem = rem.shiftRight(1);
     }
 
     return res;
 };
+
+

@@ -19,18 +19,18 @@
 
 const chai = require("chai");
 
-const bigInt = require("big-integer");
-const ZqField = require("../src/zqfield");
+const Scalar = require("../src/scalar.js");
+const ZqField = require("../src/f1field.js");
 const RatField = require("../src/ratfield.js");
 
-const q  = bigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+const q  = Scalar.fromString("21888242871839275222246405745257275088548364400416034343698204186575808495617");
 const Z = new ZqField(q);
 const R = new RatField(Z);
 
 const assert = chai.assert;
 
 function r(a,b) {
-    return [bigInt(a), bigInt(b)];
+    return [Z.e(a), Z.e(b)];
 }
 
 
@@ -71,11 +71,11 @@ describe("Rational zq Field", () => {
     it("Should affine", () => {
         const a = r(12,4);
         const aa = R.affine(a);
-        assert(Z.eq( aa[0], bigInt(3)));
+        assert(Z.eq( aa[0], Z.e(3)));
         assert(Z.eq( aa[1], Z.one));
     });
     it("Should convert from Z to R", () => {
-        const vz = bigInt(34);
+        const vz = Z.e(34);
         const vr = R.fromF(vz);
 
         assert(R.eq( vr, r(34,1)));
@@ -84,6 +84,6 @@ describe("Rational zq Field", () => {
         const vr = r(32, 2);
         const vz = R.toF(vr);
 
-        assert(Z.eq( vz, bigInt(16)));
+        assert(Z.eq( vz, Z.e(16)));
     });
 });

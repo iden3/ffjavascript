@@ -21,12 +21,15 @@ module.exports = class ZqField {
     constructor(p) {
         this.one = bigInt.one;
         this.zero = bigInt.zero;
-        this.p = p;
-        this.minusone = p.minus(bigInt.one);
+        this.p = bigInt(p);
+        this.minusone = this.p.minus(bigInt.one);
         this.two = bigInt(2);
-        this.half = p.shiftRight(1);
-        this.bitLength = p.bitLength();
+        this.half = this.p.shiftRight(1);
+        this.bitLength = this.p.bitLength();
         this.mask = bigInt.one.shiftLeft(this.bitLength).minus(bigInt.one);
+
+        this.n64 = Math.floor((this.bitLength - 1) / 64)+1;
+        this.R = bigInt.one.shiftLeft(this.n64*64);
 
         const e = this.minusone.shiftRight(this.one);
         this.nqr = this.two;
@@ -45,6 +48,14 @@ module.exports = class ZqField {
         }
 
         this.nqr_to_t = this.pow(this.nqr, this.t);
+    }
+
+    e(a,b) {
+
+        const res = bigInt(a,b);
+
+        return this.normalize(res);
+
     }
 
     add(a, b) {
@@ -73,7 +84,7 @@ module.exports = class ZqField {
     }
 
     mulScalar(base, s) {
-        return base.times(s).mod(this.p);
+        return base.times(bigInt(s)).mod(this.p);
     }
 
     square(a) {
@@ -247,8 +258,21 @@ module.exports = class ZqField {
     }
 
     toString(a, base) {
-        return a.toString(base);
+        let vs;
+        if (!a.lesserOrEquals(this.p.shiftRight(bigInt(1)))) {
+            const v = this.p.minus(a);
+            vs = "-"+v.toString(base);
+        } else {
+            vs = a.toString(base);
+        }
+
+        return vs;
     }
+
+    isZero(a) {
+        return a.isZero();
+    }
+
 
 };
 

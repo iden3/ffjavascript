@@ -19,7 +19,7 @@
 
 const fUtils = require("./futils.js");
 
-class GCurve {
+class EC {
 
     constructor(F, g) {
         this.F = F;
@@ -216,5 +216,5 @@ class GCurve {
 
 }
 
-module.exports = GCurve;
+module.exports = EC;
 
