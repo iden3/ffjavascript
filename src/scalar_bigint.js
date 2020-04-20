@@ -2,8 +2,18 @@ const bigInt = require("big-integer");
 const assert = require("assert");
 
 module.exports.fromString = function fromString(s, radix) {
-    return bigInt(s,radix);
+    if (typeof s == "string") {
+        if (s.slice(0,2) == "0x") {
+            return bigInt(s.slice(2), 16);
+        } else {
+            return bigInt(s,radix);
+        }
+    } else {
+        return bigInt(s, radix);
+    }
 };
+
+module.exports.e = module.exports.fromString;
 
 module.exports.fromArray = function fromArray(a, radix) {
     return bigInt.fromArray(a, radix);
@@ -77,10 +87,6 @@ module.exports.toArray = function(s, radix) {
     return bigInt(s).toArray(radix);
 };
 
-module.exports.e = function(a) {
-    return bigInt(a);
-};
-
 module.exports.add = function(a, b) {
     return bigInt(a).add(bigInt(b));
 };
@@ -99,6 +105,14 @@ module.exports.mul = function(a, b) {
 
 module.exports.square = function(a) {
     return bigInt(a).square();
+};
+
+module.exports.pow = function(a, b) {
+    return bigInt(a).pow(bigInt(b));
+};
+
+module.exports.abs = function(a) {
+    return bigInt(a).abs();
 };
 
 module.exports.div = function(a, b) {

@@ -6,9 +6,15 @@ module.exports.fromString = function fromString(s, radix) {
     if ((!radix)||(radix==10)) {
         return BigInt(s);
     } else if (radix==16) {
-        return BigInt("0x"+s);
+        if (s.slice(0,2) == "0x") {
+            return BigInt(s);
+        } else {
+            return BigInt("0x"+s);
+        }
     }
 };
+
+module.exports.e = module.exports.fromString;
 
 module.exports.fromArray = function fromArray(a, radix) {
     let acc =0n;
@@ -96,10 +102,6 @@ module.exports.toArray = function(s, radix) {
 };
 
 
-module.exports.e = function(a) {
-    return BigInt(a);
-};
-
 module.exports.add = function(a, b) {
     return BigInt(a) + BigInt(b);
 };
@@ -118,6 +120,14 @@ module.exports.mul = function(a, b) {
 
 module.exports.square = function(a) {
     return BigInt(a) * BigInt(a);
+};
+
+module.exports.pow = function(a, b) {
+    return BigInt(a) ** BigInt(b);
+};
+
+module.exports.abs = function(a) {
+    return BigInt(a) >= 0 ? BigInt(a) : -BigInt(a);
 };
 
 module.exports.div = function(a, b) {
@@ -164,15 +174,15 @@ module.exports.bxor = function(a, b) {
     return BigInt(a) ^ BigInt(b);
 };
 
-module.exports.band = function(a, b) {
+module.exports.land = function(a, b) {
     return BigInt(a) && BigInt(b);
 };
 
-module.exports.bor = function(a, b) {
+module.exports.lor = function(a, b) {
     return BigInt(a) || BigInt(b);
 };
 
-module.exports.bnot = function(a) {
+module.exports.lnot = function(a) {
     return !BigInt(a);
 };
 
