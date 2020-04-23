@@ -36,16 +36,20 @@ module.exports.unstringifyBigInts = function unstringifyBigInts(o) {
 module.exports.beBuff2int = function beBuff2int(buff) {
     let res = 0n;
     let i = buff.length;
+    let offset = 0;
     while (i>0) {
         if (i >= 4) {
             i -= 4;
-            res += BigInt(buff.readUInt32BE(i)) << BigInt( i*8);
+            res += BigInt(buff.readUInt32BE(i)) << BigInt(offset*8);
+            offset += 4;
         } else if (i >= 2) {
             i -= 2;
-            res += BigInt(buff.readUInt16BE(i)) << BigInt( i*8);
+            res += BigInt(buff.readUInt16BE(i)) << BigInt(offset*8);
+            offset += 2;
         } else {
             i -= 1;
-            res += BigInt(buff.readUInt8(i)) << BigInt( i*8);
+            res += BigInt(buff.readUInt8(i)) << BigInt(offset*8);
+            offset += 1;
         }
     }
     return res;
