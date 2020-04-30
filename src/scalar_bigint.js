@@ -79,7 +79,7 @@ module.exports.bits = function naf(n) {
 };
 
 module.exports.toNumber = function(s) {
-    assert(s.lt(bigInt("100000000", 16)));
+    assert(s.lt(bigInt("9007199254740992", 10)));
     return s.toJSNumber();
 };
 

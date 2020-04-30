@@ -86,7 +86,7 @@ module.exports.bits = function naf(n) {
 };
 
 module.exports.toNumber = function(s) {
-    assert(s<0x100000000n);
+    assert(s<BigInt(Number.MAX_SAFE_INTEGER + 1));
     return Number(s);
 };
 
