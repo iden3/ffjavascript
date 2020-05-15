@@ -21,10 +21,17 @@ const fUtils = require("./futils.js");
 
 class F3Field {
     constructor(F, nonResidue) {
+        this.type="F3";
         this.F = F;
         this.zero = [this.F.zero, this.F.zero, this.F.zero];
         this.one = [this.F.one, this.F.zero, this.F.zero];
+        this.negone = this.neg(this.one);
         this.nonResidue = nonResidue;
+        this.m = F.m*3;
+        this.p = F.p;
+        this.n64 = F.n64*2;
+        this.n32 = this.n64*2;
+        this.n8 = this.n64*8;
     }
 
     _mulByNonResidue(a) {
@@ -171,6 +178,102 @@ class F3Field {
     toString(a) {
         return `[ ${this.F.toString(a[0])} , ${this.F.toString(a[1])}, ${this.F.toString(a[2])} ]`;
     }
+
+    fromRng(rng) {
+        const c0 = this.F.fromRng(rng);
+        const c1 = this.F.fromRng(rng);
+        const c2 = this.F.fromRng(rng);
+        return [c0, c1, c2];
+    }
+
+    gt(a, b) {
+        if (this.F.gt(a[0], b[0])) return true;
+        if (this.F.gt(b[0], a[0])) return false;
+        if (this.F.gt(a[1], b[1])) return true;
+        if (this.F.gt(b[1], a[1])) return false;
+        if (this.F.gt(a[2], b[2])) return true;
+        return false;
+    }
+
+
+    geq(a, b) {
+        return this.gt(a, b) || this.eq(a, b);
+    }
+
+    lt(a, b) {
+        return !this.geq(a,b);
+    }
+
+    leq(a, b) {
+        return !this.gt(a,b);
+    }
+
+    neq(a, b) {
+        return !this.eq(a,b);
+    }
+
+    random() {
+        return [this.F.random(), this.F.random(), this.F.random()];
+    }
+
+
+    toRprLE(buff, o, e) {
+        this.F.toRprLE(buff, o, e[0]);
+        this.F.toRprLE(buff, o+this.F.n8, e[1]);
+        this.F.toRprLE(buff, o+this.F.n8*2, e[2]);
+    }
+
+    toRprBE(buff, o, e) {
+        this.F.toRprBE(buff, o, e[2]);
+        this.F.toRprBE(buff, o+this.F.n8, e[1]);
+        this.F.toRprBE(buff, o+this.F.n8*2, e[0]);
+    }
+
+    toRprLEM(buff, o, e) {
+        this.F.toRprLEM(buff, o, e[0]);
+        this.F.toRprLEM(buff, o+this.F.n8, e[1]);
+        this.F.toRprLEM(buff, o+this.F.n8*2, e[2]);
+    }
+
+
+    toRprBEM(buff, o, e) {
+        this.F.toRprBEM(buff, o, e[2]);
+        this.F.toRprBEM(buff, o+this.F.n8, e[1]);
+        this.F.toRprBEM(buff, o+this.F.n8*2, e[0]);
+    }
+
+    fromRprLE(buff, o) {
+        o = o || 0;
+        const c0 = this.F.fromRprLE(buff, o);
+        const c1 = this.F.fromRprLE(buff, o+this.n8);
+        const c2 = this.F.fromRprLE(buff, o+this.n8*2);
+        return [c0, c1, c2];
+    }
+
+    fromRprBE(buff, o) {
+        o = o || 0;
+        const c2 = this.F.fromRprBE(buff, o);
+        const c1 = this.F.fromRprBE(buff, o+this.n8);
+        const c0 = this.F.fromRprBE(buff, o+this.n8*2);
+        return [c0, c1, c2];
+    }
+
+    fromRprLEM(buff, o) {
+        o = o || 0;
+        const c0 = this.F.fromRprLEM(buff, o);
+        const c1 = this.F.fromRprLEM(buff, o+this.n8);
+        const c2 = this.F.fromRprLEM(buff, o+this.n8*2);
+        return [c0, c1, c2];
+    }
+
+    fromRprBEM(buff, o) {
+        o = o || 0;
+        const c2 = this.F.fromRprBEM(buff, o);
+        const c1 = this.F.fromRprBEM(buff, o+this.n8);
+        const c0 = this.F.fromRprBEM(buff, o+this.n8*2);
+        return [c0, c1, c2];
+    }
+
 }
 
 module.exports = F3Field;

@@ -1,5 +1,6 @@
 const bigInt = require("big-integer");
 const assert = require("assert");
+const buildSqrt = require("./fsqrt");
 
 function getRandomByte() {
     if (typeof window !== "undefined") { // Browser
@@ -19,28 +20,33 @@ function getRandomByte() {
 
 module.exports = class ZqField {
     constructor(p) {
+        this.type="F1";
         this.one = bigInt.one;
         this.zero = bigInt.zero;
         this.p = bigInt(p);
-        this.minusone = this.p.minus(bigInt.one);
+        this.m = 1;
+        this.negone = this.p.minus(bigInt.one);
         this.two = bigInt(2);
         this.half = this.p.shiftRight(1);
         this.bitLength = this.p.bitLength();
         this.mask = bigInt.one.shiftLeft(this.bitLength).minus(bigInt.one);
 
         this.n64 = Math.floor((this.bitLength - 1) / 64)+1;
+        this.n32 = this.n64*2;
+        this.n8 = this.n64*8;
         this.R = bigInt.one.shiftLeft(this.n64*64);
-
-        const e = this.minusone.shiftRight(this.one);
+        this.Ri = this.inv(this.R);
+/*
+        const e = this.negone.shiftRight(this.one);
         this.nqr = this.two;
         let r = this.pow(this.nqr, e);
-        while (!r.equals(this.minusone)) {
+        while (!r.equals(this.negone)) {
             this.nqr = this.nqr.add(this.one);
             r = this.pow(this.nqr, e);
         }
 
         this.s = this.zero;
-        this.t = this.minusone;
+        this.t = this.negone;
 
         while (!this.t.isOdd()) {
             this.s = this.s.add(this.one);
@@ -48,6 +54,8 @@ module.exports = class ZqField {
         }
 
         this.nqr_to_t = this.pow(this.nqr, this.t);
+*/
+        buildSqrt(this);
     }
 
     e(a,b) {
@@ -200,12 +208,12 @@ module.exports = class ZqField {
         return a.isZero() ? bigInt.one : bigInt.zero;
     }
 
-    sqrt(n) {
+    sqrt_old(n) {
 
         if (n.equals(this.zero)) return this.zero;
 
         // Test that have solution
-        const res = this.pow(n, this.minusone.shiftRight(this.one));
+        const res = this.pow(n, this.negone.shiftRight(this.one));
         if (!res.equals(this.one)) return null;
 
         let m = parseInt(this.s);
@@ -271,6 +279,19 @@ module.exports = class ZqField {
 
     isZero(a) {
         return a.isZero();
+    }
+
+    fromRng(rng) {
+        let v;
+        do {
+            v = bigInt(0);
+            for (let i=0; i<this.n64; i++) {
+                v = v.add(v, rng.nextU64().shiftLeft(64*i));
+            }
+            v = v.and(this.mask);
+        } while (v.geq(this.p));
+        v = v.times(this.Ri).mod(this.q);
+        return v;
     }
 
 

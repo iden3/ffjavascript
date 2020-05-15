@@ -22,11 +22,18 @@ const F1Field = require("./f1field");
 const F2Field = require("./f2field");
 const F3Field = require("./f3field");
 const EC = require("./ec.js");
+const buildEngine = require("./engine");
+const bn128_wasm = require("wasmsnark").bn128_wasm;
+
+
+let engine = null;
+
 
 class BN128 {
 
     constructor() {
 
+        this.name = "bn128";
         this.q = Scalar.fromString("21888242871839275222246405745257275088696311157297823662689037894645226208583");
         this.r = Scalar.fromString("21888242871839275222246405745257275088548364400416034343698204186575808495617");
 
@@ -53,6 +60,10 @@ class BN128 {
         this.G1 = new EC(this.F1, this.g1);
         this.G2 = new EC(this.F2, this.g2);
 
+        this.G1.b = this.F1.e(3);
+        this.G2.b = this.F2.div([this.F1.e(3),this.F1.e(0)], [this.F1.e(9), this.F1.e(1)]);
+        this.G2.cofactor = Scalar.e("0x30644e72e131a029b85045b68181585e06ceecda572a2489345f2299c0f9fa8d");
+
         this.nonResidueF6 = [ this.F1.e("9"), this.F1.e("1") ];
 
         this.F6 = new F3Field(this.F2, this.nonResidueF6);
@@ -68,6 +79,54 @@ class BN128 {
 
         this._preparePairing();
 
+        this.G1.batchApplyKey = this.batchApplyKeyG1.bind(this);
+        this.G2.batchApplyKey = this.batchApplyKeyG2.bind(this);
+        this.G1.batchLEMtoU = this.batchLEMtoUG1.bind(this);
+        this.G2.batchLEMtoU = this.batchLEMtoUG2.bind(this);
+        this.G1.batchLEMtoC = this.batchLEMtoCG1.bind(this);
+        this.G2.batchLEMtoC = this.batchLEMtoCG2.bind(this);
+    }
+
+    async loadEngine() {
+        if (!engine) {
+            engine = await buildEngine(this, bn128_wasm, true);
+        }
+    }
+
+    async batchApplyKeyG1(buff, first, inc) {
+        await this.loadEngine();
+        const res = await engine.batchApplyKey("G1", buff, first, inc);
+        return res;
+    }
+
+    async batchApplyKeyG2(buff, first, inc) {
+        await this.loadEngine();
+        const res = await engine.batchApplyKey("G2", buff, first, inc);
+        return res;
+    }
+
+    async batchLEMtoUG1(buff) {
+        await this.loadEngine();
+        const res = await engine.batchConvert("G1", "LEM", "U", buff );
+        return res;
+    }
+
+    async batchLEMtoUG2(buff) {
+        await this.loadEngine();
+        const res = await engine.batchConvert("G2", "LEM", "U",buff);
+        return res;
+    }
+
+    async batchLEMtoCG1(buff) {
+        await this.loadEngine();
+        const res = await engine.batchConvert("G1", "LEM", "C", buff);
+        return res;
+    }
+
+    async batchLEMtoCG2(buff) {
+        await this.loadEngine();
+        const res = await engine.batchConvert("G2", "LEM", "C", buff);
+        return res;
     }
 
     _preparePairing() {
@@ -253,7 +312,7 @@ class BN128 {
     finalExponentiation(elt) {
         // TODO: There is an optimization in FF
 
-        const res = this.F12.exp(elt,this.final_exponent);
+        const res = this.F12.pow(elt,this.final_exponent);
 
         return res;
     }
@@ -307,7 +366,7 @@ class BN128 {
 
         const D = this.F2.sub( X1, this.F2.mul(x2,Z1) );  // D = X1 - X2*Z1
 
-//        console.log("Y: "+ A[0].affine(this.q).toString(16));
+        // console.log("Y: "+ A[0].affine(this.q).toString(16));
 
         const E = this.F2.sub( Y1, this.F2.mul(y2,Z1) );  // E = Y1 - Y2*Z1
         const F = this.F2.square(D);                      // F = D^2
@@ -342,14 +401,14 @@ class BN128 {
     _mul_by_024(a, ell_0, ell_VW, ell_VV) {
 
         //  Old implementation
-/*
+        /*
         const b = [
             [ell_0, this.F2.zero, ell_VV],
             [this.F2.zero, ell_VW, this.F2.zero]
         ];
 
         return this.F12.mul(a,b);
-*/
+        */
 
         // This is a new implementation,
         //  But it does not look worthy

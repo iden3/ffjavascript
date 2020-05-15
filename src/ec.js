@@ -17,7 +17,27 @@
     snarkjs. If not, see <https://www.gnu.org/licenses/>.
 */
 
+
+
 const fUtils = require("./futils.js");
+const Scalar = require("./scalar");
+const assert = require("assert");
+
+
+function isGreatest(F, a) {
+    if (Array.isArray(a)) {
+        for (let i=a.length-1; i>=0; i--) {
+            if (!F.F.isZero(a[i])) {
+                return isGreatest(F.F, a[i]);
+            }
+        }
+        return 0;
+    } else {
+        const na = F.neg(a);
+        return Scalar.gt(a, na);
+    }
+}
+
 
 class EC {
 
@@ -138,8 +158,10 @@ class EC {
 
     affine(p) {
         const F = this.F;
-        if (this.eq(p, this.zero)) {
+        if (this.isZero(p)) {
             return this.zero;
+        } else if (F.eq(p[2], F.one)) {
+            return p;
         } else {
             const Z_inv = F.inv(p[2]);
             const Z2_inv = F.square(Z_inv);
@@ -209,9 +231,163 @@ class EC {
         return (F.eq(U1,U2) && F.eq(S1,S2));
     }
 
+    isZero(p) {
+        return this.F.isZero(p[2]);
+    }
+
     toString(p) {
         const cp = this.affine(p);
         return `[ ${this.F.toString(cp[0])} , ${this.F.toString(cp[1])} ]`;
+    }
+
+    fromRng(rng) {
+        const F = this.F;
+        let P = [];
+        let greatest;
+        do {
+            P[0] = F.fromRng(rng);
+            greatest = rng.nextBool();
+            const x3b = F.add(F.mul(F.square(P[0]), P[0]), this.b);
+            P[1] = F.sqrt(x3b);
+        } while ((P[1] == null)||(F.isZero[P]));
+
+        const s = isGreatest(F, P[1]);
+        if (greatest ^ s) P[1] = F.neg(P[1]);
+        P[2] = F.one;
+
+        if (this.cofactor) {
+            P = this.mulScalar(P, this.cofactor);
+        }
+
+        P = this.affine(P);
+
+        return P;
+
+    }
+
+    toRprLE(buff, o, p) {
+        p = this.affine(p);
+        if (this.isZero(p)) {
+            const BuffV = new Uint8Array(buff, o, this.F.n8*2);
+            BuffV.fill(0);
+            return;
+        }
+        this.F.toRprLE(buff, o, p[0]);
+        this.F.toRprLE(buff, o+this.F.n8, p[1]);
+    }
+
+    toRprBE(buff, o, p) {
+        p = this.affine(p);
+        if (this.isZero(p)) {
+            const BuffV = new Uint8Array(buff, o, this.F.n8*2);
+            BuffV.fill(0);
+            return;
+        }
+        this.F.toRprBE(buff, o, p[0]);
+        this.F.toRprBE(buff, o+this.F.n8, p[1]);
+    }
+
+    toRprLEM(buff, o, p) {
+        p = this.affine(p);
+        if (this.isZero(p)) {
+            const BuffV = new Uint8Array(buff, o, this.F.n8*2);
+            BuffV.fill(0);
+            return;
+        }
+        this.F.toRprLEM(buff, o, p[0]);
+        this.F.toRprLEM(buff, o+this.F.n8, p[1]);
+    }
+
+
+    toRprBEM(buff, o, p) {
+        p = this.affine(p);
+        if (this.isZero(p)) {
+            const BuffV = new Uint8Array(buff, o, this.F.n8*2);
+            BuffV.fill(0);
+            return;
+        }
+        this.F.toRprBEM(buff, o, p[0]);
+        this.F.toRprBEM(buff, o+this.F.n8, p[1]);
+    }
+
+    fromRprLE(buff, o) {
+        o = o || 0;
+        const x = this.F.fromRprLE(buff, o);
+        const y = this.F.fromRprLE(buff, o+this.F.n8);
+        if (this.F.isZero(x) && this.F.isZero(y)) {
+            return this.zero;
+        }
+        return [x, y, this.F.one];
+    }
+
+    fromRprBE(buff, o) {
+        o = o || 0;
+        const x = this.F.fromRprBE(buff, o);
+        const y = this.F.fromRprBE(buff, o+this.F.n8);
+        if (this.F.isZero(x) && this.F.isZero(y)) {
+            return this.zero;
+        }
+        return [x, y, this.F.one];
+    }
+
+    fromRprLEM(buff, o) {
+        o = o || 0;
+        const x = this.F.fromRprLEM(buff, o);
+        const y = this.F.fromRprLEM(buff, o+this.F.n8);
+        if (this.F.isZero(x) && this.F.isZero(y)) {
+            return this.zero;
+        }
+        return [x, y, this.F.one];
+    }
+
+    fromRprBEM(buff, o) {
+        o = o || 0;
+        const x = this.F.fromRprBEM(buff, o);
+        const y = this.F.fromRprBEM(buff, o+this.F.n8);
+        if (this.F.isZero(x) && this.F.isZero(y)) {
+            return this.zero;
+        }
+        return [x, y, this.F.one];
+    }
+
+    fromRprCompressed(buff, o) {
+        const F = this.F;
+        const v = new Uint8Array(buff, o, F.n8);
+        if (v[0] & 0x40) return this.zero;
+        const P = new Array(3);
+
+        const greatest = ((v[0] & 0x80) != 0);
+        v[0] = v[0] & 0x7F;
+        P[0] = F.fromRprBE(buff, o);
+        if (greatest) v[0] = v[0] | 0x80;  // set back again the old value
+
+        const x3b = F.add(F.mul(F.square(P[0]), P[0]), this.b);
+        P[1] = F.sqrt(x3b);
+
+        if (P[1] === null) {
+            assert(false, "Invalid Point!");
+        }
+
+        const s = isGreatest(F, P[1]);
+        if (greatest ^ s) P[1] = F.neg(P[1]);
+        P[2] = F.one;
+
+        return P;
+    }
+
+    toRprCompressed(buff, o, p) {
+        p = this.affine(p);
+        const v = new Uint8Array(buff, o, this.F.n8);
+        if (this.isZero(p)) {
+            v.fill(0);
+            v[0] = 0x40;
+            return;
+        }
+        this.F.toRprBE(buff, o, p[0]);
+
+        if (isGreatest(this.F, p[1])) {
+            v[0] = v[0] | 0x80;
+        }
     }
 
 }

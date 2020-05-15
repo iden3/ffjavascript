@@ -12,5 +12,6 @@ exports.EC = require("./src/ec");
 exports.bn128 = require("./src/bn128.js");
 
 exports.utils = require("./src/utils");
+exports.ChaCha = require("./src/chacha");
 
 

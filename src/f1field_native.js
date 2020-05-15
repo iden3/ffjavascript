@@ -2,6 +2,7 @@
 const assert = require("assert");
 const Scalar = require("./scalar");
 const futils = require("./futils");
+const buildSqrt = require("./fsqrt");
 
 function getRandomByte() {
     if (typeof window !== "undefined") { // Browser
@@ -21,28 +22,34 @@ function getRandomByte() {
 
 module.exports = class ZqField {
     constructor(p) {
+        this.type="F1";
         this.one = 1n;
         this.zero = 0n;
         this.p = BigInt(p);
-        this.minusone = this.p-1n;
+        this.m = 1;
+        this.negone = this.p-1n;
         this.two = 2n;
         this.half = this.p >> 1n;
         this.bitLength = Scalar.bitLength(this.p);
         this.mask = (1n << BigInt(this.bitLength)) - 1n;
 
         this.n64 = Math.floor((this.bitLength - 1) / 64)+1;
+        this.n32 = this.n64*2;
+        this.n8 = this.n64*8;
         this.R = this.e(1n << BigInt(this.n64*64));
-
-        const e = this.minusone >> 1n;
+        this.Ri = this.inv(this.R);
+/*
+        const e = this.negone >> 1n;
         this.nqr = this.two;
         let r = this.pow(this.nqr, e);
-        while (!this.eq(r, this.minusone)) {
+        while (!this.eq(r, this.negone)) {
             this.nqr = this.nqr + 1n;
             r = this.pow(this.nqr, e);
         }
 
+
         this.s = 0;
-        this.t = this.minusone;
+        this.t = this.negone;
 
         while ((this.t & 1n) == 0n) {
             this.s = this.s + 1;
@@ -50,6 +57,8 @@ module.exports = class ZqField {
         }
 
         this.nqr_to_t = this.pow(this.nqr, this.t);
+*/
+        buildSqrt(this);
     }
 
     e(a,b) {
@@ -219,12 +228,12 @@ module.exports = class ZqField {
         return (a) ? 0n : 1n;
     }
 
-    sqrt(n) {
+    sqrt_old(n) {
 
         if (n == 0n) return this.zero;
 
         // Test that have solution
-        const res = this.pow(n, this.minusone >> this.one);
+        const res = this.pow(n, this.negone >> this.one);
         if ( res != 1n ) return null;
 
         let m = this.s;
@@ -290,6 +299,19 @@ module.exports = class ZqField {
 
     isZero(a) {
         return a == 0n;
+    }
+
+    fromRng(rng) {
+        let v;
+        do {
+            v=0n;
+            for (let i=0; i<this.n64; i++) {
+                v += rng.nextU64() << BigInt(64 *i);
+            }
+            v &= this.mask;
+        } while (v >= this.p);
+        v = (v * this.Ri) % this.p;   // Convert from montgomery
+        return v;
     }
 
 };

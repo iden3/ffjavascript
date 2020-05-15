@@ -49,7 +49,7 @@ describe("F1 testing", () => {
         let b = F.sqrt(a);
         assert(F.eq(F.e(0), F.sqrt(F.e("0"))));
         assert(F.eq(b, F.e("2")));
-        assert(F.sqrt(F.nqr) === null);
+        // assert(F.sqrt(F.nqr) === null);
     });
 
     it("Should compute sqrt of 100 random numbers", () => {
@@ -236,5 +236,30 @@ describe("Pairing", () => {
 
             assert(bn128.F12.eq(res, bn128.F12.one)); */
         }
+    }).timeout(10000);
+    it("Should test rpr of F2", () => {
+        const P1 = [
+            [
+                bn128.F1.e("1b2327ce7815d3358fe89fd8e5695305ed23682db29569f549ab8f48cae1f1c4",16),
+                bn128.F1.e("1ed41ca6b3edc06237af648f845c270ff83bcde333f17863c1b71a43b271b46d",16)
+            ],
+            [
+                bn128.F1.e("122057912ab892abcf2e729f0f342baea3fe1b484840eb97c7d78cd7530f4ab5",16),
+                bn128.F1.e("2cb317fd40d56eeb17b0c1ff9443661a42ec00cea060012873b3f643f1a5bff8",16)
+            ],
+            [
+                bn128.F1.one,
+                bn128.F1.zero
+            ]
+        ];
+        const buff = new ArrayBuffer(64);
+        bn128.G2.toRprCompressed(buff, 0, P1);
+
+        const P2 = bn128.G2.fromRprCompressed(buff, 0);
+
+        console.log(P1[1][0].toString(16));
+        console.log(P2[1][0].toString(16));
+
+        assert(bn128.G2.eq(P1,P2));
     }).timeout(10000);
 });

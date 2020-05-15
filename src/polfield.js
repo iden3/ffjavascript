@@ -28,8 +28,8 @@ class PolField {
     constructor (F) {
         this.F = F;
 
-        let rem = F.t;
-        let s = F.s;
+        let rem = F.sqrt_t;
+        let s = F.sqrt_s;
 
         const five = this.F.add(this.F.add(this.F.two, this.F.two), this.F.one);
 
