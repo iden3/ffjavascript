@@ -71,7 +71,6 @@ class PolField {
                 rootsi[j] = r;
                 r = this.F.mul(r, this.w[i]);
             }
-
             this.roots[i] = rootsi;
         }
     }
@@ -261,7 +260,6 @@ class PolField {
         return resn;
 
     }
-
 
     _fft(pall, bits, offset, step) {
 
@@ -522,6 +520,5 @@ function __fft(PF, pall, bits, offset, step) {
 
     return out;
 }
-
 
 module.exports = PolField;

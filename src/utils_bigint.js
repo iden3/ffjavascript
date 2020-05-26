@@ -8,9 +8,10 @@ module.exports.stringifyBigInts = function stringifyBigInts(o) {
         return o.map(stringifyBigInts);
     } else if (typeof o == "object") {
         const res = {};
-        for (let k in o) {
+        const keys = Object.keys(o);
+        keys.forEach( (k) => {
             res[k] = stringifyBigInts(o[k]);
-        }
+        });
         return res;
     } else {
         return o;
@@ -24,9 +25,10 @@ module.exports.unstringifyBigInts = function unstringifyBigInts(o) {
         return o.map(unstringifyBigInts);
     } else if (typeof o == "object") {
         const res = {};
-        for (let k in o) {
+        const keys = Object.keys(o);
+        keys.forEach( (k) => {
             res[k] = unstringifyBigInts(o[k]);
-        }
+        });
         return res;
     } else {
         return o;

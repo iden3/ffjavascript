@@ -340,6 +340,17 @@ class EC {
         return [x, y, this.F.one];
     }
 
+    fromRprLEJM(buff, o) {
+        o = o || 0;
+        const x = this.F.fromRprLEM(buff, o);
+        const y = this.F.fromRprLEM(buff, o+this.F.n8);
+        const z = this.F.fromRprLEM(buff, o+this.F.n8*2);
+        if (this.F.isZero(x) && this.F.isZero(y)) {
+            return this.zero;
+        }
+        return [x, y, z];
+    }
+
     fromRprBEM(buff, o) {
         o = o || 0;
         const x = this.F.fromRprBEM(buff, o);
@@ -352,7 +363,7 @@ class EC {
 
     fromRprCompressed(buff, o) {
         const F = this.F;
-        const v = new Uint8Array(buff, o, F.n8);
+        const v = new Uint8Array(buff.buffer, o, F.n8);
         if (v[0] & 0x40) return this.zero;
         const P = new Array(3);
 
@@ -377,7 +388,7 @@ class EC {
 
     toRprCompressed(buff, o, p) {
         p = this.affine(p);
-        const v = new Uint8Array(buff, o, this.F.n8);
+        const v = new Uint8Array(buff.buffer, o, this.F.n8);
         if (this.isZero(p)) {
             v.fill(0);
             v[0] = 0x40;

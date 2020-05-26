@@ -21,6 +21,7 @@ const Scalar = require("./scalar");
 const F1Field = require("./f1field");
 const F2Field = require("./f2field");
 const F3Field = require("./f3field");
+const PolField = require("./polfield");
 const EC = require("./ec.js");
 const buildEngine = require("./engine");
 const bn128_wasm = require("wasmsnark").bn128_wasm;
@@ -69,7 +70,7 @@ class BN128 {
         this.F6 = new F3Field(this.F2, this.nonResidueF6);
         this.F12 = new F2Field(this.F6, this.nonResidueF6);
         this.Fr = new F1Field(this.r);
-
+        this.PFr = new PolField(this.Fr);
 
 
         const self = this;
@@ -85,11 +86,27 @@ class BN128 {
         this.G2.batchLEMtoU = this.batchLEMtoUG2.bind(this);
         this.G1.batchLEMtoC = this.batchLEMtoCG1.bind(this);
         this.G2.batchLEMtoC = this.batchLEMtoCG2.bind(this);
+        this.G1.batchUtoLEM = this.batchUtoLEMG1.bind(this);
+        this.G2.batchUtoLEM = this.batchUtoLEMG2.bind(this);
+        this.G1.batchCtoLEM = this.batchCtoLEMG1.bind(this);
+        this.G2.batchCtoLEM = this.batchCtoLEMG2.bind(this);
+        this.G1.ifft = this.ifftG1.bind(this);
+        this.G1.fft = this.fftG1.bind(this);
+        this.G2.ifft = this.ifftG2.bind(this);
+        this.G2.fft = this.fftG2.bind(this);
+
+        this.Fr.batchToMontgomery = this.batchToMontgomeryFr.bind(this);
+        this.Fr.batchFromMontgomery = this.batchFromMontgomeryFr.bind(this);
+        this.Fr.fft = this.fftFr.bind(this);
+        this.Fr.ifft = this.ifftFr.bind(this);
+
+        this.G1.multiExpAffine = this.multiExpAffineG1.bind(this);
+        this.G2.multiExpAffine = this.multiExpAffineG2.bind(this);
     }
 
     async loadEngine() {
         if (!engine) {
-            engine = await buildEngine(this, bn128_wasm, true);
+            engine = await buildEngine(this, bn128_wasm /* , true */ ); // Set single Trherad tot true to debug
         }
     }
 
@@ -107,27 +124,121 @@ class BN128 {
 
     async batchLEMtoUG1(buff) {
         await this.loadEngine();
-        const res = await engine.batchConvert("G1", "LEM", "U", buff );
+        // const res = await engine.batchConvert("G1", "LEM", "U", buff );
+        const res = await engine.batchConvert("g1m_batchLEMtoU", buff, this.F1.n8*2, this.F1.n8*2);
         return res;
     }
 
     async batchLEMtoUG2(buff) {
         await this.loadEngine();
-        const res = await engine.batchConvert("G2", "LEM", "U",buff);
+        // const res = await engine.batchConvert("G2", "LEM", "U",buff);
+        const res = await engine.batchConvert("g2m_batchLEMtoU", buff, this.F2.n8*2, this.F2.n8*2);
         return res;
     }
 
     async batchLEMtoCG1(buff) {
         await this.loadEngine();
-        const res = await engine.batchConvert("G1", "LEM", "C", buff);
+        // const res = await engine.batchConvert("G1", "LEM", "C", buff);
+        const res = await engine.batchConvert("g1m_batchLEMtoC", buff, this.F1.n8*2, this.F1.n8);
         return res;
     }
 
     async batchLEMtoCG2(buff) {
         await this.loadEngine();
-        const res = await engine.batchConvert("G2", "LEM", "C", buff);
+        // const res = await engine.batchConvert("G2", "LEM", "C", buff);
+        const res = await engine.batchConvert("g2m_batchLEMtoC", buff, this.F2.n8*2, this.F2.n8);
         return res;
     }
+/////
+
+    async batchUtoLEMG1(buff) {
+        await this.loadEngine();
+        // const res = await engine.batchConvert("G1", "LEM", "U", buff );
+        const res = await engine.batchConvert("g1m_batchUtoLEM", buff, this.F1.n8*2, this.F1.n8*2);
+        return res;
+    }
+
+    async batchUtoLEMG2(buff) {
+        await this.loadEngine();
+        // const res = await engine.batchConvert("G2", "LEM", "U",buff);
+        const res = await engine.batchConvert("g2m_batchUtoLEM", buff, this.F2.n8*2, this.F2.n8*2);
+        return res;
+    }
+
+    async batchCtoLEMG1(buff) {
+        await this.loadEngine();
+        // const res = await engine.batchConvert("G1", "LEM", "C", buff);
+        const res = await engine.batchConvert("g1m_batchCtoLEM", buff, this.F1.n8, this.F1.n8*2);
+        return res;
+    }
+
+    async batchCtoLEMG2(buff) {
+        await this.loadEngine();
+        // const res = await engine.batchConvert("G2", "LEM", "C", buff);
+        const res = await engine.batchConvert("g2m_batchCtoLEM", buff, this.F2.n8, this.F2.n8*2);
+        return res;
+    }
+
+    async batchToMontgomeryFr(buff) {
+        await this.loadEngine();
+        const res = await engine.batchConvert("frm_batchToMontgomery", buff, this.Fr.n8, this.Fr.n8);
+        return res;
+    }
+
+    async batchFromMontgomeryFr(buff) {
+        await this.loadEngine();
+        const res = await engine.batchConvert("frm_batchFromMontgomery", buff, this.Fr.n8, this.Fr.n8);
+        return res;
+    }
+
+    async fftG1(buff, log) {
+        await this.loadEngine();
+        const res = await engine.fft("G1", buff, false, log);
+        return res;
+    }
+
+    async ifftG1(buff, log) {
+        await this.loadEngine();
+        const res = await engine.fft("G1", buff, true, log);
+        return res;
+    }
+
+    async fftG2(buff, log) {
+        await this.loadEngine();
+        const res = await engine.fft("G2", buff, false, log);
+        return res;
+    }
+
+    async ifftG2(buff, log) {
+        await this.loadEngine();
+        const res = await engine.fft("G2", buff, true, log);
+        return res;
+    }
+
+    async fftFr(buff, log) {
+        await this.loadEngine();
+        const res = await engine.fft("Fr", buff, false, log);
+        return res;
+    }
+
+    async ifftFr(buff, log) {
+        await this.loadEngine();
+        const res = await engine.fft("Fr", buff, true, log);
+        return res;
+    }
+
+    async multiExpAffineG1(buffBases, buffScalars) {
+        await this.loadEngine();
+        const res = await engine.multiExpAffine("G1", buffBases, buffScalars);
+        return res;
+    }
+
+    async multiExpAffineG2(buffBases, buffScalars) {
+        await this.loadEngine();
+        const res = await engine.multiExpAffine("G2", buffBases, buffScalars);
+        return res;
+    }
+
 
     _preparePairing() {
         this.loopCount = Scalar.fromString("29793968203157093288");// CONSTANT
