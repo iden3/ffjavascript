@@ -604,8 +604,8 @@ class Engine {
         const self = this;
         const G = self.curve[groupName];
         const sBase = G.F.n8*2;
-        const sScalar = self.curve.Fr.n8;
         const nPoints = Math.floor(buffBases.byteLength / sBase);
+        const sScalar = Math.floor(buffScalars.byteLength / nPoints);
         assert( nPoints * sBase === buffBases.byteLength);
         assert( nPoints * sScalar === buffScalars.byteLength);
         const pointsPerChunk = Math.floor(nPoints/self.concurrency);
@@ -635,7 +635,7 @@ class Engine {
                     {var: 0},
                     {var: 1},
                     {val: sScalar},
-                    {val: nPoints},
+                    {val: n},
                     {var: 2}
                 ]},
                 {cmd: "GET", out: 0, var: 2, len: G.F.n8*3}
