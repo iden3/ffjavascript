@@ -298,6 +298,18 @@ class EC {
         this.F.toRprLEM(buff, o+this.F.n8, p[1]);
     }
 
+    toRprLEJM(buff, o, p) {
+        p = this.affine(p);
+        if (this.isZero(p)) {
+            const BuffV = new Uint8Array(buff, o, this.F.n8*2);
+            BuffV.fill(0);
+            return;
+        }
+        this.F.toRprLEM(buff, o, p[0]);
+        this.F.toRprLEM(buff, o+this.F.n8, p[1]);
+        this.F.toRprLEM(buff, o+2*this.F.n8, p[2]);
+    }
+
 
     toRprBEM(buff, o, p) {
         p = this.affine(p);

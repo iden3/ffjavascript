@@ -699,6 +699,82 @@ class Engine {
         return fullBuffOut;
     }
 
+    async pairingEq() {
+        const self = this;
+        const buffCt = new Uint8Array(self.curve.Gt.n8);
+        let nEqs;
+        if ((arguments.length % 2) == 1) {
+            self.curve.Gt.toRprLEM(buffCt, 0, arguments[arguments.length-1]);
+            nEqs = (arguments.length -1) /2;
+        } else {
+            self.curve.Gt.toRprLEM(buffCt, 0, self.curve.Gt.one);
+            nEqs = arguments.length /2;
+        }
+
+        const opPromises = [];
+        for (let i=0; i<nEqs; i++) {
+
+            const task = [];
+
+            const g1Buff = new Uint8Array(self.curve.G1.F.n8*3);
+            self.curve.G1.toRprLEJM(g1Buff, 0, arguments[i*2]);
+            task.push({cmd: "ALLOCSET", var: 0, buff: g1Buff});
+            task.push({cmd: "ALLOC", var: 1, len: self.curve.PrePSize});
+
+            const g2Buff = new Uint8Array(self.curve.G2.F.n8*3);
+            self.curve.G2.toRprLEJM(g2Buff, 0, arguments[i*2+1]);
+            task.push({cmd: "ALLOCSET", var: 2, buff: g2Buff});
+            task.push({cmd: "ALLOC", var: 3, len: self.curve.PreQSize});
+
+            task.push({cmd: "ALLOC", var: 4, len: self.curve.Gt.n8});
+
+            task.push({cmd: "CALL", fnName: self.curve.name + "_prepareG1", params: [
+                {var: 0},
+                {var: 1}
+            ]});
+
+            task.push({cmd: "CALL", fnName: self.curve.name + "_prepareG2", params: [
+                {var: 2},
+                {var: 3}
+            ]});
+
+            task.push({cmd: "CALL", fnName: self.curve.name + "_millerLoop", params: [
+                {var: 1},
+                {var: 3},
+                {var: 4}
+            ]});
+
+            task.push({cmd: "GET", out: 0, var: 4, len: self.curve.Gt.n8});
+
+            opPromises.push(
+                self.queueAction(task)
+            );
+
+        }
+
+
+        const result = await Promise.all(opPromises);
+
+        const oldAlloc = self.u32[0];
+        const pRes = self.alloc(self.curve.Gt.n8);
+        self.instance.exports.ftm_one(pRes);
+
+        for (let i=0; i<result.length; i++) {
+            const pMR = self.allocBuff(result[i][0]);
+            self.instance.exports.ftm_mul(pRes, pMR, pRes);
+        }
+        self.instance.exports[self.curve.name + "_finalExponentiation"](pRes, pRes);
+
+        const pCt = self.allocBuff(buffCt);
+
+        const r = !!self.instance.exports.ftm_eq(pRes, pCt);
+
+        self.u32[0] = oldAlloc;
+
+        return r;
+    }
+
+
 
 }
 

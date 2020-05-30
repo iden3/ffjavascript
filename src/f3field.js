@@ -29,7 +29,7 @@ class F3Field {
         this.nonResidue = nonResidue;
         this.m = F.m*3;
         this.p = F.p;
-        this.n64 = F.n64*2;
+        this.n64 = F.n64*3;
         this.n32 = this.n64*2;
         this.n8 = this.n64*8;
     }

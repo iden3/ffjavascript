@@ -71,12 +71,18 @@ class BN128 {
         this.F12 = new F2Field(this.F6, this.nonResidueF6);
         this.Fr = new F1Field(this.r);
         this.PFr = new PolField(this.Fr);
+        this.Gt = new F2Field(this.F6, this.nonResidueF6);
+        this.Gt.neg = this.F12.conjugate.bind(this.Gt);
 
 
         const self = this;
         this.F12._mulByNonResidue = function(a) {
             return [self.F2.mul(this.nonResidue, a[2]), a[0], a[1]];
         };
+
+
+        this.PrePSize= 192;
+        this.PreQSize= 19776;
 
         this._preparePairing();
 
@@ -106,7 +112,7 @@ class BN128 {
 
     async loadEngine() {
         if (!engine) {
-            engine = await buildEngine(this, bn128_wasm  /* , true */ ); // Set single Trherad tot true to debug
+            engine = await buildEngine(this, bn128_wasm  /* , true  */); // Set single Trherad tot true to debug
         }
     }
 
@@ -236,6 +242,13 @@ class BN128 {
     async multiExpAffineG2(buffBases, buffScalars) {
         await this.loadEngine();
         const res = await engine.multiExpAffine("G2", buffBases, buffScalars);
+        return res;
+    }
+
+    async pairingEq() {
+        const self = this;
+        await self.loadEngine();
+        const res = await engine.pairingEq(...arguments);
         return res;
     }
 
