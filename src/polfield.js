@@ -242,6 +242,19 @@ class PolField {
         return res;
     }
 
+    fft2(p) {
+        if (p.length <= 1) return p;
+        const bits = log2(p.length-1)+1;
+        this._setRoots(bits);
+
+        const m = 1 << bits;
+        const ep = this.extend(p, m);
+        __bitReverse(ep, bits);
+        const res = __fft2(this, ep, bits);
+        return res;
+    }
+
+
     ifft(p) {
 
         if (p.length <= 1) return p;
@@ -250,6 +263,27 @@ class PolField {
         const m = 1 << bits;
         const ep = this.extend(p, m);
         const res =  __fft(this, ep, bits, 0, 1);
+
+        const twoinvm = this.F.inv( this.F.mulScalar(this.F.one, m) );
+        const resn = new Array(m);
+        for (let i=0; i<m; i++) {
+            resn[i] = this.F.mul(res[(m-i)%m], twoinvm);
+        }
+
+        return resn;
+
+    }
+
+
+    ifft2(p) {
+
+        if (p.length <= 1) return p;
+        const bits = log2(p.length-1)+1;
+        this._setRoots(bits);
+        const m = 1 << bits;
+        const ep = this.extend(p, m);
+        __bitReverse(ep, bits);
+        const res =  __fft2(this, ep, bits, 0, 1);
 
         const twoinvm = this.F.inv( this.F.mulScalar(this.F.one, m) );
         const resn = new Array(m);
@@ -520,5 +554,65 @@ function __fft(PF, pall, bits, offset, step) {
 
     return out;
 }
+
+
+function __fft2(PF, pall, bits) {
+
+    const n = 1 << bits;
+    if (n==1) {
+        return [ pall[0] ];
+    }
+
+    const ndiv2 = n >> 1;
+    const p1 = __fft2(PF, pall.slice(0, ndiv2), bits-1);
+    const p2 = __fft2(PF, pall.slice(ndiv2), bits-1);
+
+    const out = new Array(n);
+
+    for (let i=0; i<ndiv2; i++) {
+        out[i] = PF.F.add(p1[i], PF.F.mul(PF.roots[bits][i], p2[i]));
+        out[i+ndiv2] = PF.F.sub(p1[i], PF.F.mul(PF.roots[bits][i], p2[i]));
+    }
+
+    return out;
+}
+
+const _revTable = [];
+for (let i=0; i<256; i++) {
+    _revTable[i] = _revSlow(i, 8);
+}
+
+function _revSlow(idx, bits) {
+    let res =0;
+    let a = idx;
+    for (let i=0; i<bits; i++) {
+        res <<= 1;
+        res = res | (a &1);
+        a >>=1;
+    }
+    return res;
+}
+
+function rev(idx, bits) {
+    return (
+        _revTable[idx >>> 24] |
+        (_revTable[(idx >>> 16) & 0xFF] << 8) |
+        (_revTable[(idx >>> 8) & 0xFF] << 16) |
+        (_revTable[idx & 0xFF] << 24)
+    ) >>> (32-bits);
+}
+
+function __bitReverse(p, bits) {
+    for (let k=0; k<p.length; k++) {
+        const r = rev(k, bits);
+        if (r>k) {
+            const tmp= p[k];
+            p[k] = p[r];
+            p[r] = tmp;
+        }
+    }
+
+}
+
 
 module.exports = PolField;

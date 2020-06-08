@@ -94,7 +94,7 @@ module.exports = function thread(self) {
                 for (let j=0; j<task[i].params.length; j++) {
                     const p = task[i].params[j];
                     if (typeof p.var !== "undefined") {
-                        params.push(ctx.vars[p.var]);
+                        params.push(ctx.vars[p.var] + (p.offset || 0));
                     } else if (typeof p.val != "undefined") {
                         params.push(p.val);
                     }

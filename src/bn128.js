@@ -88,6 +88,7 @@ class BN128 {
 
         this.G1.batchApplyKey = this.batchApplyKeyG1.bind(this);
         this.G2.batchApplyKey = this.batchApplyKeyG2.bind(this);
+        this.Fr.batchApplyKey = this.batchApplyKeyFr.bind(this);
         this.G1.batchLEMtoU = this.batchLEMtoUG1.bind(this);
         this.G2.batchLEMtoU = this.batchLEMtoUG2.bind(this);
         this.G1.batchLEMtoC = this.batchLEMtoCG1.bind(this);
@@ -96,10 +97,20 @@ class BN128 {
         this.G2.batchUtoLEM = this.batchUtoLEMG2.bind(this);
         this.G1.batchCtoLEM = this.batchCtoLEMG1.bind(this);
         this.G2.batchCtoLEM = this.batchCtoLEMG2.bind(this);
+        this.G1.batchToJacobian = this.batchToJacobianG1.bind(this);
+        this.G2.batchToJacobian = this.batchToJacobianG2.bind(this);
+        this.G1.batchToAffine = this.batchToAffineG1.bind(this);
+        this.G2.batchToAffine = this.batchToAffineG2.bind(this);
         this.G1.ifft = this.ifftG1.bind(this);
         this.G1.fft = this.fftG1.bind(this);
         this.G2.ifft = this.ifftG2.bind(this);
         this.G2.fft = this.fftG2.bind(this);
+        this.G1.fftMix = this.fftMixG1.bind(this);
+        this.G1.fftJoin = this.fftJoinG1.bind(this);
+        this.G1.fftFinal = this.fftFinalG1.bind(this);
+        this.G2.fftMix = this.fftMixG2.bind(this);
+        this.G2.fftJoin = this.fftJoinG2.bind(this);
+        this.G2.fftFinal = this.fftFinalG2.bind(this);
 
         this.Fr.batchToMontgomery = this.batchToMontgomeryFr.bind(this);
         this.Fr.batchFromMontgomery = this.batchFromMontgomeryFr.bind(this);
@@ -111,9 +122,11 @@ class BN128 {
     }
 
     async loadEngine() {
+        const self = this;
         if (!engine) {
-            engine = await buildEngine(this, bn128_wasm  /* , true  */); // Set single Trherad tot true to debug
+            engine = await buildEngine(this, bn128_wasm /* , true  */); // Set single Trherad tot true to debug
         }
+        self.engine = engine;
     }
 
     async batchApplyKeyG1(buff, first, inc) {
@@ -125,6 +138,12 @@ class BN128 {
     async batchApplyKeyG2(buff, first, inc) {
         await this.loadEngine();
         const res = await engine.batchApplyKey("G2", buff, first, inc);
+        return res;
+    }
+
+    async batchApplyKeyFr(buff, first, inc) {
+        await this.loadEngine();
+        const res = await engine.batchApplyKey("Fr", buff, first, inc);
         return res;
     }
 
@@ -197,6 +216,30 @@ class BN128 {
         return res;
     }
 
+    async batchToAffineG1(buff) {
+        await this.loadEngine();
+        const res = await engine.batchConvert("g1m_batchToAffine", buff, this.G1.F.n8*3, this.G1.F.n8*2);
+        return res;
+    }
+
+    async batchToAffineG2(buff) {
+        await this.loadEngine();
+        const res = await engine.batchConvert("g2m_batchToAffine", buff, this.G2.F.n8*3, this.G2.F.n8*2);
+        return res;
+    }
+
+    async batchToJacobianG1(buff) {
+        await this.loadEngine();
+        const res = await engine.batchConvert("g1m_batchToJacobian", buff, this.G1.F.n8*2, this.G1.F.n8*3);
+        return res;
+    }
+
+    async batchToJacobianG2(buff) {
+        await this.loadEngine();
+        const res = await engine.batchConvert("g2m_batchToJacobian", buff, this.G2.F.n8*2, this.G2.F.n8*3);
+        return res;
+    }
+
     async fftG1(buff, log) {
         await this.loadEngine();
         const res = await engine.fft("G1", buff, false, log);
@@ -230,6 +273,42 @@ class BN128 {
     async ifftFr(buff, log) {
         await this.loadEngine();
         const res = await engine.fft("Fr", buff, true, log);
+        return res;
+    }
+
+    async fftMixG1(buff, log) {
+        await this.loadEngine();
+        const res = await engine.fftMix("G1", buff, log);
+        return res;
+    }
+
+    async fftJoinG1(buff1, buff2, first, inc, log) {
+        await this.loadEngine();
+        const res = await engine.fftJoin("G1", buff1, buff2, first, inc, log);
+        return res;
+    }
+
+    async fftFinalG1(buff1, factor, log) {
+        await this.loadEngine();
+        const res = await engine.fftFinal("G1", buff1, factor, log);
+        return res;
+    }
+
+    async fftMixG2(buff, log) {
+        await this.loadEngine();
+        const res = await engine.fftMix("G2", buff, log);
+        return res;
+    }
+
+    async fftJoinG2(buff1, buff2, first, inc, log) {
+        await this.loadEngine();
+        const res = await engine.fftJoin("G2", buff1, buff2, first, inc, log);
+        return res;
+    }
+
+    async fftFinalG2(buff1, factor, log) {
+        await this.loadEngine();
+        const res = await engine.fftFinal("G2", buff1, factor, log);
         return res;
     }
 
