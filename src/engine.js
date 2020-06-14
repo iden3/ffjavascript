@@ -302,24 +302,44 @@ class Engine {
     }
 
 
-    async batchApplyKey(groupName, buff, first, inc) {
+    async batchApplyKey(groupName, buff, first, inc, inType, outType) {
+        inType = inType || "affine";
+        outType = outType || "affine";
         const self = this;
         const G = self.curve[groupName];
         const Fr = self.curve.Fr;
         let fnName, fnAffine;
         let sGin, sGmid, sGout;
         if (groupName == "G1") {
-            fnName = "g1m_batchApplyKeyMixed";
-            fnAffine = "g1m_batchToAffine";
-            sGin = G.F.n8*2;
-            sGmid = G.F.n8*2;
-            sGout = G.F.n8*2;
+            if (inType == "jacobian") {
+                sGin = G.F.n8*3;
+                fnName = "g1m_batchApplyKey";
+            } else {
+                sGin = G.F.n8*2;
+                fnName = "g1m_batchApplyKeyMixed";
+            }
+            sGmid = G.F.n8*3;
+            if (outType == "jacobian") {
+                sGout = G.F.n8*3;
+            } else {
+                fnAffine = "g1m_batchToAffine";
+                sGout = G.F.n8*2;
+            }
         } else if (groupName == "G2") {
-            fnName = "g2m_batchApplyKeyMixed";
-            fnAffine = "g2m_batchToAffine";
-            sGin = G.F.n8*2;
-            sGmid = G.F.n8*2;
-            sGout = G.F.n8*2;
+            if (inType == "jacobian") {
+                sGin = G.F.n8*3;
+                fnName = "g2m_batchApplyKey";
+            } else {
+                sGin = G.F.n8*2;
+                fnName = "g2m_batchApplyKeyMixed";
+            }
+            sGmid = G.F.n8*3;
+            if (outType == "jacobian") {
+                sGout = G.F.n8*3;
+            } else {
+                fnAffine = "g2m_batchToAffine";
+                sGout = G.F.n8*2;
+            }
         } else if (groupName == "Fr") {
             fnName = "frm_batchApplyKey";
             sGin = G.n8;
@@ -385,7 +405,7 @@ class Engine {
 
         const result = await Promise.all(opPromises);
 
-        const outBuff = new Uint8Array(buff.byteLength);
+        const outBuff = new Uint8Array(nPoints*sGout);
         let p=0;
         for (let i=0; i<result.length; i++) {
             outBuff.set(result[i][0], p);
@@ -424,7 +444,9 @@ class Engine {
     }
 
 
-    async fft(groupName, buff, inverse, log) {
+    async fft(groupName, buff, inverse, inType, outType, log) {
+        inType = inType || "affine";
+        outType = outType || "affine";
         const self = this;
         const MAX_BITS_THREAD = 12;
         const G = self.curve[groupName];
@@ -433,10 +455,13 @@ class Engine {
 
         let sIn, sMid, sOut, fnIn2Mid, fnMid2Out, fnName, fnFFTMix, fnFFTJoin, fnFFTFinal;
         if (groupName == "G1") {
-            sIn = G.F.n8*2;
+            if (inType == "affine") {
+                sIn = G.F.n8*2;
+                fnIn2Mid = "g1m_batchToJacobian";
+            } else {
+                sIn = G.F.n8*3;
+            }
             sMid = G.F.n8*3;
-            sOut = G.F.n8*2;
-            fnIn2Mid = "g1m_batchToJacobian";
             if (inverse) {
                 fnName = "g1m_ifft";
                 fnFFTFinal = "g1m_fftFinal";
@@ -445,12 +470,22 @@ class Engine {
             }
             fnFFTJoin = "g1m_fftJoin";
             fnFFTMix = "g1m_fftMix";
-            fnMid2Out = "g1m_batchToAffine";
+
+            if (outType == "affine") {
+                sOut = G.F.n8*2;
+                fnMid2Out = "g1m_batchToAffine";
+            } else {
+                sOut = G.F.n8*3;
+            }
+
         } else if (groupName == "G2") {
-            sIn = G.F.n8*2;
+            if (inType == "affine") {
+                sIn = G.F.n8*2;
+                fnIn2Mid = "g2m_batchToJacobian";
+            } else {
+                sIn = G.F.n8*3;
+            }
             sMid = G.F.n8*3;
-            sOut = G.F.n8*2;
-            fnIn2Mid = "g2m_batchToJacobian";
             if (inverse) {
                 fnName = "g2m_ifft";
                 fnFFTFinal = "g2m_fftFinal";
@@ -459,7 +494,12 @@ class Engine {
             }
             fnFFTJoin = "g2m_fftJoin";
             fnFFTMix = "g2m_fftMix";
-            fnMid2Out = "g2m_batchToAffine";
+            if (outType == "affine") {
+                sOut = G.F.n8*2;
+                fnMid2Out = "g2m_batchToAffine";
+            } else {
+                sOut = G.F.n8*3;
+            }
         } else if (groupName == "Fr") {
             sIn = G.n8;
             sMid = G.n8;
@@ -485,7 +525,7 @@ class Engine {
         const nPoints = buff.byteLength / sIn;
         const bits = log2(nPoints);
 
-        assert( (1 << bits) == nPoints, "fft must be ultiple of 2" );
+        assert( (1 << bits) == nPoints, "fft must be multiple of 2" );
 
         let bInv;
         if (inverse) {

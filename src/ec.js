@@ -413,6 +413,22 @@ class EC {
         }
     }
 
+
+    fromRprUncompressed(buff, o) {
+        if (buff[0] & 0x40) return this.zero;
+
+        return this.fromRprBE(buff, o);
+    }
+
+    toRprUncompressed(buff, o, p) {
+        this.toRprBE(buff, o, p);
+
+        if (this.isZero(p)) {
+            buff[o] = buff[o] | 0x40;
+        }
+    }
+
+
 }
 
 module.exports = EC;

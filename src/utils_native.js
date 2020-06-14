@@ -24,6 +24,7 @@ module.exports.unstringifyBigInts = function unstringifyBigInts(o) {
     } else if (Array.isArray(o)) {
         return o.map(unstringifyBigInts);
     } else if (typeof o == "object") {
+        if (o===null) return null;
         const res = {};
         const keys = Object.keys(o);
         keys.forEach( (k) => {

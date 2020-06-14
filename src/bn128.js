@@ -124,20 +124,20 @@ class BN128 {
     async loadEngine() {
         const self = this;
         if (!engine) {
-            engine = await buildEngine(this, bn128_wasm /* , true  */); // Set single Trherad tot true to debug
+            engine = await buildEngine(this, bn128_wasm  , true  ); // Set single Trherad tot true to debug
         }
         self.engine = engine;
     }
 
-    async batchApplyKeyG1(buff, first, inc) {
+    async batchApplyKeyG1(buff, first, inc, inType, outType) {
         await this.loadEngine();
-        const res = await engine.batchApplyKey("G1", buff, first, inc);
+        const res = await engine.batchApplyKey("G1", buff, first, inc, inType, outType);
         return res;
     }
 
-    async batchApplyKeyG2(buff, first, inc) {
+    async batchApplyKeyG2(buff, first, inc, inType, outType) {
         await this.loadEngine();
-        const res = await engine.batchApplyKey("G2", buff, first, inc);
+        const res = await engine.batchApplyKey("G2", buff, first, inc, inType, outType);
         return res;
     }
 
@@ -240,39 +240,39 @@ class BN128 {
         return res;
     }
 
-    async fftG1(buff, log) {
+    async fftG1(buff, inType, outType, log) {
         await this.loadEngine();
-        const res = await engine.fft("G1", buff, false, log);
+        const res = await engine.fft("G1", buff, false, inType, outType, log);
         return res;
     }
 
-    async ifftG1(buff, log) {
+    async ifftG1(buff, inType, outType, log) {
         await this.loadEngine();
-        const res = await engine.fft("G1", buff, true, log);
+        const res = await engine.fft("G1", buff, true, inType, outType, log);
         return res;
     }
 
-    async fftG2(buff, log) {
+    async fftG2(buff, inType, outType, log) {
         await this.loadEngine();
-        const res = await engine.fft("G2", buff, false, log);
+        const res = await engine.fft("G2", buff, false, inType, outType, log);
         return res;
     }
 
-    async ifftG2(buff, log) {
+    async ifftG2(buff, inType, outType,  log) {
         await this.loadEngine();
-        const res = await engine.fft("G2", buff, true, log);
+        const res = await engine.fft("G2", buff, true, inType, outType, log);
         return res;
     }
 
     async fftFr(buff, log) {
         await this.loadEngine();
-        const res = await engine.fft("Fr", buff, false, log);
+        const res = await engine.fft("Fr", buff, false, undefined, undefined, log);
         return res;
     }
 
     async ifftFr(buff, log) {
         await this.loadEngine();
-        const res = await engine.fft("Fr", buff, true, log);
+        const res = await engine.fft("Fr", buff, true, undefined, undefined, log);
         return res;
     }
 
