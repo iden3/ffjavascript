@@ -124,7 +124,7 @@ class BN128 {
     async loadEngine() {
         const self = this;
         if (!engine) {
-            engine = await buildEngine(this, bn128_wasm  , true  ); // Set single Trherad tot true to debug
+            engine = await buildEngine(this, bn128_wasm /* , true */ ); // Set single Trherad tot true to debug
         }
         self.engine = engine;
     }
