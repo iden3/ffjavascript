@@ -119,6 +119,8 @@ class BN128 {
 
         this.G1.multiExpAffine = this.multiExpAffineG1.bind(this);
         this.G2.multiExpAffine = this.multiExpAffineG2.bind(this);
+        this.G1.multiExp = this.multiExpG1.bind(this);
+        this.G2.multiExp = this.multiExpG2.bind(this);
     }
 
     async loadEngine() {
@@ -314,13 +316,25 @@ class BN128 {
 
     async multiExpAffineG1(buffBases, buffScalars) {
         await this.loadEngine();
-        const res = await engine.multiExpAffine("G1", buffBases, buffScalars);
+        const res = await engine.multiExp("G1", buffBases, buffScalars, "affine");
         return res;
     }
 
     async multiExpAffineG2(buffBases, buffScalars) {
         await this.loadEngine();
-        const res = await engine.multiExpAffine("G2", buffBases, buffScalars);
+        const res = await engine.multiExp("G2", buffBases, buffScalars, "affine");
+        return res;
+    }
+
+    async multiExpG1(buffBases, buffScalars) {
+        await this.loadEngine();
+        const res = await engine.multiExp("G1", buffBases, buffScalars, "jacobian");
+        return res;
+    }
+
+    async multiExpG2(buffBases, buffScalars) {
+        await this.loadEngine();
+        const res = await engine.multiExp("G2", buffBases, buffScalars, "jacobian");
         return res;
     }
 
