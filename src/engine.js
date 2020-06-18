@@ -426,16 +426,30 @@ class Engine {
     array2bufferG(Gs, arr) {
         const self = this;
         const G = self.curve[Gs];
-        const sG = G.F.n8*2;
+        const sG = G.F.n8*3;
 
         const buff = new Uint8Array(sG*arr.length);
 
         for (let i=0; i<arr.length; i++) {
-            G.toRprLEM(buff, i*sG, arr[i]);
+            G.toRprLEJM(buff, i*sG, arr[i]);
         }
 
         return buff;
     }
+
+    array2bufferFr(arr) {
+        const self = this;
+        const sG = self.curve.Fr.n8;
+
+        const buff = new Uint8Array(sG*arr.length);
+
+        for (let i=0; i<arr.length; i++) {
+            self.curve.Fr.toRprLE(buff, i*sG, arr[i]);
+        }
+
+        return buff;
+    }
+
 
     buffer2arrayG(Gs, buff) {
         const self = this;
@@ -526,6 +540,7 @@ class Engine {
 
         let returnArray = false;
         if (Array.isArray(buff)) {
+            assert(inType == "jacobian");
             buff = self.array2bufferG(groupName, buff);
             returnArray = true;
         }
@@ -685,8 +700,16 @@ class Engine {
     }
 
     async multiExp(groupName, buffBases, buffScalars, inType) {
-        inType = inType || "affine";
         const self = this;
+        inType = inType || "affine";
+        if (Array.isArray(buffBases)) {
+            assert(inType == "jacobian");
+            buffBases = self.array2bufferG(groupName, buffBases);
+        }
+        if (Array.isArray(buffScalars)) {
+            buffScalars = self.array2bufferFr(buffScalars);
+        }
+
         const G = self.curve[groupName];
         let sGIn;
         let fnName;
@@ -849,6 +872,23 @@ class Engine {
         }
 
         return fullBuffOut;
+    }
+
+    async pairing(a, b) {
+        const self=this;
+        const oldAlloc = self.u32[0];
+
+        const pA = self.alloc(self.curve.G1.F.n8*3);
+        self.curve.G1.toRprLEJM(self.u8, pA, a);
+        const pB = self.alloc(self.curve.G1.F.n8*3);
+        self.curve.G2.toRprLEJM(self.u8, pB, b);
+        const pRes = self.alloc(self.curve.Gt.n8);
+        self.instance.exports[self.curve.name + "_pairing"](pA, pB, pRes);
+
+        const res = self.curve.Gt.fromRprLEM(self.u8, pRes);
+
+        self.u32[0] = oldAlloc;
+        return res;
     }
 
     async pairingEq() {

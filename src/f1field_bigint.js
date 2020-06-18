@@ -36,7 +36,7 @@ module.exports = class ZqField {
         this.n8 = this.n64*8;
         this.R = bigInt.one.shiftLeft(this.n64*64);
         this.Ri = this.inv(this.R);
-/*
+
         const e = this.negone.shiftRight(this.one);
         this.nqr = this.two;
         let r = this.pow(this.nqr, e);
@@ -54,7 +54,7 @@ module.exports = class ZqField {
         }
 
         this.nqr_to_t = this.pow(this.nqr, this.t);
-*/
+
         buildSqrt(this);
     }
 

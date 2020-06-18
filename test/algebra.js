@@ -252,7 +252,7 @@ describe("Pairing", () => {
                 bn128.F1.zero
             ]
         ];
-        const buff = new ArrayBuffer(64);
+        const buff = new Uint8Array(64);
         bn128.G2.toRprCompressed(buff, 0, P1);
 
         const P2 = bn128.G2.fromRprCompressed(buff, 0);

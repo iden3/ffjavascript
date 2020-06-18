@@ -387,8 +387,14 @@ class BN128 {
 
     }
 
+    async pairing(p1, p2) {
+        const self = this;
+        await self.loadEngine();
+        const res = await engine.pairing(p1, p2);
+        return res;
+    }
 
-    pairing(p1, p2) {
+    pairing_old(p1, p2) {
 
         const pre1 = this.precomputeG1(p1);
         const pre2 = this.precomputeG2(p2);
