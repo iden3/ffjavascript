@@ -102,7 +102,8 @@ async function buildEngine(curve, wasm, singleThread) {
         if ((typeof(navigator) === "object") && navigator.hardwareConcurrency) {
             concurrency = navigator.hardwareConcurrency;
         } else {
-            concurrency = 8;
+            const os = require("os");
+            concurrency = os.cpus().length;
         }
         engine.concurrency = concurrency;
 
