@@ -27,7 +27,7 @@ module.exports.fromArray = function fromArray(a, radix) {
 
 module.exports.bitLength = function (a) {
     const aS =a.toString(16);
-    return (aS.length-1)*4 +hexLen[aS[0]];
+    return (aS.length-1)*4 +hexLen[parseInt(aS[0], 16)];
 };
 
 module.exports.isNegative = function (a) {

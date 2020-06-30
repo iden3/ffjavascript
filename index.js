@@ -9,7 +9,8 @@ exports.ZqField = exports.F1Field;
 
 exports.EC = require("./src/ec");
 
-exports.bn128 = require("./src/bn128.js");
+exports.buildBn128 = require("./src/bn128.js");
+exports.buildBls12381 = require("./src/bls12381.js");
 
 exports.utils = require("./src/utils");
 exports.ChaCha = require("./src/chacha");

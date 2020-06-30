@@ -1,5 +1,6 @@
 /* global BigInt */
 const assert = require("assert");
+const Scalar =require("./scalar");
 
 module.exports.stringifyBigInts = function stringifyBigInts(o) {
     if ((typeof(o) == "bigint") || o.eq !== undefined)  {
@@ -102,6 +103,10 @@ module.exports.leBuff2int = function leBuff2int(buff) {
 
 module.exports.leInt2Buff = function leInt2Buff(n, len) {
     let r = n;
+    if (typeof len === "undefined") {
+        len = Math.floor((Scalar.bitLength(n) - 1) / 8) +1;
+        if (len==0) len = 1;
+    }
     const buff = Buffer.alloc(len);
     let o = 0;
     while (o < len) {
