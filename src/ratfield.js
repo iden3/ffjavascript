@@ -17,9 +17,9 @@
     snarkjs. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const fUtils = require("./futils.js");
+import * as fUtils from "./futils.js";
 
-class RatField {
+export default class RatField {
     constructor(F) {
         this.F = F;
         this.zero = [F.zero, F.one];
@@ -123,5 +123,3 @@ class RatField {
     }
 }
 
-
-module.exports = RatField;

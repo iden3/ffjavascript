@@ -1,7 +1,7 @@
-const assert = require("assert");
+import assert from "assert";
 
-const ScalarN = require("../src/scalar_native.js");
-const ScalarB = require("../src/scalar_bigint.js");
+import * as ScalarN from "../src/scalar_native.js";
+import * as ScalarB from "../src/scalar_bigint.js";
 
 describe("Basic scalar convertions", () => {
     it("Should convertion Native", () => {

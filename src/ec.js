@@ -19,9 +19,8 @@
 
 
 
-const fUtils = require("./futils.js");
-const Scalar = require("./scalar");
-const assert = require("assert");
+import * as fUtils from "./futils.js";
+import * as Scalar from "./scalar.js";
 
 
 function isGreatest(F, a) {
@@ -39,7 +38,7 @@ function isGreatest(F, a) {
 }
 
 
-class EC {
+export default class EC {
 
     constructor(F, g) {
         this.F = F;
@@ -150,6 +149,10 @@ class EC {
         res[2] = F.add( Y1Z1 , Y1Z1 );                 // Z3 = 2 * Y1 * Z1
 
         return res;
+    }
+
+    timesScalar(base, e) {
+        return fUtils.mulScalar(this, base, e);
     }
 
     mulScalar(base, e) {
@@ -388,7 +391,7 @@ class EC {
         P[1] = F.sqrt(x3b);
 
         if (P[1] === null) {
-            assert(false, "Invalid Point!");
+            throw new Error("Invalid Point!");
         }
 
         const s = isGreatest(F, P[1]);
@@ -431,5 +434,4 @@ class EC {
 
 }
 
-module.exports = EC;
 

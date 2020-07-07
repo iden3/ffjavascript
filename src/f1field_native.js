@@ -1,26 +1,10 @@
 /* global BigInt */
-const assert = require("assert");
-const Scalar = require("./scalar");
-const futils = require("./futils");
-const buildSqrt = require("./fsqrt");
+import * as Scalar from "./scalar.js";
+import * as futils from "./futils.js";
+import buildSqrt from "./fsqrt.js";
+import {getRandomBytes} from "./random.js";
 
-function getRandomByte() {
-    if (typeof window !== "undefined") { // Browser
-        if (typeof window.crypto !== "undefined") { // Supported
-            let array = new Uint8Array(1);
-            window.crypto.getRandomValues(array);
-            return array[0];
-        }
-        else { // fallback
-            return Math.floor(Math.random() * 256);
-        }
-    }
-    else { // NodeJS
-        return module.require("crypto").randomBytes(1)[0];
-    }
-}
-
-module.exports = class ZqField {
+export default class ZqField {
     constructor(p) {
         this.type="F1";
         this.one = 1n;
@@ -140,12 +124,12 @@ module.exports = class ZqField {
     }
 
     idiv(a, b) {
-        assert(b, "Division by zero");
+        if (!b) throw new Error("Division by zero");
         return a / b;
     }
 
     inv(a) {
-        assert(a, "Division by zero");
+        if (!a) throw new Error("Division by zero");
 
         let t = 0n;
         let r = this.p;
@@ -165,6 +149,10 @@ module.exports = class ZqField {
     }
 
     pow(b, e) {
+        return futils.exp(this, b, e);
+    }
+
+    exp(b, e) {
         return futils.exp(this, b, e);
     }
 
@@ -281,7 +269,7 @@ module.exports = class ZqField {
         const nBytes = (this.bitLength*2 / 8);
         let res =0n;
         for (let i=0; i<nBytes; i++) {
-            res = (res << 8n) + BigInt(getRandomByte());
+            res = (res << 8n) + BigInt(getRandomBytes(1)[0]);
         }
         return res % this.p;
     }

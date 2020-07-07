@@ -1,11 +1,9 @@
 
 
-const assert = require("assert");
-const Scalar = require("./scalar");
-const utils = require("./utils");
-const buildBatchConvert = require("./engine_batchconvert");
+import * as Scalar from "./scalar.js";
+import buildBatchConvert from "./engine_batchconvert.js";
 
-class WasmCurve {
+export default class WasmCurve {
 
     constructor(tm, prefix, F, pGen, pGb, cofactor) {
         this.tm = tm;
@@ -77,7 +75,7 @@ class WasmCurve {
             } else if (b.byteLength == this.F.n8*2) {
                 return this.op2("_addMixed", a, b);
             } else {
-                assert(false, "invalid point size");
+                throw new Error("invalid point size");
             }
         } else if (a.byteLength == this.F.n8*2) {
             if (b.byteLength == this.F.n8*3) {
@@ -85,10 +83,10 @@ class WasmCurve {
             } else if (b.byteLength == this.F.n8*2) {
                 return this.op2("_addAffine", a, b);
             } else {
-                assert(false, "invalid point size");
+                throw new Error("invalid point size");
             }
         } else {
-            assert(false, "invalid point size");
+            throw new Error("invalid point size");
         }
     }
 
@@ -99,7 +97,7 @@ class WasmCurve {
             } else if (b.byteLength == this.F.n8*2) {
                 return this.op2("_subMixed", a, b);
             } else {
-                assert(false, "invalid point size");
+                throw new Error("invalid point size");
             }
         } else if (a.byteLength == this.F.n8*2) {
             if (b.byteLength == this.F.n8*3) {
@@ -107,10 +105,10 @@ class WasmCurve {
             } else if (b.byteLength == this.F.n8*2) {
                 return this.op2("_subAffine", a, b);
             } else {
-                assert(false, "invalid point size");
+                throw new Error("invalid point size");
             }
         } else {
-            assert(false, "invalid point size");
+            throw new Error("invalid point size");
         }
     }
 
@@ -120,7 +118,7 @@ class WasmCurve {
         } else if (a.byteLength == this.F.n8*2) {
             return this.op1Affine("_negAffine", a);
         } else {
-            assert(false, "invalid point size");
+            throw new Error("invalid point size");
         }
     }
 
@@ -130,7 +128,7 @@ class WasmCurve {
         } else if (a.byteLength == this.F.n8*2) {
             return this.op1("_doubleAffine", a);
         } else {
-            assert(false, "invalid point size");
+            throw new Error("invalid point size");
         }
     }
 
@@ -140,7 +138,7 @@ class WasmCurve {
         } else if (a.byteLength == this.F.n8*2) {
             return this.op1Bool("_isZeroAffine", a);
         } else {
-            assert(false, "invalid point size");
+            throw new Error("invalid point size");
         }
     }
 
@@ -154,7 +152,7 @@ class WasmCurve {
         } else if (a.byteLength == this.F.n8*2) {
             fnName = this.prefix + "_timesScalarAffine";
         } else {
-            assert(false, "invalid point size");
+            throw new Error("invalid point size");
         }
         this.tm.setBuff(this.pOp1, a);
         this.tm.setBuff(this.pOp2, s);
@@ -169,7 +167,7 @@ class WasmCurve {
         } else if (a.byteLength == this.F.n8*2) {
             fnName = this.prefix + "_timesFrAffine";
         } else {
-            assert(false, "invalid point size");
+            throw new Error("invalid point size");
         }
         this.tm.setBuff(this.pOp1, a);
         this.tm.setBuff(this.pOp2, s);
@@ -184,7 +182,7 @@ class WasmCurve {
             } else if (b.byteLength == this.F.n8*2) {
                 return this.op2bool("_eqMixed", a, b);
             } else {
-                assert(false, "invalid point size");
+                throw new Error("invalid point size");
             }
         } else if (a.byteLength == this.F.n8*2) {
             if (b.byteLength == this.F.n8*3) {
@@ -192,10 +190,10 @@ class WasmCurve {
             } else if (b.byteLength == this.F.n8*2) {
                 return this.op2bool("_eqAffine", a, b);
             } else {
-                assert(false, "invalid point size");
+                throw new Error("invalid point size");
             }
         } else {
-            assert(false, "invalid point size");
+            throw new Error("invalid point size");
         }
     }
 
@@ -205,7 +203,7 @@ class WasmCurve {
         } else if (a.byteLength == this.F.n8*2) {
             return a;
         } else {
-            assert(false, "invalid point size");
+            throw new Error("invalid point size");
         }
     }
 
@@ -215,7 +213,7 @@ class WasmCurve {
         } else if (a.byteLength == this.F.n8*2) {
             return this.op1("_toJacobian", a);
         } else {
-            assert(false, "invalid point size");
+            throw new Error("invalid point size");
         }
     }
 
@@ -224,7 +222,7 @@ class WasmCurve {
         if (a.byteLength == this.F.n8*3) {
             this.tm.instance.exports[this.prefix + "_toAffine"](this.pOp1, this.pOp1);
         } else if (a.byteLength != this.F.n8*2) {
-            assert(false, "invalid point size");
+            throw new Error("invalid point size");
         }
         this.tm.instance.exports[this.prefix + "_LEMtoU"](this.pOp1, this.pOp1);
         const res = this.tm.getBuff(this.pOp1, this.F.n8*2);
@@ -236,6 +234,25 @@ class WasmCurve {
         this.tm.setBuff(this.pOp1, buff);
         this.tm.instance.exports[this.prefix + "_UtoLEM"](this.pOp1, this.pOp1);
         return this.tm.getBuff(this.pOp1, this.F.n8*2);
+    }
+
+    toRprCompressed(arr, offset, a) {
+        this.tm.setBuff(this.pOp1, a);
+        if (a.byteLength == this.F.n8*3) {
+            this.tm.instance.exports[this.prefix + "_toAffine"](this.pOp1, this.pOp1);
+        } else if (a.byteLength != this.F.n8*2) {
+            throw new Error("invalid point size");
+        }
+        this.tm.instance.exports[this.prefix + "_LEMtoC"](this.pOp1, this.pOp1);
+        const res = this.tm.getBuff(this.pOp1, this.F.n8);
+        arr.set(res, offset);
+    }
+
+    fromRprCompressed(arr, offset) {
+        const buff = arr.slice(offset, offset + this.F.n8);
+        this.tm.setBuff(this.pOp1, buff);
+        this.tm.instance.exports[this.prefix + "_CtoLEM"](this.pOp1, this.pOp2);
+        return this.tm.getBuff(this.pOp2, this.F.n8*2);
     }
 
     toUncompressed(a) {
@@ -254,7 +271,7 @@ class WasmCurve {
             const res = this.tm.getBuff(this.pOp1, this.F.n8*2);
             arr.set(res, offset);
         } else {
-            assert(false, "invalid point size");
+            throw new Error("invalid point size");
         }
     }
 
@@ -274,7 +291,7 @@ class WasmCurve {
             const y = this.F.toString(a.slice(this.F.n8), radix);
             return `[ ${x}, ${y} ]`;
         } else {
-            assert(false, "invalid point size");
+            throw new Error("invalid point size");
         }
     }
 
@@ -352,8 +369,11 @@ class WasmCurve {
         }
     }
 
+    e(a) {
+        if (a instanceof Uint8Array) return a;
+        return this.fromObject(a);
+    }
 
 }
 
-module.exports = WasmCurve;
 

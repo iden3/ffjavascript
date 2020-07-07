@@ -17,9 +17,9 @@
     snarkjs. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const fUtils = require("./futils.js");
+import * as fUtils from "./futils.js";
 
-class F3Field {
+export default class F3Field {
     constructor(F, nonResidue) {
         this.type="F3";
         this.F = F;
@@ -171,6 +171,10 @@ class F3Field {
         return fUtils.mulScalar(this, base, e);
     }
 
+    pow(base, e) {
+        return fUtils.exp(this, base, e);
+    }
+
     exp(base, e) {
         return fUtils.exp(this, base, e);
     }
@@ -275,5 +279,3 @@ class F3Field {
     }
 
 }
-
-module.exports = F3Field;

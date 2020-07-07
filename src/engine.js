@@ -1,19 +1,18 @@
-const WasmField1 =require("./wasm_field1");
-const WasmField2 =require("./wasm_field2");
-const WasmField3 =require("./wasm_field3");
-const WasmCurve = require("./wasm_curve");
-const buildThreadManager = require("./threadman");
-const Scalar = require("./scalar");
-const buildBatchApplyKey = require("./engine_applykey");
-const buildPairing = require("./engine_pairing");
-const buildMultiExp = require("./engine_multiexp");
-const buildFFT = require("./engine_fft");
+import WasmField1 from "./wasm_field1.js";
+import WasmField2 from "./wasm_field2.js";
+import WasmField3 from "./wasm_field3.js";
+import WasmCurve from "./wasm_curve.js";
+import buildThreadManager from "./threadman.js";
+import * as Scalar from "./scalar.js";
+import buildBatchApplyKey from "./engine_applykey.js";
+import buildPairing from "./engine_pairing.js";
+import buildMultiExp from "./engine_multiexp.js";
+import buildFFT from "./engine_fft.js";
 
-module.exports = buildEngine;
-
-async function buildEngine(params) {
+export default async function buildEngine(params) {
 
     const tm = await buildThreadManager(params.wasm, params.singleThread);
+
 
     const curve = {};
 
@@ -45,6 +44,25 @@ async function buildEngine(params) {
     buildFFT(curve, "Fr");
 
     buildPairing(curve);
+
+    curve.array2buffer = function(arr, sG) {
+        const buff = new Uint8Array(sG*arr.length);
+
+        for (let i=0; i<arr.length; i++) {
+            buff.set(arr[i], i*sG);
+        }
+
+        return buff;
+    };
+
+    curve.buffer2array = function(buff , sG) {
+        const n= buff.length / sG;
+        const arr = new Array(n);
+        for (let i=0; i<n; i++) {
+            arr[i] = buff.slice(i*sG, i*sG+sG);
+        }
+        return arr;
+    };
 
     return curve;
 }

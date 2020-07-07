@@ -17,10 +17,10 @@
     snarkjs. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const fUtils = require("./futils.js");
-const buildSqrt = require("./fsqrt");
+import * as fUtils from "./futils.js";
+import buildSqrt from "./fsqrt.js";
 
-class F2Field {
+export default class F2Field {
     constructor(F, nonResidue) {
         this.type="F2";
         this.F = F;
@@ -141,6 +141,10 @@ class F2Field {
         return fUtils.exp(this, base, e);
     }
 
+    exp(base, e) {
+        return fUtils.exp(this, base, e);
+    }
+
     toString(a) {
         return `[ ${this.F.toString(a[0])} , ${this.F.toString(a[1])} ]`;
     }
@@ -230,4 +234,3 @@ class F2Field {
 
 }
 
-module.exports = F2Field;

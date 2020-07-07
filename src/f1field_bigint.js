@@ -1,24 +1,8 @@
-const bigInt = require("big-integer");
-const assert = require("assert");
-const buildSqrt = require("./fsqrt");
+import bigInt from "big-integer";
+import buildSqrt from "./fsqrt.js";
+import {getRandomBytes} from "./random.js";
 
-function getRandomByte() {
-    if (typeof window !== "undefined") { // Browser
-        if (typeof window.crypto !== "undefined") { // Supported
-            let array = new Uint8Array(1);
-            window.crypto.getRandomValues(array);
-            return array[0];
-        }
-        else { // fallback
-            return Math.floor(Math.random() * 256);
-        }
-    }
-    else { // NodeJS
-        return module.require("crypto").randomBytes(1)[0];
-    }
-}
-
-module.exports = class ZqField {
+export default class ZqField {
     constructor(p) {
         this.type="F1";
         this.one = bigInt.one;
@@ -132,17 +116,17 @@ module.exports = class ZqField {
     }
 
     div(a, b) {
-        assert(!b.isZero(), "Division by zero");
+        if (b.isZero()) throw new Error("Division by zero");
         return a.times(b.modInv(this.p)).mod(this.p);
     }
 
     idiv(a, b) {
-        assert(!b.isZero(), "Division by zero");
+        if (b.isZero()) throw new Error("Division by zero");
         return a.divide(b);
     }
 
     inv(a) {
-        assert(!a.isZero(), "Division by zero");
+        if (a.isZero()) throw new Error("Division by zero");
         return a.modInv(this.p);
     }
 
@@ -151,6 +135,10 @@ module.exports = class ZqField {
     }
 
     pow(a, b) {
+        return a.modPow(b, this.p);
+    }
+
+    exp(a, b) {
         return a.modPow(b, this.p);
     }
 
@@ -259,7 +247,7 @@ module.exports = class ZqField {
         let res = bigInt(0);
         let n = bigInt(this.p.square());
         while (!n.isZero()) {
-            res = res.shiftLeft(8).add(bigInt(getRandomByte()));
+            res = res.shiftLeft(8).add(bigInt(getRandomBytes(1)[0]));
             n = n.shiftRight(8);
         }
         return res.mod(this.p);
@@ -295,5 +283,5 @@ module.exports = class ZqField {
     }
 
 
-};
+}
 

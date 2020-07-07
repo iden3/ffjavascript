@@ -1,4 +1,4 @@
-/* global navigator, Blob, Worker, WebAssembly */
+/* global window, navigator, Blob, Worker, WebAssembly */
 /*
     Copyright 2019 0KIMS association.
 
@@ -21,17 +21,14 @@
 const MEM_SIZE = 4096;  // Memory size in 64K Pakes (256Mb)
 
 
-const assert = require("assert");
-const thread = require("./threadman_thread");
-const FFT = require("./fft");
-const {log2, buffReverseBits} = require("./utils");
+import thread from "./threadman_thread.js";
+import os from "os";
 
+import NodeWorker_mod from "worker_threads";
 const inBrowser = (typeof window !== "undefined");
 let NodeWorker;
-let NodeCrypto;
 if (!inBrowser) {
-    NodeWorker = require("worker_threads").Worker;
-    NodeCrypto = require("crypto");
+    NodeWorker = NodeWorker_mod.Worker;
 }
 
 class Deferred {
@@ -43,17 +40,31 @@ class Deferred {
     }
 }
 
+function base64ToArrayBuffer(base64) {
+    if (process.browser) {
+        var binary_string = window.atob(base64);
+        var len = binary_string.length;
+        var bytes = new Uint8Array(len);
+        for (var i = 0; i < len; i++) {
+            bytes[i] = binary_string.charCodeAt(i);
+        }
+        return bytes;
+    } else {
+        return new Uint8Array(Buffer.from(base64, "base64"));
+    }
+}
 
 
 
-async function buildThreadManager(wasm, singleThread) {
+
+export default async function buildThreadManager(wasm, singleThread) {
     const tm = new ThreadManager();
 
     tm.memory = new WebAssembly.Memory({initial:MEM_SIZE});
     tm.u8 = new Uint8Array(tm.memory.buffer);
     tm.u32 = new Uint32Array(tm.memory.buffer);
 
-    const wasmModule = await WebAssembly.compile(wasm.code);
+    const wasmModule = await WebAssembly.compile(base64ToArrayBuffer(wasm.code));
 
     tm.instance = await WebAssembly.instantiate(wasmModule, {
         env: {
@@ -71,17 +82,17 @@ async function buildThreadManager(wasm, singleThread) {
     tm.pG2zero = wasm.pG2zero;
     tm.pOneT = wasm.pOneT;
 
-//    tm.pTmp0 = tm.alloc(curve.G2.F.n8*3);
-//    tm.pTmp1 = tm.alloc(curve.G2.F.n8*3);
+    //    tm.pTmp0 = tm.alloc(curve.G2.F.n8*3);
+    //    tm.pTmp1 = tm.alloc(curve.G2.F.n8*3);
 
 
     if (singleThread) {
-        tm.code = wasm.code;
+        tm.code = base64ToArrayBuffer(wasm.code);
         tm.taskManager = thread();
         await tm.taskManager([{
             cmd: "INIT",
             init: MEM_SIZE,
-            code: wasm.code
+            code: tm.code.slice()
         }]);
         tm.concurrency  = 1;
     } else {
@@ -94,7 +105,6 @@ async function buildThreadManager(wasm, singleThread) {
         if ((typeof(navigator) === "object") && navigator.hardwareConcurrency) {
             concurrency = navigator.hardwareConcurrency;
         } else {
-            const os = require("os");
             concurrency = os.cpus().length;
         }
         tm.concurrency = concurrency;
@@ -120,12 +130,12 @@ async function buildThreadManager(wasm, singleThread) {
 
         const initPromises = [];
         for (let i=0; i<tm.workers.length;i++) {
-            const copyCode = wasm.code.buffer.slice(0);
+            const copyCode = base64ToArrayBuffer(wasm.code).slice();
             initPromises.push(tm.postAction(i, [{
                 cmd: "INIT",
                 init: MEM_SIZE,
                 code: copyCode
-            }], [copyCode]));
+            }], [copyCode.buffer]));
         }
 
         await Promise.all(initPromises);
@@ -157,18 +167,20 @@ class ThreadManager {
     }
 
     startSyncOp() {
-        assert(this.oldPFree == 0);
+        if (this.oldPFree != 0) throw new Error("Sync operation in progress");
         this.oldPFree = this.u32[0];
     }
 
     endSyncOp() {
-        assert(this.oldPFree != 0);
+        if (this.oldPFree == 0) throw new Error("No sync operation in progress");
         this.u32[0] = this.oldPFree;
         this.oldPFree = 0;
     }
 
     postAction(workerId, e, transfers, _deferred) {
-        assert(this.working[workerId] == false);
+        if (this.working[workerId]) {
+            throw new Error("Posting a job t a working worker");
+        }
         this.working[workerId] = true;
 
         this.pendingDeferreds[workerId] = _deferred ? _deferred : new Deferred();
@@ -236,7 +248,3 @@ class ThreadManager {
 
 }
 
-
-
-
-module.exports = buildThreadManager;

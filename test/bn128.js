@@ -1,11 +1,19 @@
-const assert = require("assert");
+import assert from "assert";
+import buildBn128 from "../src/bn128.js";
 
-describe("bn128 tester", async function () {
+describe("FFT in G1", async function () {
+    let bn128;
+    before( async() => {
+        bn128 = await buildBn128();
+    });
+    after( async() => {
+        bn128.terminate();
+    });
+
     this.timeout(100000);
 
 
     it("It shoud do an inverse FFT in G1", async () => {
-        const bn128 = require("../index").bn128;
         const Fr = bn128.Fr;
         const G1 = bn128.G1;
 
@@ -13,21 +21,19 @@ describe("bn128 tester", async function () {
         for (let i=0; i<8; i++) a[i] = Fr.e(i+1);
 
         const aG_expected = [];
-        for (let i=0; i<8; i++) aG_expected[i] = G1.mulScalar(G1.g, a[i]);
+        for (let i=0; i<8; i++) aG_expected[i] = G1.timesFr(G1.g, a[i]);
 
-        const A = await bn128.PFr.fft(a);
+        const A = await bn128.Fr.fft(a);
 
 
         const AG = [];
-        for (let i=0; i<8; i++) AG[i] = G1.mulScalar(G1.g, A[i]);
+        for (let i=0; i<8; i++) AG[i] = G1.timesFr(G1.g, A[i]);
 
-        const aG_calculated = await G1.ifft(AG);
+        const aG_calculated = await G1.ifft(AG, "jacobian", "jacobian");
 
         for (let i=0; i<8; i++) {
             assert(G1.eq(aG_calculated[i], aG_expected[i]));
         }
-
-        bn128.engine.terminate();
     });
 });
 

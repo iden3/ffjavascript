@@ -1,7 +1,6 @@
-const assert = require("assert");
-const bigInt = require("big-integer");
+import bigInt from "big-integer";
 
-module.exports.stringifyBigInts = function stringifyBigInts(o) {
+export function stringifyBigInts(o) {
     if ((typeof(o) == "bigint") || o.eq !== undefined)  {
         return o.toString(10);
     } else if (Array.isArray(o)) {
@@ -16,9 +15,9 @@ module.exports.stringifyBigInts = function stringifyBigInts(o) {
     } else {
         return o;
     }
-};
+}
 
-module.exports.unstringifyBigInts = function unstringifyBigInts(o) {
+export function unstringifyBigInts(o) {
     if ((typeof(o) == "string") && (/^[0-9]+$/.test(o) ))  {
         return bigInt(o);
     } else if (Array.isArray(o)) {
@@ -33,51 +32,55 @@ module.exports.unstringifyBigInts = function unstringifyBigInts(o) {
     } else {
         return o;
     }
-};
+}
 
-module.exports.beBuff2int = function beBuff2int(buff) {
+export function beBuff2int(buff) {
     let res = bigInt.zero;
     for (let i=0; i<buff.length; i++) {
         const n = bigInt(buff[buff.length - i - 1]);
         res = res.add(n.shiftLeft(i*8));
     }
     return res;
-};
+}
 
-module.exports.beInt2Buff = function beInt2Buff(n, len) {
+export function beInt2Buff(n, len) {
     let r = n;
     let o =len-1;
-    const buff = Buffer.alloc(len);
+    const buff = new Uint8Array(len);
     while ((r.gt(bigInt.zero))&&(o>=0)) {
         let c = Number(r.and(bigInt("255")));
         buff[o] = c;
         o--;
         r = r.shiftRight(8);
     }
-    assert(r.eq(bigInt.zero));
+    if (!r.eq(bigInt.zero)) {
+        throw new Error("Number does not fit in this length");
+    }
     return buff;
-};
+}
 
 
-module.exports.leBuff2int = function leBuff2int (buff) {
+export function leBuff2int (buff) {
     let res = bigInt.zero;
     for (let i=0; i<buff.length; i++) {
         const n = bigInt(buff[i]);
         res = res.add(n.shiftLeft(i*8));
     }
     return res;
-};
+}
 
-module.exports.leInt2Buff = function leInt2Buff(n, len) {
+export function leInt2Buff(n, len) {
     let r = n;
     let o =0;
-    const buff = Buffer.alloc(len);
+    const buff = new Uint8Array(len);
     while ((r.gt(bigInt.zero))&&(o<buff.length)) {
         let c = Number(r.and(bigInt(255)));
         buff[o] = c;
         o++;
         r = r.shiftRight(8);
     }
-    assert(r.eq(bigInt.zero));
+    if (!r.eq(bigInt.zero)) {
+        throw new Error("Number does not fit in this length");
+    }
     return buff;
-};
+}

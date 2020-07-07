@@ -1,5 +1,4 @@
-const assert = require("assert");
-const {log2} = require("./utils");
+import { log2 } from "./utils.js";
 
 const pTSizes = [
     1 ,  1,  1,  1,    2,  3,  4,  5,
@@ -8,7 +7,7 @@ const pTSizes = [
     17, 17, 17, 17,   17, 17, 17, 17
 ];
 
-module.exports = function buildMultiexp(curve, groupName) {
+export default function buildMultiexp(curve, groupName) {
     const G = curve[groupName];
     async function _multiExp(buffBases, buffScalars, inType) {
         inType = inType || "affine";
@@ -32,11 +31,13 @@ module.exports = function buildMultiexp(curve, groupName) {
                 sGIn = G.F.n8*3;
             }
         } else {
-            assert(false, "Invalid group");
+            throw new Error("Invalid group");
         }
         const nPoints = Math.floor(buffBases.byteLength / sGIn);
         const sScalar = Math.floor(buffScalars.byteLength / nPoints);
-        assert( sScalar * nPoints == buffScalars.byteLength, "Scalar size does not match");
+        if( sScalar * nPoints != buffScalars.byteLength) {
+            throw new Error("Scalar size does not match");
+        }
 
         const bitChunkSize = pTSizes[log2(nPoints)];
         const nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) +1;
@@ -82,4 +83,4 @@ module.exports = function buildMultiexp(curve, groupName) {
     G.multiExpAffine = async function multiExpAffine(buffBases, buffScalars) {
         return await _multiExp(buffBases, buffScalars, "affine");
     };
-};
+}

@@ -1,9 +1,10 @@
-const assert = require("assert");
 
-module.exports = function buildBatchConvert(tm, fnName, sIn, sOut) {
+export default function buildBatchConvert(tm, fnName, sIn, sOut) {
     return async function batchConvert(buffIn) {
         const nPoints = Math.floor(buffIn.byteLength / sIn);
-        assert( nPoints * sIn === buffIn.byteLength);
+        if ( nPoints * sIn !== buffIn.byteLength) {
+            throw new Error("Invalid buffer size");
+        }
         const pointsPerChunk = Math.floor(nPoints/tm.concurrency);
         const opPromises = [];
         for (let i=0; i<tm.concurrency; i++) {
@@ -42,4 +43,4 @@ module.exports = function buildBatchConvert(tm, fnName, sIn, sOut) {
 
         return fullBuffOut;
     };
-};
+}

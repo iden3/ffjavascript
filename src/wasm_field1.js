@@ -1,13 +1,12 @@
 
 
-const assert = require("assert");
-const Scalar = require("./scalar");
-const utils = require("./utils");
-const {getThreadRng} = require("./random");
-const buildBatchConvert = require("./engine_batchconvert");
+import * as Scalar from "./scalar.js";
+import * as utils from "./utils.js";
+import { getThreadRng } from "./random.js";
+import buildBatchConvert from "./engine_batchconvert.js";
 
 
-class WasmField1 {
+export default class WasmField1 {
 
     constructor(tm, prefix, n8, p) {
         this.tm = tm;
@@ -26,9 +25,9 @@ class WasmField1 {
         this.pOp2 = tm.alloc(n8);
         this.pOp3 = tm.alloc(n8);
         this.tm.instance.exports[prefix + "_zero"](this.pOp1);
-        this.zero = this.getBuff(this.pOp1);
+        this.zero = this.tm.getBuff(this.pOp1, this.n8);
         this.tm.instance.exports[prefix + "_one"](this.pOp1);
-        this.one = this.getBuff(this.pOp1);
+        this.one = this.tm.getBuff(this.pOp1, this.n8);
 
         this.negone = this.neg(this.one);
         this.two = this.add(this.one, this.one);
@@ -36,7 +35,9 @@ class WasmField1 {
         this.n64 = Math.floor(n8/8);
         this.n32 = Math.floor(n8/4);
 
-        assert(this.n64*8 == this.n8, "n8 must be a multiple of 8");
+        if(this.n64*8 != this.n8) {
+            throw new Error("n8 must be a multiple of 8");
+        }
 
         this.half = Scalar.shiftRight(this.p, Scalar.one);
         this.nqr = this.two;
@@ -62,42 +63,36 @@ class WasmField1 {
             this.w[i] = this.square(this.w[i+1]);
         }
 
-        assert(this.eq(this.w[0], this.one));
-
+        if (!this.eq(this.w[0], this.one)) {
+            throw new Error("Error calculating roots of unity");
+        }
 
         this.batchToMontgomery = buildBatchConvert(tm, prefix + "_batchToMontgomery", this.n8, this.n8);
         this.batchFromMontgomery = buildBatchConvert(tm, prefix + "_batchFromMontgomery", this.n8, this.n8);
     }
 
-    getBuff(p) {
-        return this.tm.u8.slice(p, p+this.n8);
-    }
-
-    setBuff(p, buff) {
-        return this.tm.u8.set(buff, p);
-    }
 
     op2(opName, a, b) {
-        this.setBuff(this.pOp1, a);
-        this.setBuff(this.pOp2, b);
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
         this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2, this.pOp3);
-        return this.getBuff(this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
     }
 
     op2Bool(opName, a, b) {
-        this.setBuff(this.pOp1, a);
-        this.setBuff(this.pOp2, b);
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
         return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2);
     }
 
     op1(opName, a) {
-        this.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp1, a);
         this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
-        return this.getBuff(this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
     }
 
     op1Bool(opName, a) {
-        this.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp1, a);
         return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
     }
 
@@ -136,6 +131,14 @@ class WasmField1 {
 
     mul(a,b) {
         return this.op2("_mul", a, b);
+    }
+
+    div(a, b) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        this.tm.instance.exports[this.prefix + "_inverse"](this.pOp2, this.pOp2);
+        this.tm.instance.exports[this.prefix + "_mul"](this.pOp1, this.pOp2, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
     }
 
     square(a) {
@@ -227,5 +230,4 @@ class WasmField1 {
 
 }
 
-module.exports = WasmField1;
 

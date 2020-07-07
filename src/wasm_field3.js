@@ -1,11 +1,10 @@
 
 
-const assert = require("assert");
-const {getThreadRng} = require("./random");
-const Scalar = require("./scalar");
+import { getThreadRng } from "./random.js";
+import * as Scalar from "./scalar.js";
 
 
-class WasmField3 {
+export default class WasmField3 {
 
     constructor(tm, prefix, F) {
         this.tm = tm;
@@ -96,6 +95,14 @@ class WasmField3 {
         return this.op2("_mul", a, b);
     }
 
+    div(a, b) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        this.tm.instance.exports[this.prefix + "_inverse"](this.pOp2, this.pOp2);
+        this.tm.instance.exports[this.prefix + "_mul"](this.pOp1, this.pOp2, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
+    }
+
     square(a) {
         return this.op1("_square", a);
     }
@@ -130,7 +137,7 @@ class WasmField3 {
             res.set(c3, this.F.n8*2);
             return res;
         } else {
-            assert(false, "invalid F3");
+            throw new Error("invalid F3");
         }
     }
 
@@ -164,7 +171,7 @@ class WasmField3 {
     }
 
     fromObject(a) {
-        const buff = new Uint8Array(this.F.n8*2);
+        const buff = new Uint8Array(this.F.n8*3);
         const b1 = this.F.fromObject(a[0]);
         const b2 = this.F.fromObject(a[1]);
         const b3 = this.F.fromObject(a[2]);
@@ -176,5 +183,4 @@ class WasmField3 {
 
 }
 
-module.exports = WasmField3;
 

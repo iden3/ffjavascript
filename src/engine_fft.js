@@ -1,11 +1,11 @@
-const assert = require("assert");
-const {log2, buffReverseBits} = require("./utils");
+import {log2, buffReverseBits} from "./utils.js";
 
-module.exports = function buildFFT(curve, groupName) {
+export default function buildFFT(curve, groupName) {
     const G = curve[groupName];
     const Fr = curve.Fr;
     const tm = G.tm;
     async function _fft(buff, inverse, inType, outType, log) {
+
         inType = inType || "affine";
         outType = outType || "affine";
         const MAX_BITS_THREAD = 12;
@@ -72,11 +72,18 @@ module.exports = function buildFFT(curve, groupName) {
         }
 
 
+        let returnArray = false;
+        if (Array.isArray(buff)) {
+            buff = curve.array2buffer(buff, sIn);
+            returnArray = true;
+        }
 
         const nPoints = buff.byteLength / sIn;
         const bits = log2(nPoints);
 
-        assert( (1 << bits) == nPoints, "fft must be multiple of 2" );
+        if  ((1 << bits) != nPoints) {
+            throw new Error("fft must be multiple of 2" );
+        }
 
         let inv;
         if (inverse) {
@@ -216,7 +223,11 @@ module.exports = function buildFFT(curve, groupName) {
             }
         }
 
-        return buffOut;
+        if (returnArray) {
+            return curve.buffer2array(buffOut, sOut);
+        } else {
+            return buffOut;
+        }
     }
 
     G.fft = async function(buff, inType, outType, log) {
@@ -240,7 +251,7 @@ module.exports = function buildFFT(curve, groupName) {
             fnName = "frm_fftMix";
             fnFFTJoin = "frm_fftJoin";
         } else {
-            assert(false);
+            throw new Error("Invalid group");
         }
 
         const nPoints = Math.floor(buff.byteLength / sG);
@@ -338,12 +349,16 @@ module.exports = function buildFFT(curve, groupName) {
         } else if (groupName == "G2") {
             fnName = "g2m_fftJoin";
         } else {
-            assert(false);
+            throw new Error("Invalid group");
         }
 
-        assert (buff1.byteLength == buff2.byteLength);
+        if (buff1.byteLength != buff2.byteLength) {
+            throw new Error("Invalid buffer size");
+        }
         const nPoints = Math.floor(buff1.byteLength / sG);
-        assert (nPoints == 1 << log2(nPoints));
+        if (nPoints != 1 << log2(nPoints)) {
+            throw new Error("Invalid number of points");
+        }
 
         let nChunks = 1 << log2(tm.concurrency);
         if (nPoints <= nChunks*2) nChunks = 1;
@@ -403,11 +418,13 @@ module.exports = function buildFFT(curve, groupName) {
             fnName = "g2m_fftFinal";
             fnToAffine = "g2m_batchToAffine";
         } else {
-            assert(false);
+            throw new Error("Invalid group");
         }
 
         const nPoints = Math.floor(buff.byteLength / sG);
-        assert (nPoints == 1 << log2(nPoints));
+        if (nPoints == 1 << log2(nPoints)) {
+            throw new Error("Invalid number of points");
+        }
 
         const pointsPerChunk = Math.floor(nPoints / tm.concurrency);
 
@@ -452,4 +469,4 @@ module.exports = function buildFFT(curve, groupName) {
 
         return fullBuffOut;
     };
-};
+}

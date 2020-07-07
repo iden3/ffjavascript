@@ -1,6 +1,6 @@
-const ZqField = require("../src/f1field");
-const Scalar = require("../src/scalar");
-const assert = require("assert");
+import ZqField from "../src/f1field.js";
+import * as Scalar from "../src/scalar.js";
+import assert from "assert";
 
 const q = Scalar.fromString("21888242871839275222246405745257275088696311157297823662689037894645226208583");
 const r = Scalar.fromString("21888242871839275222246405745257275088548364400416034343698204186575808495617");

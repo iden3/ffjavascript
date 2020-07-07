@@ -1,5 +1,5 @@
 
-module.exports = function buildBatchApplyKey(curve, groupName) {
+export default function buildBatchApplyKey(curve, groupName) {
     const G = curve[groupName];
     const Fr = curve.Fr;
     const tm = curve.tm;
@@ -110,4 +110,4 @@ module.exports = function buildBatchApplyKey(curve, groupName) {
 
         return outBuff;
     };
-};
+}

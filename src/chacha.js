@@ -1,6 +1,6 @@
 
 
-const Scalar = require("./scalar");
+import * as Scalar from "./scalar.js";
 
 
 function quarterRound(st, a, b, c, d) {
@@ -34,7 +34,7 @@ function doubleRound(st) {
     quarterRound(st, 3, 4, 9,14);
 }
 
-module.exports = class ChaCha {
+export default class ChaCha {
 
     constructor(seed) {
         seed = seed || [0,0,0,0,0,0,0,0];
@@ -93,4 +93,4 @@ module.exports = class ChaCha {
         if (this.state[14] != 0) return;
         this.state[15] = (this.state[15] + 1) >>> 0;
     }
-};
+}

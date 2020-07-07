@@ -1,8 +1,7 @@
 /* global BigInt */
-const assert = require("assert");
 const hexLen = [ 0, 1, 2, 2, 3, 3, 3, 3, 4 ,4 ,4 ,4 ,4 ,4 ,4 ,4];
 
-module.exports.fromString = function fromString(s, radix) {
+export function fromString(s, radix) {
     if ((!radix)||(radix==10)) {
         return BigInt(s);
     } else if (radix==16) {
@@ -12,49 +11,49 @@ module.exports.fromString = function fromString(s, radix) {
             return BigInt("0x"+s);
         }
     }
-};
+}
 
-module.exports.e = module.exports.fromString;
+export const e = fromString;
 
-module.exports.fromArray = function fromArray(a, radix) {
+export function fromArray(a, radix) {
     let acc =0n;
     radix = BigInt(radix);
     for (let i=0; i<a.length; i++) {
         acc = acc*radix + BigInt(a[i]);
     }
     return acc;
-};
+}
 
-module.exports.bitLength = function (a) {
+export function bitLength(a) {
     const aS =a.toString(16);
     return (aS.length-1)*4 +hexLen[parseInt(aS[0], 16)];
-};
+}
 
-module.exports.isNegative = function (a) {
+export function isNegative(a) {
     return BigInt(a) < 0n;
-};
+}
 
-module.exports.isZero = function (a) {
+export function isZero(a) {
     return !a;
-};
+}
 
-module.exports.shiftLeft = function (a, n) {
+export function shiftLeft(a, n) {
     return BigInt(a) << BigInt(n);
-};
+}
 
-module.exports.shiftRight = function (a, n) {
+export function shiftRight(a, n) {
     return BigInt(a) >> BigInt(n);
-};
+}
 
-module.exports.shl = module.exports.shiftLeft;
-module.exports.shr = module.exports.shiftRight;
+export const shl = shiftLeft;
+export const shr = shiftRight;
 
-module.exports.isOdd = function (a) {
+export function isOdd(a) {
     return (BigInt(a) & 1n) == 1n;
-};
+}
 
 
-module.exports.naf = function naf(n) {
+export function naf(n) {
     let E = BigInt(n);
     const res = [];
     while (E) {
@@ -68,10 +67,10 @@ module.exports.naf = function naf(n) {
         E = E >> 1n;
     }
     return res;
-};
+}
 
 
-module.exports.bits = function naf(n) {
+export function bits(n) {
     let E = BigInt(n);
     const res = [];
     while (E) {
@@ -83,14 +82,16 @@ module.exports.bits = function naf(n) {
         E = E >> 1n;
     }
     return res;
-};
+}
 
-module.exports.toNumber = function(s) {
-    assert(s<BigInt(Number.MAX_SAFE_INTEGER + 1));
+export function toNumber(s) {
+    if (s>BigInt(Number.MAX_SAFE_INTEGER )) {
+        throw new Error("Number too big");
+    }
     return Number(s);
-};
+}
 
-module.exports.toArray = function(s, radix) {
+export function toArray(s, radix) {
     const res = [];
     let rem = BigInt(s);
     radix = BigInt(radix);
@@ -99,90 +100,94 @@ module.exports.toArray = function(s, radix) {
         rem = rem / radix;
     }
     return res;
-};
+}
 
 
-module.exports.add = function(a, b) {
+export function add(a, b) {
     return BigInt(a) + BigInt(b);
-};
+}
 
-module.exports.sub = function(a, b) {
+export function sub(a, b) {
     return BigInt(a) - BigInt(b);
-};
+}
 
-module.exports.neg = function(a) {
+export function neg(a) {
     return -BigInt(a);
-};
+}
 
-module.exports.mul = function(a, b) {
+export function mul(a, b) {
     return BigInt(a) * BigInt(b);
-};
+}
 
-module.exports.square = function(a) {
+export function square(a) {
     return BigInt(a) * BigInt(a);
-};
+}
 
-module.exports.pow = function(a, b) {
+export function pow(a, b) {
     return BigInt(a) ** BigInt(b);
-};
+}
 
-module.exports.abs = function(a) {
+export function exp(a, b) {
+    return BigInt(a) ** BigInt(b);
+}
+
+export function abs(a) {
     return BigInt(a) >= 0 ? BigInt(a) : -BigInt(a);
-};
+}
 
-module.exports.div = function(a, b) {
+export function div(a, b) {
     return BigInt(a) / BigInt(b);
-};
+}
 
-module.exports.mod = function(a, b) {
+export function mod(a, b) {
     return BigInt(a) % BigInt(b);
-};
+}
 
-module.exports.eq = function(a, b) {
+export function eq(a, b) {
     return BigInt(a) == BigInt(b);
-};
+}
 
-module.exports.neq = function(a, b) {
+export function neq(a, b) {
     return BigInt(a) != BigInt(b);
-};
+}
 
-module.exports.lt = function(a, b) {
+export function lt(a, b) {
     return BigInt(a) < BigInt(b);
-};
+}
 
-module.exports.gt = function(a, b) {
+export function gt(a, b) {
     return BigInt(a) > BigInt(b);
-};
+}
 
-module.exports.leq = function(a, b) {
+export function leq(a, b) {
     return BigInt(a) <= BigInt(b);
-};
+}
 
-module.exports.geq = function(a, b) {
+export function geq(a, b) {
     return BigInt(a) >= BigInt(b);
-};
+}
 
-module.exports.band = function(a, b) {
+export function band(a, b) {
     return BigInt(a) & BigInt(b);
-};
+}
 
-module.exports.bor = function(a, b) {
+export function bor(a, b) {
     return BigInt(a) | BigInt(b);
-};
+}
 
-module.exports.bxor = function(a, b) {
+export function bxor(a, b) {
     return BigInt(a) ^ BigInt(b);
-};
+}
 
-module.exports.land = function(a, b) {
+export function land(a, b) {
     return BigInt(a) && BigInt(b);
-};
+}
 
-module.exports.lor = function(a, b) {
+export function lor(a, b) {
     return BigInt(a) || BigInt(b);
-};
+}
 
-module.exports.lnot = function(a) {
+export function lnot(a) {
     return !BigInt(a);
-};
+}
 

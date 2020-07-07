@@ -1,5 +1,5 @@
 
-module.exports = function buildPairing(curve) {
+export default function buildPairing(curve) {
     const tm = curve.tm;
     curve.pairing = function pairing(a, b) {
 
@@ -85,4 +85,46 @@ module.exports = function buildPairing(curve) {
 
         return r;
     };
-};
+
+    curve.prepareG1 = function(p) {
+        this.tm.startSyncOp();
+        const pP = this.tm.allocBuff(p);
+        const pPrepP = this.tm.alloc(this.prePSize);
+        this.tm.instance.exports[this.name + "_prepareG1"](pP, pPrepP);
+        const res = this.tm.getBuff(pPrepP, this.prePSize);
+        this.tm.endSyncOp();
+        return res;
+    };
+
+    curve.prepareG2 = function(q) {
+        this.tm.startSyncOp();
+        const pQ = this.tm.allocBuff(q);
+        const pPrepQ = this.tm.alloc(this.preQSize);
+        this.tm.instance.exports[this.name + "_prepareG2"](pQ, pPrepQ);
+        const res = this.tm.getBuff(pPrepQ, this.preQSize);
+        this.tm.endSyncOp();
+        return res;
+    };
+
+    curve.millerLoop = function(preP, preQ) {
+        this.tm.startSyncOp();
+        const pPreP = this.tm.allocBuff(preP);
+        const pPreQ = this.tm.allocBuff(preQ);
+        const pRes = this.tm.alloc(this.Gt.n8);
+        this.tm.instance.exports[this.name + "_millerLoop"](pPreP, pPreQ, pRes);
+        const res = this.tm.getBuff(pRes, this.Gt.n8);
+        this.tm.endSyncOp();
+        return res;
+    };
+
+    curve.finalExponentiation = function(a) {
+        this.tm.startSyncOp();
+        const pA = this.tm.allocBuff(a);
+        const pRes = this.tm.alloc(this.Gt.n8);
+        this.tm.instance.exports[this.name + "_finalExponentiation"](pA, pRes);
+        const res = this.tm.getBuff(pRes, this.Gt.n8);
+        this.tm.endSyncOp();
+        return res;
+    };
+
+}

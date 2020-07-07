@@ -17,16 +17,24 @@
     zksnark JavaScript library. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const chai = require("chai");
+import chai from "chai";
 
-const Scalar = require("../src/scalar.js");
-const bn128 = require("../src/bn128.js");
-const F1Field = require("../src/f1field.js");
+import * as Scalar from "../src/scalar.js";
+import buildBn128 from "../src/bn128.js";
+import F1Field from "../src/f1field.js";
 
 const assert = chai.assert;
 
 
 describe("Sqrt testing", () => {
+    let bn128;
+    before( async() => {
+        bn128 = await buildBn128();
+    });
+    after( async() => {
+        bn128.terminate();
+    });
+
 /*
     it("Should compute sqrts", () => {
         const F = new F1Field(bn128.r);
@@ -71,13 +79,13 @@ describe("Sqrt testing", () => {
     });
     it("Should compute sqrt m=2 p%4 = 3", () => {
         const F = bn128.F2;
-        const e = Scalar.div(Scalar.pow(F.p, F.m), 2);
+        const e = Scalar.div(Scalar.exp(F.F.p, F.m), 2);
         for (let i=0; i<100; i++) {
             const x2 = F.random();
-            const x = F.sqrt(x2);
-            if (x==null) {
-                assert(F.eq( F.pow(x2, e), F.negone));
+            if (!F.isSquare(x2)) {
+                assert(F.eq( F.exp(x2, e), F.negone));
             } else {
+                const x = F.sqrt(x2);
                 assert(F.eq(F.square(x), x2));
             }
         }

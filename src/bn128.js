@@ -1,15 +1,15 @@
-const bn128_wasm = require("wasmsnark").bn128_wasm;
-const buildEngine = require("./engine");
-const Scalar = require("./scalar");
+import wasmcurves from "wasmcurves";
+import buildEngine from "./engine.js";
+import * as Scalar from "./scalar.js";
 
 let curve;
 
-module.exports = async function buildBn128() {
+export default async function buildBn128() {
 
     if (curve) return curve;
     const params = {
         name: "bn128",
-        wasm: bn128_wasm,
+        wasm: wasmcurves.bn128_wasm,
         q: Scalar.e("21888242871839275222246405745257275088696311157297823662689037894645226208583"),
         r: Scalar.e("21888242871839275222246405745257275088548364400416034343698204186575808495617"),
         n8q: 32,
@@ -19,6 +19,11 @@ module.exports = async function buildBn128() {
     };
 
     curve = await buildEngine(params);
+    curve.terminate = function() {
+        this.tm.terminate();
+        curve = null;
+    };
+
     return curve;
-};
+}
 

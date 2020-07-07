@@ -17,11 +17,11 @@
     zksnark JavaScript library. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const chai = require("chai");
+import chai from "chai";
 
-const Scalar = require("../src/scalar");
-const PolField = require("../src/polfield.js");
-const ZqField = require("../src/f1field");
+import * as Scalar from "../src/scalar.js";
+import PolField from "../src/polfield.js";
+import ZqField from "../src/f1field.js";
 
 const assert = chai.assert;
 

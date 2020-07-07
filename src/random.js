@@ -1,11 +1,8 @@
 /* global window */
-const ChaCha = require("./chacha");
+import ChaCha from "./chacha.js";
+import crypto from "crypto";
 
-module.exports.getRandomBytes = getRandomBytes;
-module.exports.getRandomSeed = getRandomSeed;
-module.exports.getThreadRng = getThreadRng;
-
-function getRandomBytes(n) {
+export function getRandomBytes(n) {
     let array = new Uint8Array(n);
     if (typeof window !== "undefined") { // Browser
         if (typeof window.crypto !== "undefined") { // Supported
@@ -17,12 +14,12 @@ function getRandomBytes(n) {
         }
     }
     else { // NodeJS
-        module.require("crypto").randomFillSync(array);
+        crypto.randomFillSync(array);
     }
     return array;
 }
 
-function getRandomSeed() {
+export function getRandomSeed() {
     const arr = getRandomBytes(32);
     const arrV = new Uint32Array(arr.buffer);
     const seed = [];
@@ -34,7 +31,7 @@ function getRandomSeed() {
 
 let threadRng = null;
 
-function getThreadRng() {
+export function getThreadRng() {
     if (threadRng) return threadRng;
     threadRng = new ChaCha(getRandomSeed());
     return threadRng;

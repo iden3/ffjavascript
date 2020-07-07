@@ -1,18 +1,19 @@
 
-const assert = require("assert");
+import * as Scalar_native from "./scalar_native.js";
+import * as Scalar_bigint from "./scalar_bigint.js";
 
 const supportsNativeBigInt = typeof BigInt === "function";
 
-let Scalar;
+let Scalar = {};
 if (supportsNativeBigInt) {
-    Scalar = require("./scalar_native.js");
+    Object.assign(Scalar, Scalar_native);
 } else {
-    Scalar = require("./scalar_bigint.js");
+    Object.assign(Scalar, Scalar_bigint);
 }
 
 
 // Returns a buffer with Little Endian Representation
-Scalar.__proto__.toRprLE = function rprBE(buff, o, e, n8) {
+Scalar.toRprLE = function rprBE(buff, o, e, n8) {
     const s = "0000000" + e.toString(16);
     const v = new Uint32Array(buff.buffer, o, n8/4);
     const l = (((s.length-7)*4 - 1) >> 5)+1;    // Number of 32bit words;
@@ -22,7 +23,7 @@ Scalar.__proto__.toRprLE = function rprBE(buff, o, e, n8) {
 };
 
 // Returns a buffer with Big Endian Representation
-Scalar.__proto__.toRprBE = function rprLEM(buff, o, e, n8) {
+Scalar.toRprBE = function rprLEM(buff, o, e, n8) {
     const s = "0000000" + e.toString(16);
     const v = new DataView(buff.buffer, o, n8);
     const l = (((s.length-7)*4 - 1) >> 5)+1;    // Number of 32bit words;
@@ -31,7 +32,7 @@ Scalar.__proto__.toRprBE = function rprLEM(buff, o, e, n8) {
 };
 
 // Pases a buffer with Little Endian Representation
-Scalar.__proto__.fromRprLE = function rprLEM(buff, o, n8) {
+Scalar.fromRprLE = function rprLEM(buff, o, n8) {
     n8 = n8 || buff.byteLength;
     const v = new Uint32Array(buff.buffer, o, n8/4);
     const a = new Array(n8/4);
@@ -40,7 +41,7 @@ Scalar.__proto__.fromRprLE = function rprLEM(buff, o, n8) {
 };
 
 // Pases a buffer with Big Endian Representation
-Scalar.__proto__.fromRprBE = function rprLEM(buff, o, n8) {
+Scalar.fromRprBE = function rprLEM(buff, o, n8) {
     n8 = n8 || buff.byteLength;
     const v = new DataView(buff.buffer, o, n8);
     const a = new Array(n8/4);
@@ -50,22 +51,69 @@ Scalar.__proto__.fromRprBE = function rprLEM(buff, o, n8) {
     return Scalar.fromString(a.join(""), 16);
 };
 
-Scalar.__proto__.toString = function toString(a, radix) {
+Scalar.toString = function toString(a, radix) {
     return a.toString(radix);
 };
 
-Scalar.__proto__.toLEBuff = function toLEBuff(a) {
+Scalar.toLEBuff = function toLEBuff(a) {
     const buff = new Uint8Array(Math.floor((Scalar.bitLength(a) - 1) / 8) +1);
     Scalar.toRprLE(buff, 0, a, buff.byteLength);
     return buff;
 };
 
 
-
 Scalar.zero = Scalar.e(0);
 Scalar.one = Scalar.e(1);
 
-module.exports = Scalar;
+export let {
+    toRprLE,
+    toRprBE,
+    fromRprLE,
+    fromRprBE,
+    toString,
+    toLEBuff,
+    zero,
+    one,
+    fromString,
+    e,
+    fromArray,
+    bitLength,
+    isNegative,
+    isZero,
+    shiftLeft,
+    shiftRight,
+    shl,
+    shr,
+    isOdd,
+    naf,
+    bits,
+    toNumber,
+    toArray,
+    add,
+    sub,
+    neg,
+    mul,
+    square,
+    pow,
+    exp,
+    abs,
+    div,
+    mod,
+    eq,
+    neq,
+    lt,
+    gt,
+    leq,
+    geq,
+    band,
+    bor,
+    bxor,
+    land,
+    lor,
+    lnot,
+} = Scalar;
+
+
 
 
 

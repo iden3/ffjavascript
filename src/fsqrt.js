@@ -1,28 +1,25 @@
-const Scalar = require("./scalar");
-const assert = require("assert");
+import * as Scalar from "./scalar.js";
 // Check here: https://eprint.iacr.org/2012/685.pdf
 
-module.exports = function buildSqrt (F) {
+export default function buildSqrt (F) {
     if ((F.m % 2) == 1) {
         if (Scalar.eq(Scalar.mod(F.p, 4), 1 )) {
             if (Scalar.eq(Scalar.mod(F.p, 8), 1 )) {
                 if (Scalar.eq(Scalar.mod(F.p, 16), 1 )) {
                     // alg7_muller(F);
                     alg5_tonelliShanks(F);
-                } else if (Scalar.eq(Scalar.mod(F.p, 16), 1 )) {
+                } else if (Scalar.eq(Scalar.mod(F.p, 16), 9 )) {
                     alg4_kong(F);
                 } else {
-                    assert(false);
+                    throw new Error("Field withot sqrt");
                 }
             } else if (Scalar.eq(Scalar.mod(F.p, 8), 5 )) {
                 alg3_atkin(F);
             } else {
-                assert(false);
+                throw new Error("Field withot sqrt");
             }
         } else if (Scalar.eq(Scalar.mod(F.p, 4), 3 )) {
             alg2_shanks(F);
-        } else {
-            assert(false);
         }
     } else {
         const pm2mod4 = Scalar.mod(Scalar.pow(F.p, F.m/2), 4);
@@ -35,95 +32,8 @@ module.exports = function buildSqrt (F) {
         }
 
     }
-};
-
-
-function alg7_muller(F) {
-    F.sqrt_q = Scalar.pow(F.p, F.m);
-    F.sqrt_2 = F.add(F.one, F.one);
-    F.sqrt_4 = F.add(F.sqrt_2, F.sqrt_2);
-    F.sqrt_e = Scalar.div( Scalar.sub(F.sqrt_q, 1) , 2);
-
-    F.sqrt_bits = Scalar.bits(Scalar.div( Scalar.sub(F.sqrt_q, 1) , 4));
-
-    F.sqrt_v = function(alfa) {
-        const d = [];
-        d[0] = alfa;
-        d[1] = this.sub(this.square(alfa), this.sqrt_2);
-        for (let j=F.sqrt_bits.length-2; j>0; j--) {
-            const d0 =
-                this.sub(
-                    this.mul(d[0], d[1]),
-                    alfa
-                );
-            const d1 =
-                this.sub(
-                    this.square( d[ 1 - F.sqrt_bits[j] ]),
-                    this.sqrt_2
-                );
-            d[ 1 - F.sqrt_bits[j] ] = d0;
-            d[ F.sqrt_bits[j] ] = d1;
-/*
-            d[ 1 - F.sqrt_bits[j] ] =
-                this.sub(
-                    this.mul(d[0], d[1]),
-                    alfa
-                );
-            d[ F.sqrt_bits[j] ] =
-                this.sub(
-                    this.square( d[ 1 - F.sqrt_bits[j] ]),
-                    this.sqrt_2
-                );
-*/
-        }
-        if (F.sqrt_bits[0] == 1) {
-            return this.sub(
-                this.mul(d[0], d[1]),
-                alfa
-            );
-        } else {
-            return this.sub(
-                this.square(d[0]),
-                this.sqrt_2
-            );
-        }
-    };
-
-    F.sqrt = function(a) {
-        if (this.isZero(a)) return this.zero;
-        if (this.eq(a, this.sqrt_4)) return this.sqrt_2;
-
-
-        let t = this.one;
-        let a1 = this.pow( this.sub(a, F.sqrt_4), F.sqrt_e);
-
-        while (this.eq(a1, this.one)) {
-            t = this.random();
-            while (this.isZero(t) || this.eq(t, this.one)) {
-                t = this.random();
-            }
-
-            const b = this.sub(this.mul(a, this.square(t)), this.sqrt_4);
-            if (this.isZero(b)) {
-                return this.mul(this.sqrt_2, this.inv(t));
-            }
-
-            a1 = this.pow(b, F.sqrt_e);
-        }
-
-        const alfa = this.sub(this.mul(a, this.square(t)), this.sqrt_2);
-
-        const x = this.div( this.sqrt_v(alfa), t);
-
-        const a0 = this.sub(this.square(x), a);
-
-        if (!this.isZero(a0)) return null;
-
-        return x;
-
-
-    };
 }
+
 
 function alg5_tonelliShanks(F) {
     F.sqrt_q = Scalar.pow(F.p, F.m);
@@ -180,13 +90,13 @@ function alg5_tonelliShanks(F) {
 
 function alg4_kong(F) {
     F.sqrt = function() {
-        assert(false, "Not implemented");
+        throw new Error("Sqrt alg 4 not implemented");
     };
 }
 
 function alg3_atkin(F) {
     F.sqrt = function() {
-        assert(false, "Not implemented");
+        throw new Error("Sqrt alg 3 not implemented");
     };
 }
 
@@ -213,7 +123,7 @@ function alg2_shanks(F) {
 
 function alg10_adj(F) {
     F.sqrt = function() {
-        assert(false, "Not implemented");
+        throw new Error("Sqrt alg 10 not implemented");
     };
 }
 
@@ -251,6 +161,6 @@ function alg9_adj(F) {
 
 function alg8_complex(F) {
     F.sqrt = function() {
-        assert(false, "Not implemented");
+        throw new Error("Sqrt alg 8 not implemented");
     };
 }

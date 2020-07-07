@@ -24,8 +24,7 @@
     by the array [ p0, p1, p2, ... , pn ].
  */
 
-const assert = require("assert");
-class FFT {
+export default class FFT {
     constructor (G, F, opMulGF) {
         this.F = F;
         this.G = G;
@@ -51,7 +50,8 @@ class FFT {
 
 
         this.roots = [];
-/*        for (let i=0; i<16; i++) {
+        /*
+        for (let i=0; i<16; i++) {
             let r = this.F.one;
             n = 1 << i;
             const rootsi = new Array(n);
@@ -62,7 +62,7 @@ class FFT {
 
             this.roots.push(rootsi);
         }
-    */
+        */
         this._setRoots(15);
     }
 
@@ -86,7 +86,9 @@ class FFT {
         this._setRoots(bits);
 
         const m = 1 << bits;
-        assert (p.length == m);
+        if (p.length != m) {
+            throw new Error("Size must be multiple of 2");
+        }
         const res = __fft(this, p, bits, 0, 1);
         return res;
     }
@@ -97,8 +99,10 @@ class FFT {
         const bits = log2(p.length-1)+1;
         this._setRoots(bits);
         const m = 1 << bits;
-        assert (p.length == m);
-        const res =  __ffti(this, p, bits, 0, 1);
+        if (p.length != m) {
+            throw new Error("Size must be multiple of 2");
+        }
+        const res =  __fft(this, p, bits, 0, 1);
         const twoinvm = this.F.inv( this.F.mulScalar(this.F.one, m) );
         const resn = new Array(m);
         for (let i=0; i<m; i++) {
@@ -142,5 +146,3 @@ function __fft(PF, pall, bits, offset, step) {
     return out;
 }
 
-
-module.exports = FFT;

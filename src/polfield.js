@@ -24,7 +24,7 @@
     by the array [ p0, p1, p2, ... , pn ].
  */
 
-class PolField {
+export default class PolField {
     constructor (F) {
         this.F = F;
 
@@ -509,7 +509,7 @@ class PolField {
         }
 
         const z = this.F.sub(tm, this.F.one);
-//        let l = this.F.mul(z,  this.F.pow(this.F.twoinv, m));
+        //        let l = this.F.mul(z,  this.F.pow(this.F.twoinv, m));
         let l = this.F.mul(z,  this.F.inv(this.F.e(m)));
         for (let i = 0; i < m; i++) {
             u[i] = this.F.mul(l, this.F.inv(this.F.sub(t,this.roots[bits][i])));
@@ -615,4 +615,3 @@ function __bitReverse(p, bits) {
 }
 
 
-module.exports = PolField;

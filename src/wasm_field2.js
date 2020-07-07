@@ -1,11 +1,8 @@
+import { getThreadRng } from "./random.js";
+import * as Scalar from "./scalar.js";
 
 
-const assert = require("assert");
-const {getThreadRng} = require("./random");
-const Scalar = require("./scalar");
-
-
-class WasmField2 {
+export default class WasmField2 {
 
     constructor(tm, prefix, F) {
         this.tm = tm;
@@ -95,6 +92,14 @@ class WasmField2 {
         return this.op2("_mul", a, b);
     }
 
+    div(a, b) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        this.tm.instance.exports[this.prefix + "_inverse"](this.pOp2, this.pOp2);
+        this.tm.instance.exports[this.prefix + "_mul"](this.pOp1, this.pOp2, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
+    }
+
     square(a) {
         return this.op1("_square", a);
     }
@@ -127,7 +132,7 @@ class WasmField2 {
             res.set(c2, this.F.n8*2);
             return res;
         } else {
-            assert(false, "invalid F2");
+            throw new Error("invalid F2");
         }
     }
 
@@ -166,6 +171,4 @@ class WasmField2 {
     }
 
 }
-
-module.exports = WasmField2;
 

@@ -1,6 +1,6 @@
 /* global WebAssembly */
 
-module.exports = function thread(self) {
+export default function thread(self) {
     let instance;
     let memory;
     let u32;
@@ -69,7 +69,6 @@ module.exports = function thread(self) {
     }
 
     function runTask(task) {
-        const self=this;
         if (task[0].cmd == "INIT") {
             return init(task[0]);
         }
@@ -113,145 +112,6 @@ module.exports = function thread(self) {
         return ctx.out;
     }
 
-    function batchApplyKey(task) {
-        const outBuffLen = task.buff.byteLength;
-        const oldAlloc = u32[0];
-        const pBufIn = allocBuffer(task.buff);
-        const pFirst = allocBuffer(task.first);
-        const pInc = allocBuffer(task.inc);
-        const pBuffOut = alloc(outBuffLen);
-        if (task.Gs == "G1") {
-            instance.exports.g1m_batchApplyKey(pBufIn, task.n, pFirst, pInc, pBuffOut);
-        } else {
-            instance.exports.g2m_batchApplyKey(pBufIn, task.n, pFirst, pInc, pBuffOut);
-        }
-
-        const outBuff = getBuffer(pBuffOut, outBuffLen).slice();
-        u32[0] = oldAlloc;
-        return [ outBuff, outBuff.buffer];
-    }
-
-    function batchConvert(task) {
-        const oldAlloc = u32[0];
-
-        const outBuffLen = task.n*task.sOut;
-        const pBufIn = allocBuffer(task.buff);
-        const pBuffOut = alloc(outBuffLen);
-
-        instance.exports[task.fnName](pBufIn, task.n, pBuffOut);
-        const outBuff = getBuffer(pBuffOut, outBuffLen).slice();
-        u32[0] = oldAlloc;
-        return [ outBuff, outBuff.buffer];
-    }
-
-    function batchConvertOld(task) {
-        const oldAlloc = u32[0];
-
-        const outBuffLen = task.n*task.sGin;
-        const pBufIn = allocBuffer(task.buff);
-        const pBuffOut = alloc(outBuffLen);
-        if (task.Gs == "G1") {
-            if (task.fr=="LEM") {
-                if (task.to=="U") {
-                    instance.exports.g1m_batchLEMtoU(pBufIn, task.n, pBuffOut);
-                } else if (task.to=="C") {
-                    instance.exports.g1m_batchLEMtoC(pBufIn, task.n, pBuffOut);
-                } else {
-                    throw new Error("Invalid to: "+task.to);
-                }
-            } else {
-                throw new Error("Invalid fr: "+task.fr);
-            }
-        } else if (task.Gs == "G2") {
-            if (task.fr=="LEM") {
-                if (task.to=="U") {
-                    instance.exports.g2m_batchLEMtoU(pBufIn, task.n, pBuffOut);
-                } else if (task.to=="C") {
-                    instance.exports.g2m_batchLEMtoC(pBufIn, task.n, pBuffOut);
-                } else {
-                    throw new Error("Invalid to: "+task.to);
-                }
-            } else {
-                throw new Error("Invalid fr: "+task.fr);
-            }
-        } else {
-            throw new Error("Invalid group: "+task.gs);
-        }
-
-        const outBuff = getBuffer(pBuffOut, outBuffLen).slice();
-        u32[0] = oldAlloc;
-        return [ outBuff, outBuff.buffer];
-    }
-
-
-    function fft(task) {
-        const oldAlloc = u32[0];
-
-        const maxBuffLen = task.n*task.sGin*3/2;
-        const pBuff = alloc(maxBuffLen);
-        setBuffer(pBuff, task.buff);
-        if (task.Gs == "G1") {
-            instance.exports.g1m_batchToJacobian(pBuff, task.n, pBuff);
-            if (task.inverse) {
-                instance.exports.g1m_ifft(pBuff, task.n);
-            } else {
-                instance.exports.g1m_fft(pBuff, task.n);
-            }
-            instance.exports.g1m_batchToAffine(pBuff, task.n, pBuff);
-        } else if (task.Gs == "G2") {
-            instance.exports.g2m_batchToJacobian(pBuff, task.n, pBuff);
-            if (task.inverse) {
-                instance.exports.g2m_ifft(pBuff, task.n);
-            } else {
-                instance.exports.g2m_fft(pBuff, task.n);
-            }
-            instance.exports.g2m_batchToAffine(pBuff, task.n, pBuff);
-        } else if (task.Gs == "Fr") {
-            if (task.inverse) {
-                instance.exports.frm_ifft(pBuff, task.n);
-            } else {
-                instance.exports.frm_fft(pBuff, task.n);
-            }
-        } else {
-            throw new Error("Invalid group: "+task.gs);
-        }
-
-        const outBuff = getBuffer(pBuff, task.n*task.sGin).slice();
-        u32[0] = oldAlloc;
-        return [ outBuff, outBuff.buffer];
-    }
-
-
-    function multiexp(task) {
-        const oldAlloc = u32[0];
-
-        const pBuffBases = allocBuffer(task.buffBases);
-        const pBuffScalars = allocBuffer(task.buffScalars);
-        const pOut = alloc(task.sOut);
-        instance.exports[task.fnName](pBuffBases, pBuffScalars, task.sScalar, task.n, pOut);
-
-        const outBuff = getBuffer(pOut, task.sOut).slice();
-        u32[0] = oldAlloc;
-        return [ outBuff, outBuff.buffer];
-    }
-
-
-    function taskManager(task) {
-        if (task.command == "INIT") {
-            return init(task);
-        } else if (task.command == "BATCH_APPLY_KEY") {
-            return batchApplyKey(task);
-        } else if (task.command == "BATCH_CONVERT") {
-            return batchConvert(task);
-        } else if (task.command == "FFT") {
-            return fft(task);
-        } else if (task.command == "MULTIEXP") {
-            return multiexp(task);
-        } else {
-            console.log("Invalid task", task);
-            throw new Error("Invalid task");
-        }
-    }
 
     return runTask;
-};
+}

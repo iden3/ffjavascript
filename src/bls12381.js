@@ -1,15 +1,15 @@
-const bls12381_wasm = require("wasmsnark").bls12381_wasm;
-const buildEngine = require("./engine");
-const Scalar = require("./scalar");
+import wasmcurves from "wasmcurves";
+import buildEngine from "./engine.js";
+import * as Scalar from "./scalar.js";
 
 let curve;
 
-module.exports = async function buildBls12381() {
+export default async function buildBls12381() {
 
     if (curve) return curve;
     const params = {
         name: "bls12381",
-        wasm: bls12381_wasm,
+        wasm: wasmcurves.bls12381_wasm,
         q: Scalar.e("1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab", 16),
         r: Scalar.e("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001", 16),
         n8q: 48,
@@ -20,6 +20,11 @@ module.exports = async function buildBls12381() {
     };
 
     curve = await buildEngine(params);
+
+    curve.terminate = function() {
+        this.tm.terminate();
+        curve = null;
+    };
     return curve;
-};
+}
 

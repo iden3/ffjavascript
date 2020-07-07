@@ -17,11 +17,10 @@
     snarkjs. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const Scalar = require("./scalar.js");
-const assert = require("assert");
+import * as Scalar from "./scalar.js";
 
 
-exports.mulScalar = (F, base, e) => {
+export function mulScalar(F, base, e) {
     let res;
 
     if (Scalar.isZero(e)) return F.zero;
@@ -33,7 +32,7 @@ exports.mulScalar = (F, base, e) => {
     } else if (n[n.length-1] == -1) {
         res = F.neg(base);
     } else {
-        assert(false);
+        throw new Error("invlaud NAF");
     }
 
     for (let i=n.length-2; i>=0; i--) {
@@ -48,7 +47,7 @@ exports.mulScalar = (F, base, e) => {
     }
 
     return res;
-};
+}
 
 
 /*
@@ -70,7 +69,7 @@ exports.mulScalar = (F, base, e) =>{
 */
 
 
-exports.exp = (F, base, e) => {
+export function exp(F, base, e) {
 
     if (Scalar.isZero(e)) return F.one;
 
@@ -90,6 +89,6 @@ exports.exp = (F, base, e) => {
     }
 
     return res;
-};
+}
 
 
