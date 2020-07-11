@@ -40,6 +40,10 @@ class Deferred {
     }
 }
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function base64ToArrayBuffer(base64) {
     if (process.browser) {
         var binary_string = window.atob(base64);
@@ -240,10 +244,11 @@ class ThreadManager {
         return res;
     }
 
-    terminate() {
+    async terminate() {
         for (let i=0; i<this.workers.length; i++) {
             this.workers[i].postMessage([{cmd: "TERMINATE"}]);
         }
+        await sleep(200);
     }
 
 }

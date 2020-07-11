@@ -302,5 +302,5 @@ export default class ZqField {
         return v;
     }
 
-};
+}
 

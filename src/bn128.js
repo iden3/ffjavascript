@@ -19,9 +19,9 @@ export default async function buildBn128() {
     };
 
     curve = await buildEngine(params);
-    curve.terminate = function() {
-        this.tm.terminate();
+    curve.terminate = async function() {
         curve = null;
+        await this.tm.terminate();
     };
 
     return curve;

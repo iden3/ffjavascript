@@ -193,6 +193,7 @@ export default class WasmField1 {
 
     fromRng(rng) {
         let v;
+        const buff = new Uint8Array(this.n8);
         do {
             v = Scalar.zero;
             for (let i=0; i<this.n64; i++) {
@@ -200,7 +201,8 @@ export default class WasmField1 {
             }
             v = Scalar.band(v, this.mask);
         } while (Scalar.geq(v, this.p));
-        return this.e(v);
+        Scalar.toRprLE(buff, 0, v, this.n8);
+        return buff;
     }
 
     random() {

@@ -4,7 +4,7 @@ export default function buildFFT(curve, groupName) {
     const G = curve[groupName];
     const Fr = curve.Fr;
     const tm = G.tm;
-    async function _fft(buff, inverse, inType, outType, log) {
+    async function _fft(buff, inverse, inType, outType, logger) {
 
         inType = inType || "affine";
         outType = outType || "affine";
@@ -131,7 +131,7 @@ export default function buildFFT(curve, groupName) {
                 }
                 task.push({cmd: "GET", out:0, var: 0, len: sMid*pointsInChunk});
                 promises.push(tm.queueAction(task).then( (r) => {
-                    if (log) log(`fft: ${i}/${nChunks}`);
+                    if (logger) logger.debug(`fft: ${i}/${nChunks}`);
                     return r;
                 }));
             }
@@ -140,7 +140,7 @@ export default function buildFFT(curve, groupName) {
             for (let i = 0; i< nChunks; i++) chunks[i] = chunks[i][0];
 
             for (let i = MAX_BITS_THREAD+1;   i<=bits; i++) {
-                if (log) log(`${i}/${bits}`);
+                if (logger) logger.debug(`fft join ${i}/${bits}`);
                 const nGroups = 1 << (bits - i);
                 const nChunksPerGroup = nChunks / nGroups;
                 const opPromises = [];
@@ -230,12 +230,12 @@ export default function buildFFT(curve, groupName) {
         }
     }
 
-    G.fft = async function(buff, inType, outType, log) {
-        return await _fft(buff, false, inType, outType, log);
+    G.fft = async function(buff, inType, outType, logger) {
+        return await _fft(buff, false, inType, outType, logger);
     };
 
-    G.ifft = async function(buff, inType, outType, log) {
-        return await _fft(buff, true, inType, outType, log);
+    G.ifft = async function(buff, inType, outType, logger) {
+        return await _fft(buff, true, inType, outType, logger);
     };
 
     G.fftMix = async function fftMix(buff) {
@@ -422,7 +422,7 @@ export default function buildFFT(curve, groupName) {
         }
 
         const nPoints = Math.floor(buff.byteLength / sG);
-        if (nPoints == 1 << log2(nPoints)) {
+        if (nPoints != 1 << log2(nPoints)) {
             throw new Error("Invalid number of points");
         }
 
