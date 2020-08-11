@@ -114,7 +114,6 @@ export default function buildFFT(curve, groupName) {
 
             let chunks;
             const pointsInChunk = 1 << MAX_BITS_THREAD;
-            const chunkSize = pointsInChunk * sIn;
             const nChunks = nPoints / pointsInChunk;
 
             const promises = [];
@@ -209,17 +208,16 @@ export default function buildFFT(curve, groupName) {
                 let p= sOut;
                 for (let i=nChunks-1; i>0; i--) {
                     buffOut.set(chunks[i], p);
-                    p += chunkSize;
+                    p += pointsInChunk*sOut;
                     delete chunks[i];  // Liberate mem
                 }
                 buffOut.set(chunks[0].slice(0, (pointsInChunk-1)*sOut), p);
-                delete chunks[nChunks-1];
+                delete chunks[0];
             } else {
                 for (let i=0; i<nChunks; i++) {
                     buffOut.set(chunks[i], pointsInChunk*sOut*i);
                     delete chunks[i];
                 }
-                return buffOut;
             }
         }
 
