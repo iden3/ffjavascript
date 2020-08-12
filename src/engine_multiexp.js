@@ -34,6 +34,8 @@ export default function buildMultiexp(curve, groupName) {
             throw new Error("Invalid group");
         }
         const nPoints = Math.floor(buffBases.byteLength / sGIn);
+
+        if (nPoints == 0) return G.zero;
         const sScalar = Math.floor(buffScalars.byteLength / nPoints);
         if( sScalar * nPoints != buffScalars.byteLength) {
             throw new Error("Scalar size does not match");
