@@ -18,7 +18,7 @@
     along with wasmsnark. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const MEM_SIZE = 4096;  // Memory size in 64K Pakes (256Mb)
+const MEM_SIZE = 8192;  // Memory size in 64K Pakes (512Mb)
 
 
 import thread from "./threadman_thread.js";
