@@ -12,10 +12,18 @@ describe("Utils native", () => {
     it("Should convert integer to buffer little-endian", () => {
         const buff = utilsN.leInt2Buff(num, 32);
         const numFromBuff = utilsN.leBuff2int(buff);
-
+        
         assert(ScalarN.eq(num, numFromBuff), true);
     });
 
+    it("Should convert integer to buffer little-endian 2", () => {
+        const buff1 = Buffer.from("Rollup_DB_EthAddr"); 
+        const buff2= Buffer.from("Rollup_DB_ChainID");
+        const numFromBuff = utilsN.leBuff2int(buff1);
+        const numFromBuff2 = utilsN.leBuff2int(buff2);
+
+        assert.equal(ScalarN.eq(numFromBuff, numFromBuff2), false)
+    });
     it("Should convert integer to buffer big-endian", () => {
         const buff = utilsN.beInt2Buff(num, 32);
         const numFromBuff = utilsN.beBuff2int(buff);
