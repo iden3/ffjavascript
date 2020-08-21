@@ -1933,7 +1933,7 @@ Scalar.toRprLE = function rprBE(buff, o, e, n8) {
 // Returns a buffer with Big Endian Representation
 Scalar.toRprBE = function rprLEM(buff, o, e, n8) {
     const s = "0000000" + e.toString(16);
-    const v = new DataView(buff.buffer, o, n8);
+    const v = new DataView(buff.buffer, buff.byteOffset + o, n8);
     const l = (((s.length-7)*4 - 1) >> 5)+1;    // Number of 32bit words;
     for (let i=0; i<l; i++) v.setUint32(n8-i*4 -4, parseInt(s.substring(s.length-8*i-8, s.length-8*i), 16), false);
     for (let i=0; i<n8/4-l; i++) v[i] = 0;
@@ -1951,7 +1951,7 @@ Scalar.fromRprLE = function rprLEM(buff, o, n8) {
 // Pases a buffer with Big Endian Representation
 Scalar.fromRprBE = function rprLEM(buff, o, n8) {
     n8 = n8 || buff.byteLength;
-    const v = new DataView(buff.buffer, o, n8);
+    const v = new DataView(buff.buffer, buff.byteOffset + o, n8);
     const a = new Array(n8/4);
     for (let i=0; i<n8/4; i++) {
         a[i] = v.getUint32(i*4, false).toString(16).padStart(8, "0");
@@ -4845,7 +4845,7 @@ function beInt2Buff(n, len) {
 function leBuff2int(buff) {
     let res = 0n;
     let i = 0;
-    const buffV = new DataView(buff.buffer);
+    const buffV = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
     while (i<buff.length) {
         if (i + 4 <= buff.length) {
             res += BigInt(buffV.getUint32(i, true)) << BigInt( i*8);
@@ -6077,8 +6077,6 @@ class WasmCurve {
 function thread(self) {
     let instance;
     let memory;
-    let u32;
-    let u8;
 
     if (self) {
         self.onmessage = function(e) {
@@ -6106,8 +6104,6 @@ function thread(self) {
         const code = new Uint8Array(data.code);
         const wasmModule = await WebAssembly.compile(code);
         memory = new WebAssembly.Memory({initial:data.init});
-        u32 = new Uint32Array(memory.buffer);
-        u8 = new Uint8Array(memory.buffer);
 
         instance = await WebAssembly.instantiate(wasmModule, {
             env: {
@@ -6119,10 +6115,11 @@ function thread(self) {
 
 
     function alloc(length) {
+        const u32 = new Uint32Array(memory.buffer, 0, 1);
         while (u32[0] & 3) u32[0]++;  // Return always aligned pointers
         const res = u32[0];
         u32[0] += length;
-        while (u32[0] > memory.buffer.byteLength) {
+        while (u32[0] + length > memory.buffer.byteLength) {
             memory.grow(100);
         }
         return res;
@@ -6135,10 +6132,12 @@ function thread(self) {
     }
 
     function getBuffer(pointer, length) {
+        const u8 = new Uint8Array(memory.buffer);
         return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);
     }
 
     function setBuffer(pointer, buffer) {
+        const u8 = new Uint8Array(memory.buffer);
         u8.set(new Uint8Array(buffer), pointer);
     }
 
@@ -6150,7 +6149,8 @@ function thread(self) {
             vars: [],
             out: []
         };
-        const oldAlloc = u32[0];
+        const u32a = new Uint32Array(memory.buffer, 0, 1);
+        const oldAlloc = u32a[0];
         for (let i=0; i<task.length; i++) {
             switch (task[i].cmd) {
             case "ALLOCSET":
@@ -6182,7 +6182,8 @@ function thread(self) {
                 throw new Error("Invalid cmd");
             }
         }
-        u32[0] = oldAlloc;
+        const u32b = new Uint32Array(memory.buffer, 0, 1);
+        u32b[0] = oldAlloc;
         return ctx.out;
     }
 
