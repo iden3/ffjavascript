@@ -29,7 +29,7 @@ export default function thread(self) {
     async function init(data) {
         const code = new Uint8Array(data.code);
         const wasmModule = await WebAssembly.compile(code);
-        memory = new WebAssembly.Memory({initial:data.init});
+        memory = new WebAssembly.Memory({initial:data.init, maximum: 32767});
 
         instance = await WebAssembly.instantiate(wasmModule, {
             env: {
@@ -45,8 +45,11 @@ export default function thread(self) {
         while (u32[0] & 3) u32[0]++;  // Return always aligned pointers
         const res = u32[0];
         u32[0] += length;
-        while (u32[0] + length > memory.buffer.byteLength) {
-            memory.grow(100);
+        if (u32[0] + length > memory.buffer.byteLength) {
+            const currentPages = memory.buffer.byteLength / 0x10000;
+            let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;
+            if (requiredPages>32767) requiredPages=32767;
+            memory.grow(requiredPages-currentPages);
         }
         return res;
     }

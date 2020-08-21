@@ -4796,7 +4796,7 @@ function beBuff2int(buff) {
     let res = 0n;
     let i = buff.length;
     let offset = 0;
-    const buffV = new DataView(buff.buffer);
+    const buffV = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
     while (i>0) {
         if (i >= 4) {
             i -= 4;
@@ -6103,7 +6103,7 @@ function thread(self) {
     async function init(data) {
         const code = new Uint8Array(data.code);
         const wasmModule = await WebAssembly.compile(code);
-        memory = new WebAssembly.Memory({initial:data.init});
+        memory = new WebAssembly.Memory({initial:data.init, maximum: 32767});
 
         instance = await WebAssembly.instantiate(wasmModule, {
             env: {
@@ -6119,8 +6119,11 @@ function thread(self) {
         while (u32[0] & 3) u32[0]++;  // Return always aligned pointers
         const res = u32[0];
         u32[0] += length;
-        while (u32[0] + length > memory.buffer.byteLength) {
-            memory.grow(100);
+        if (u32[0] + length > memory.buffer.byteLength) {
+            const currentPages = memory.buffer.byteLength / 0x10000;
+            let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;
+            if (requiredPages>32767) requiredPages=32767;
+            memory.grow(requiredPages-currentPages);
         }
         return res;
     }
@@ -6211,7 +6214,7 @@ function thread(self) {
     along with wasmsnark. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const MEM_SIZE = 8192;  // Memory size in 64K Pakes (512Mb)
+const MEM_SIZE = 1000;  // Memory size in 64K Pakes (512Mb)
 const inBrowser = (typeof window !== "undefined");
 let NodeWorker;
 if (!inBrowser) {

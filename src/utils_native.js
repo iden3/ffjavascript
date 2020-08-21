@@ -40,7 +40,7 @@ export function beBuff2int(buff) {
     let res = 0n;
     let i = buff.length;
     let offset = 0;
-    const buffV = new DataView(buff.buffer);
+    const buffV = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
     while (i>0) {
         if (i >= 4) {
             i -= 4;
