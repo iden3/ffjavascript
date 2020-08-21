@@ -3,8 +3,6 @@
 export default function thread(self) {
     let instance;
     let memory;
-    let u32;
-    let u8;
 
     if (self) {
         self.onmessage = function(e) {
@@ -32,8 +30,6 @@ export default function thread(self) {
         const code = new Uint8Array(data.code);
         const wasmModule = await WebAssembly.compile(code);
         memory = new WebAssembly.Memory({initial:data.init});
-        u32 = new Uint32Array(memory.buffer);
-        u8 = new Uint8Array(memory.buffer);
 
         instance = await WebAssembly.instantiate(wasmModule, {
             env: {
@@ -45,10 +41,11 @@ export default function thread(self) {
 
 
     function alloc(length) {
+        const u32 = new Uint32Array(memory.buffer, 0, 1);
         while (u32[0] & 3) u32[0]++;  // Return always aligned pointers
         const res = u32[0];
         u32[0] += length;
-        while (u32[0] > memory.buffer.byteLength) {
+        while (u32[0] + length > memory.buffer.byteLength) {
             memory.grow(100);
         }
         return res;
@@ -61,10 +58,12 @@ export default function thread(self) {
     }
 
     function getBuffer(pointer, length) {
+        const u8 = new Uint8Array(memory.buffer);
         return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);
     }
 
     function setBuffer(pointer, buffer) {
+        const u8 = new Uint8Array(memory.buffer);
         u8.set(new Uint8Array(buffer), pointer);
     }
 
@@ -76,7 +75,8 @@ export default function thread(self) {
             vars: [],
             out: []
         };
-        const oldAlloc = u32[0];
+        const u32a = new Uint32Array(memory.buffer, 0, 1);
+        const oldAlloc = u32a[0];
         for (let i=0; i<task.length; i++) {
             switch (task[i].cmd) {
             case "ALLOCSET":
@@ -108,7 +108,8 @@ export default function thread(self) {
                 throw new Error("Invalid cmd");
             }
         }
-        u32[0] = oldAlloc;
+        const u32b = new Uint32Array(memory.buffer, 0, 1);
+        u32b[0] = oldAlloc;
         return ctx.out;
     }
 

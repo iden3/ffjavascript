@@ -25,7 +25,7 @@ Scalar.toRprLE = function rprBE(buff, o, e, n8) {
 // Returns a buffer with Big Endian Representation
 Scalar.toRprBE = function rprLEM(buff, o, e, n8) {
     const s = "0000000" + e.toString(16);
-    const v = new DataView(buff.buffer, o, n8);
+    const v = new DataView(buff.buffer, buff.byteOffset + o, n8);
     const l = (((s.length-7)*4 - 1) >> 5)+1;    // Number of 32bit words;
     for (let i=0; i<l; i++) v.setUint32(n8-i*4 -4, parseInt(s.substring(s.length-8*i-8, s.length-8*i), 16), false);
     for (let i=0; i<n8/4-l; i++) v[i] = 0;
@@ -43,7 +43,7 @@ Scalar.fromRprLE = function rprLEM(buff, o, n8) {
 // Pases a buffer with Big Endian Representation
 Scalar.fromRprBE = function rprLEM(buff, o, n8) {
     n8 = n8 || buff.byteLength;
-    const v = new DataView(buff.buffer, o, n8);
+    const v = new DataView(buff.buffer, buff.byteOffset + o, n8);
     const a = new Array(n8/4);
     for (let i=0; i<n8/4; i++) {
         a[i] = v.getUint32(i*4, false).toString(16).padStart(8, "0");

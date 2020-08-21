@@ -89,7 +89,7 @@ export function beInt2Buff(n, len) {
 export function leBuff2int(buff) {
     let res = 0n;
     let i = 0;
-    const buffV = new DataView(buff.buffer);
+    const buffV = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
     while (i<buff.length) {
         if (i + 4 <= buff.length) {
             res += BigInt(buffV.getUint32(i, true)) << BigInt( i*8);
