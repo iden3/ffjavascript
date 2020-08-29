@@ -1,4 +1,5 @@
 import {log2, buffReverseBits} from "./utils.js";
+import BigBuffer from "./bigbuffer.js";
 
 export default function buildFFT(curve, groupName) {
     const G = curve[groupName];
@@ -96,7 +97,7 @@ export default function buildFFT(curve, groupName) {
         if (nPoints <= (1 << MAX_BITS_THREAD)) {
             const task = [];
             task.push({cmd: "ALLOC", var: 0, len: sMid*nPoints});
-            task.push({cmd: "SET", var: 0, buff: buff});
+            task.push({cmd: "SET", var: 0, buff: buff.slice()});
             if (fnIn2Mid) {
                 task.push({cmd: "CALL", fnName:fnIn2Mid, params: [{var:0}, {val: nPoints}, {var: 0}]});
             }
@@ -202,7 +203,11 @@ export default function buildFFT(curve, groupName) {
                 }
             }
 
-            buffOut = new Uint8Array(nPoints * sOut);
+            if (buff instanceof BigBuffer) {
+                buffOut = new BigBuffer(nPoints*sOut);
+            } else {
+                buffOut = new Uint8Array(nPoints*sOut);
+            }
             if (inverse) {
                 buffOut.set(chunks[0].slice((pointsInChunk-1)*sOut));
                 let p= sOut;
@@ -328,8 +333,12 @@ export default function buildFFT(curve, groupName) {
             }
         }
 
-
-        const fullBuffOut = new Uint8Array(nPoints*sG);
+        let fullBuffOut;
+        if (buff instanceof BigBuffer) {
+            fullBuffOut = new BigBuffer(nPoints*sG);
+        } else {
+            fullBuffOut = new Uint8Array(nPoints*sG);
+        }
         let p =0;
         for (let i=0; i<nChunks; i++) {
             fullBuffOut.set(chunks[i], p);
@@ -393,8 +402,16 @@ export default function buildFFT(curve, groupName) {
 
         const result = await Promise.all(opPromises);
 
-        const fullBuffOut1 = new Uint8Array(nPoints*sG);
-        const fullBuffOut2 = new Uint8Array(nPoints*sG);
+        let fullBuffOut1;
+        let fullBuffOut2;
+        if (buff1 instanceof BigBuffer) {
+            fullBuffOut1 = new BigBuffer(nPoints*sG);
+            fullBuffOut2 = new BigBuffer(nPoints*sG);
+        } else {
+            fullBuffOut1 = new Uint8Array(nPoints*sG);
+            fullBuffOut2 = new Uint8Array(nPoints*sG);
+        }
+
         let p =0;
         for (let i=0; i<result.length; i++) {
             fullBuffOut1.set(result[i][0], p);
@@ -458,7 +475,13 @@ export default function buildFFT(curve, groupName) {
 
         const result = await Promise.all(opPromises);
 
-        const fullBuffOut = new Uint8Array(nPoints*sGout);
+        let fullBuffOut;
+        if (buff instanceof BigBuffer) {
+            fullBuffOut = new BigBuffer(nPoints*sGout);
+        } else {
+            fullBuffOut = new Uint8Array(nPoints*sGout);
+        }
+
         let p =0;
         for (let i=result.length-1; i>=0; i--) {
             fullBuffOut.set(result[i][0], p);

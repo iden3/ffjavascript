@@ -18,3 +18,6 @@ import * as _utils from "./src/utils.js";
 export const utils = _utils;
 export {default as ChaCha} from "./src/chacha.js";
 
+export {default as BigBuffer} from "./src/bigbuffer.js";
+
+

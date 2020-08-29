@@ -5078,6 +5078,66 @@ var _utils = /*#__PURE__*/Object.freeze({
     leInt2Buff: leInt2Buff$2
 });
 
+const PAGE_SIZE = 1<<28;
+
+class BigBuffer {
+
+    constructor(size) {
+        this.buffers = [];
+        this.byteLength = size;
+        for (let i=0; i<size; i+= PAGE_SIZE) {
+            const n = Math.min(size-i, PAGE_SIZE);
+            this.buffers.push(new Uint8Array(n));
+        }
+
+    }
+
+    slice(fr, to) {
+        if (typeof to == "undefined") to = this.byteLength;
+        if (typeof fr == "undefined") fr = 0;
+        const len = to-fr;
+
+        const firstPage = Math.floor(fr / PAGE_SIZE);
+
+        let buff = new Uint8Array(len);
+        let p = firstPage;
+        let o = fr % PAGE_SIZE;
+        // Remaining bytes to read
+        let r = len;
+        while (r>0) {
+            // bytes to copy from this page
+            const l = (o+r > PAGE_SIZE) ? (PAGE_SIZE -o) : r;
+            const srcView = new Uint8Array(this.buffers[p].buffer, o, l);
+            buff.set(srcView, len-r);
+            r = r-l;
+            p ++;
+            o = 0;
+        }
+
+        return buff;
+    }
+
+    set(buff, offset) {
+        if (typeof offset == "undefined") offset = 0;
+
+        const firstPage = Math.floor(offset / PAGE_SIZE);
+
+        let p = firstPage;
+        let o = offset % PAGE_SIZE;
+        let r = buff.byteLength;
+        while (r>0) {
+            const l = (o+r > PAGE_SIZE) ? (PAGE_SIZE -o) : r;
+            const srcView = buff.slice( buff.byteLength -r, buff.byteLength -r+l);
+            const dstView = new Uint8Array(this.buffers[p].buffer, this.buffers[p].byteOffset + o, l);
+            dstView.set(srcView);
+            r = r-l;
+            p ++;
+            o = 0;
+        }
+
+    }
+}
+
 function buildBatchConvert(tm, fnName, sIn, sOut) {
     return async function batchConvert(buffIn) {
         const nPoints = Math.floor(buffIn.byteLength / sIn);
@@ -5113,7 +5173,13 @@ function buildBatchConvert(tm, fnName, sIn, sOut) {
 
         const result = await Promise.all(opPromises);
 
-        const fullBuffOut = new Uint8Array(nPoints*sOut);
+        let fullBuffOut;
+        if (buffIn instanceof BigBuffer) {
+            fullBuffOut = new BigBuffer(nPoints*sOut);
+        } else {
+            fullBuffOut = new Uint8Array(nPoints*sOut);
+        }
+
         let p =0;
         for (let i=0; i<result.length; i++) {
             fullBuffOut.set(result[i][0], p);
@@ -6695,7 +6761,8 @@ const pTSizes = [
 
 function buildMultiexp(curve, groupName) {
     const G = curve[groupName];
-    async function _multiExp(buffBases, buffScalars, inType) {
+    const tm = G.tm;
+    async function _multiExpChunk(buffBases, buffScalars, inType) {
         inType = inType || "affine";
 
         let sGIn;
@@ -6765,11 +6832,65 @@ function buildMultiexp(curve, groupName) {
         return res;
     }
 
-    G.multiExp = async function multiExpAffine(buffBases, buffScalars) {
-        return await _multiExp(buffBases, buffScalars, "jacobian");
+    async function _multiExp(buffBases, buffScalars, inType, logger, logText) {
+        const MAX_CHUNK_SIZE = 1 << 22;
+        const MIN_CHUNK_SIZE = 1 << 10;
+        let sGIn;
+
+        if (groupName == "G1") {
+            if (inType == "affine") {
+                sGIn = G.F.n8*2;
+            } else {
+                sGIn = G.F.n8*3;
+            }
+        } else if (groupName == "G2") {
+            if (inType == "affine") {
+                sGIn = G.F.n8*2;
+            } else {
+                sGIn = G.F.n8*3;
+            }
+        } else {
+            throw new Error("Invalid group");
+        }
+
+        const nPoints = Math.floor(buffBases.byteLength / sGIn);
+        const sScalar = Math.floor(buffScalars.byteLength / nPoints);
+        if( sScalar * nPoints != buffScalars.byteLength) {
+            throw new Error("Scalar size does not match");
+        }
+
+        const bitChunkSize = pTSizes[log2$1(nPoints)];
+        const nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) +1;
+
+        let chunkSize;
+        chunkSize = Math.floor(nPoints / (tm.concurrency /nChunks));
+        if (chunkSize>MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
+        if (chunkSize<MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
+
+        const opPromises = [];
+        for (let i=0; i<nPoints; i += chunkSize) {
+            if (logger) logger.debug(`Multiexp: ${logText}: ${i}/${nPoints}`);
+            const n= Math.min(nPoints - i, chunkSize);
+            const buffBasesChunk = await buffBases.slice(i*sGIn, (i+n)*sGIn);
+            const buffScalarsChunk = await buffScalars.slice(i*sScalar, (i+n)*sScalar);
+            opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType));
+        }
+
+        const result = await Promise.all(opPromises);
+
+        let res = G.zero;
+        for (let i=result.length-1; i>=0; i--) {
+            res = G.add(res, result[i]);
+        }
+
+        return res;
+    }
+
+    G.multiExp = async function multiExpAffine(buffBases, buffScalars, logger, logText) {
+        return await _multiExp(buffBases, buffScalars, "jacobian", logger, logText);
     };
-    G.multiExpAffine = async function multiExpAffine(buffBases, buffScalars) {
-        return await _multiExp(buffBases, buffScalars, "affine");
+    G.multiExpAffine = async function multiExpAffine(buffBases, buffScalars, logger, logText) {
+        return await _multiExp(buffBases, buffScalars, "affine", logger, logText);
     };
 }
 
@@ -6869,7 +6990,7 @@ function buildFFT(curve, groupName) {
         if (nPoints <= (1 << MAX_BITS_THREAD)) {
             const task = [];
             task.push({cmd: "ALLOC", var: 0, len: sMid*nPoints});
-            task.push({cmd: "SET", var: 0, buff: buff});
+            task.push({cmd: "SET", var: 0, buff: buff.slice()});
             if (fnIn2Mid) {
                 task.push({cmd: "CALL", fnName:fnIn2Mid, params: [{var:0}, {val: nPoints}, {var: 0}]});
             }
@@ -6975,7 +7096,11 @@ function buildFFT(curve, groupName) {
                 }
             }
 
-            buffOut = new Uint8Array(nPoints * sOut);
+            if (buff instanceof BigBuffer) {
+                buffOut = new BigBuffer(nPoints*sOut);
+            } else {
+                buffOut = new Uint8Array(nPoints*sOut);
+            }
             if (inverse) {
                 buffOut.set(chunks[0].slice((pointsInChunk-1)*sOut));
                 let p= sOut;
@@ -7101,8 +7226,12 @@ function buildFFT(curve, groupName) {
             }
         }
 
-
-        const fullBuffOut = new Uint8Array(nPoints*sG);
+        let fullBuffOut;
+        if (buff instanceof BigBuffer) {
+            fullBuffOut = new BigBuffer(nPoints*sG);
+        } else {
+            fullBuffOut = new Uint8Array(nPoints*sG);
+        }
         let p =0;
         for (let i=0; i<nChunks; i++) {
             fullBuffOut.set(chunks[i], p);
@@ -7166,8 +7295,16 @@ function buildFFT(curve, groupName) {
 
         const result = await Promise.all(opPromises);
 
-        const fullBuffOut1 = new Uint8Array(nPoints*sG);
-        const fullBuffOut2 = new Uint8Array(nPoints*sG);
+        let fullBuffOut1;
+        let fullBuffOut2;
+        if (buff1 instanceof BigBuffer) {
+            fullBuffOut1 = new BigBuffer(nPoints*sG);
+            fullBuffOut2 = new BigBuffer(nPoints*sG);
+        } else {
+            fullBuffOut1 = new Uint8Array(nPoints*sG);
+            fullBuffOut2 = new Uint8Array(nPoints*sG);
+        }
+
         let p =0;
         for (let i=0; i<result.length; i++) {
             fullBuffOut1.set(result[i][0], p);
@@ -7231,7 +7368,13 @@ function buildFFT(curve, groupName) {
 
         const result = await Promise.all(opPromises);
 
-        const fullBuffOut = new Uint8Array(nPoints*sGout);
+        let fullBuffOut;
+        if (buff instanceof BigBuffer) {
+            fullBuffOut = new BigBuffer(nPoints*sGout);
+        } else {
+            fullBuffOut = new Uint8Array(nPoints*sGout);
+        }
+
         let p =0;
         for (let i=result.length-1; i>=0; i--) {
             fullBuffOut.set(result[i][0], p);
@@ -7289,7 +7432,7 @@ async function buildEngine(params) {
     };
 
     curve.buffer2array = function(buff , sG) {
-        const n= buff.length / sG;
+        const n= buff.byteLength / sG;
         const arr = new Array(n);
         for (let i=0; i<n; i++) {
             arr[i] = buff.slice(i*sG, i*sG+sG);
@@ -7354,6 +7497,7 @@ async function buildBls12381() {
 const Scalar$1=_Scalar;
 const utils$1 = _utils;
 
+exports.BigBuffer = BigBuffer;
 exports.ChaCha = ChaCha;
 exports.EC = EC;
 exports.F1Field = F1Field;

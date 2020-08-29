@@ -1,3 +1,4 @@
+import BigBuffer from "./bigbuffer.js";
 
 export default function buildBatchConvert(tm, fnName, sIn, sOut) {
     return async function batchConvert(buffIn) {
@@ -34,7 +35,13 @@ export default function buildBatchConvert(tm, fnName, sIn, sOut) {
 
         const result = await Promise.all(opPromises);
 
-        const fullBuffOut = new Uint8Array(nPoints*sOut);
+        let fullBuffOut;
+        if (buffIn instanceof BigBuffer) {
+            fullBuffOut = new BigBuffer(nPoints*sOut);
+        } else {
+            fullBuffOut = new Uint8Array(nPoints*sOut);
+        }
+
         let p =0;
         for (let i=0; i<result.length; i++) {
             fullBuffOut.set(result[i][0], p);

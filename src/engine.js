@@ -56,7 +56,7 @@ export default async function buildEngine(params) {
     };
 
     curve.buffer2array = function(buff , sG) {
-        const n= buff.length / sG;
+        const n= buff.byteLength / sG;
         const arr = new Array(n);
         for (let i=0; i<n; i++) {
             arr[i] = buff.slice(i*sG, i*sG+sG);

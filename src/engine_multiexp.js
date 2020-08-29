@@ -9,7 +9,8 @@ const pTSizes = [
 
 export default function buildMultiexp(curve, groupName) {
     const G = curve[groupName];
-    async function _multiExp(buffBases, buffScalars, inType) {
+    const tm = G.tm;
+    async function _multiExpChunk(buffBases, buffScalars, inType) {
         inType = inType || "affine";
 
         let sGIn;
@@ -79,10 +80,64 @@ export default function buildMultiexp(curve, groupName) {
         return res;
     }
 
-    G.multiExp = async function multiExpAffine(buffBases, buffScalars) {
-        return await _multiExp(buffBases, buffScalars, "jacobian");
+    async function _multiExp(buffBases, buffScalars, inType, logger, logText) {
+        const MAX_CHUNK_SIZE = 1 << 22;
+        const MIN_CHUNK_SIZE = 1 << 10;
+        let sGIn;
+
+        if (groupName == "G1") {
+            if (inType == "affine") {
+                sGIn = G.F.n8*2;
+            } else {
+                sGIn = G.F.n8*3;
+            }
+        } else if (groupName == "G2") {
+            if (inType == "affine") {
+                sGIn = G.F.n8*2;
+            } else {
+                sGIn = G.F.n8*3;
+            }
+        } else {
+            throw new Error("Invalid group");
+        }
+
+        const nPoints = Math.floor(buffBases.byteLength / sGIn);
+        const sScalar = Math.floor(buffScalars.byteLength / nPoints);
+        if( sScalar * nPoints != buffScalars.byteLength) {
+            throw new Error("Scalar size does not match");
+        }
+
+        const bitChunkSize = pTSizes[log2(nPoints)];
+        const nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) +1;
+
+        let chunkSize;
+        chunkSize = Math.floor(nPoints / (tm.concurrency /nChunks));
+        if (chunkSize>MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
+        if (chunkSize<MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
+
+        const opPromises = [];
+        for (let i=0; i<nPoints; i += chunkSize) {
+            if (logger) logger.debug(`Multiexp: ${logText}: ${i}/${nPoints}`);
+            const n= Math.min(nPoints - i, chunkSize);
+            const buffBasesChunk = await buffBases.slice(i*sGIn, (i+n)*sGIn);
+            const buffScalarsChunk = await buffScalars.slice(i*sScalar, (i+n)*sScalar);
+            opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType));
+        }
+
+        const result = await Promise.all(opPromises);
+
+        let res = G.zero;
+        for (let i=result.length-1; i>=0; i--) {
+            res = G.add(res, result[i]);
+        }
+
+        return res;
+    }
+
+    G.multiExp = async function multiExpAffine(buffBases, buffScalars, logger, logText) {
+        return await _multiExp(buffBases, buffScalars, "jacobian", logger, logText);
     };
-    G.multiExpAffine = async function multiExpAffine(buffBases, buffScalars) {
-        return await _multiExp(buffBases, buffScalars, "affine");
+    G.multiExpAffine = async function multiExpAffine(buffBases, buffScalars, logger, logText) {
+        return await _multiExp(buffBases, buffScalars, "affine", logger, logText);
     };
 }
