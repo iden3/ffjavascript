@@ -4876,11 +4876,11 @@ function leInt2Buff(n, len) {
             o += 4;
             r = r >> 32n;
         } else if (o+2 <= len) {
-            buff.setUint16(Number(o, r & 0xFFFFn), true );
+            buffV.setUint16(Number(o, r & 0xFFFFn), true );
             o += 2;
             r = r >> 16n;
         } else {
-            buff.setUint8(Number(o, r & 0xFFn), true );
+            buffV.setUint8(Number(o, r & 0xFFn), true );
             o += 1;
             r = r >> 8n;
         }
