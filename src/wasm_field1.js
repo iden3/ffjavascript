@@ -47,6 +47,8 @@ export default class WasmField1 {
             r = this.exp(this.nqr, this.half);
         }
 
+        this.shift = this.mul(this.nqr, this.nqr);
+        this.shiftInv = this.inv(this.shift);
 
         this.s = 0;
         let t = Scalar.sub(this.p, Scalar.one);

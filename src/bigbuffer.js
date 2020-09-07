@@ -20,7 +20,13 @@ export default class BigBuffer {
 
         const firstPage = Math.floor(fr / PAGE_SIZE);
 
-        let buff = new Uint8Array(len);
+        let buff;
+
+        if (len <= PAGE_SIZE) {
+            buff = new Uint8Array(len);
+        } else {
+            buff = new BigBuffer(len);
+        }
         let p = firstPage;
         let o = fr % PAGE_SIZE;
         // Remaining bytes to read

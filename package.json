@@ -28,12 +28,12 @@
   "author": "Jordi Baylina",
   "license": "GPL-3.0",
   "bugs": {
-    "url": "https://github.com/iden3/ffjs/issues"
+    "url": "https://github.com/iden3/ffjavascript/issues"
   },
   "homepage": "https://github.com/iden3/ffjs#readme",
   "dependencies": {
     "big-integer": "^1.6.48",
-    "wasmcurves": "0.0.5",
+    "wasmcurves": "0.0.7",
     "worker-threads": "^1.0.0"
   },
   "devDependencies": {

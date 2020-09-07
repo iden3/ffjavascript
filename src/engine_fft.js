@@ -5,11 +5,11 @@ export default function buildFFT(curve, groupName) {
     const G = curve[groupName];
     const Fr = curve.Fr;
     const tm = G.tm;
-    async function _fft(buff, inverse, inType, outType, logger) {
+    async function _fft(buff, inverse, inType, outType, logger, loggerTxt) {
 
         inType = inType || "affine";
         outType = outType || "affine";
-        const MAX_BITS_THREAD = 12;
+        const MAX_BITS_THREAD = 14;
 
         let sIn, sMid, sOut, fnIn2Mid, fnMid2Out, fnName, fnFFTMix, fnFFTJoin, fnFFTFinal;
         if (groupName == "G1") {
@@ -86,143 +86,163 @@ export default function buildFFT(curve, groupName) {
             throw new Error("fft must be multiple of 2" );
         }
 
+        if (bits == Fr.s +1) {
+            let buffOut;
+
+            if (inverse) {
+                buffOut =  await _fftExtInv(buff, inType, outType, logger, loggerTxt);
+            } else {
+                buffOut =  await _fftExt(buff, inType, outType, logger, loggerTxt);
+            }
+
+            if (returnArray) {
+                return curve.buffer2array(buffOut, sOut);
+            } else {
+                return buffOut;
+            }
+        }
+
         let inv;
         if (inverse) {
             inv = Fr.inv(Fr.e(nPoints));
         }
 
-
-
         let buffOut;
-        if (nPoints <= (1 << MAX_BITS_THREAD)) {
+
+        buffReverseBits(buff, sIn);
+
+        let chunks;
+        let pointsInChunk = Math.min(1 << MAX_BITS_THREAD, nPoints);
+        let nChunks = nPoints / pointsInChunk;
+
+        while ((nChunks < tm.concurrency)&&(pointsInChunk>=16)) {
+            nChunks *= 2;
+            pointsInChunk /= 2;
+        }
+
+        const l2Chunk = log2(pointsInChunk);
+
+        const promises = [];
+        for (let i = 0; i< nChunks; i++) {
             const task = [];
-            task.push({cmd: "ALLOC", var: 0, len: sMid*nPoints});
-            task.push({cmd: "SET", var: 0, buff: buff.slice()});
+            task.push({cmd: "ALLOC", var: 0, len: sMid*pointsInChunk});
+            const buffChunk = buff.slice( (pointsInChunk * i)*sIn, (pointsInChunk * (i+1))*sIn);
+            task.push({cmd: "SET", var: 0, buff: buffChunk});
             if (fnIn2Mid) {
-                task.push({cmd: "CALL", fnName:fnIn2Mid, params: [{var:0}, {val: nPoints}, {var: 0}]});
+                task.push({cmd: "CALL", fnName:fnIn2Mid, params: [{var:0}, {val: pointsInChunk}, {var: 0}]});
             }
-            task.push({cmd: "CALL", fnName:fnName, params: [{var:0}, {val: nPoints}]});
-            if (fnMid2Out) {
-                task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:0}, {val: nPoints}, {var: 0}]});
+            for (let j=1; j<=l2Chunk;j++) {
+                task.push({cmd: "CALL", fnName:fnFFTMix, params: [{var:0}, {val: pointsInChunk}, {val: j}]});
             }
-            task.push({cmd: "GET", out: 0, var: 0, len: sOut*nPoints});
 
-            const res = await tm.queueAction(task);
-            buffOut = res[0];
-        } else {
-
-            buffReverseBits(buff, sIn);
-
-            let chunks;
-            const pointsInChunk = 1 << MAX_BITS_THREAD;
-            const nChunks = nPoints / pointsInChunk;
-
-            const promises = [];
-            for (let i = 0; i< nChunks; i++) {
-                const task = [];
-                task.push({cmd: "ALLOC", var: 0, len: sMid*pointsInChunk});
-                const buffChunk = buff.slice( (pointsInChunk * i)*sIn, (pointsInChunk * (i+1))*sIn);
-                task.push({cmd: "SET", var: 0, buff: buffChunk});
-                if (fnIn2Mid) {
-                    task.push({cmd: "CALL", fnName:fnIn2Mid, params: [{var:0}, {val: pointsInChunk}, {var: 0}]});
+            if (l2Chunk==bits) {
+                if (fnFFTFinal) {
+                    task.push({cmd: "ALLOCSET", var: 1, buff: inv});
+                    task.push({cmd: "CALL", fnName: fnFFTFinal,  params:[
+                        {var: 0},
+                        {val: pointsInChunk},
+                        {var: 1},
+                    ]});
                 }
-                for (let j=1; j<=MAX_BITS_THREAD;j++) {
-                    task.push({cmd: "CALL", fnName:fnFFTMix, params: [{var:0}, {val: pointsInChunk}, {val: j}]});
+                if (fnMid2Out) {
+                    task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:0}, {val: pointsInChunk}, {var: 0}]});
                 }
+                task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sOut});
+            } else {
                 task.push({cmd: "GET", out:0, var: 0, len: sMid*pointsInChunk});
-                promises.push(tm.queueAction(task).then( (r) => {
-                    if (logger) logger.debug(`fft: ${i}/${nChunks}`);
-                    return r;
-                }));
             }
+            promises.push(tm.queueAction(task).then( (r) => {
+                if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix: ${i}/${nChunks}`);
+                return r;
+            }));
+        }
 
-            chunks = await Promise.all(promises);
-            for (let i = 0; i< nChunks; i++) chunks[i] = chunks[i][0];
+        chunks = await Promise.all(promises);
+        for (let i = 0; i< nChunks; i++) chunks[i] = chunks[i][0];
 
-            for (let i = MAX_BITS_THREAD+1;   i<=bits; i++) {
-                if (logger) logger.debug(`fft join ${i}/${bits}`);
-                const nGroups = 1 << (bits - i);
-                const nChunksPerGroup = nChunks / nGroups;
-                const opPromises = [];
-                for (let j=0; j<nGroups; j++) {
-                    for (let k=0; k <nChunksPerGroup/2; k++) {
-                        const first = Fr.exp( Fr.w[i], k*pointsInChunk);
-                        const inc = Fr.w[i];
-                        const o1 = j*nChunksPerGroup + k;
-                        const o2 = j*nChunksPerGroup + k + nChunksPerGroup/2;
+        for (let i = l2Chunk+1;   i<=bits; i++) {
+            if (logger) logger.debug(`${loggerTxt}: fft  ${bits}  join: ${i}/${bits}`);
+            const nGroups = 1 << (bits - i);
+            const nChunksPerGroup = nChunks / nGroups;
+            const opPromises = [];
+            for (let j=0; j<nGroups; j++) {
+                for (let k=0; k <nChunksPerGroup/2; k++) {
+                    const first = Fr.exp( Fr.w[i], k*pointsInChunk);
+                    const inc = Fr.w[i];
+                    const o1 = j*nChunksPerGroup + k;
+                    const o2 = j*nChunksPerGroup + k + nChunksPerGroup/2;
 
-                        const task = [];
-                        task.push({cmd: "ALLOCSET", var: 0, buff: chunks[o1]});
-                        task.push({cmd: "ALLOCSET", var: 1, buff: chunks[o2]});
-                        task.push({cmd: "ALLOCSET", var: 2, buff: first});
-                        task.push({cmd: "ALLOCSET", var: 3, buff: inc});
-                        task.push({cmd: "CALL", fnName: fnFFTJoin,  params:[
-                            {var: 0},
-                            {var: 1},
-                            {val: pointsInChunk},
-                            {var: 2},
-                            {var: 3}
-                        ]});
-                        if (i==bits) {
-                            if (fnFFTFinal) {
-                                task.push({cmd: "ALLOCSET", var: 4, buff: inv});
-                                task.push({cmd: "CALL", fnName: fnFFTFinal,  params:[
-                                    {var: 0},
-                                    {val: pointsInChunk},
-                                    {var: 4},
-                                ]});
-                                task.push({cmd: "CALL", fnName: fnFFTFinal,  params:[
-                                    {var: 1},
-                                    {val: pointsInChunk},
-                                    {var: 4},
-                                ]});
-                            }
-                            if (fnMid2Out) {
-                                task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:0}, {val: pointsInChunk}, {var: 0}]});
-                                task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:1}, {val: pointsInChunk}, {var: 1}]});
-                            }
-                            task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sOut});
-                            task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sOut});
-                        } else {
-                            task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sMid});
-                            task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sMid});
+                    const task = [];
+                    task.push({cmd: "ALLOCSET", var: 0, buff: chunks[o1]});
+                    task.push({cmd: "ALLOCSET", var: 1, buff: chunks[o2]});
+                    task.push({cmd: "ALLOCSET", var: 2, buff: first});
+                    task.push({cmd: "ALLOCSET", var: 3, buff: inc});
+                    task.push({cmd: "CALL", fnName: fnFFTJoin,  params:[
+                        {var: 0},
+                        {var: 1},
+                        {val: pointsInChunk},
+                        {var: 2},
+                        {var: 3}
+                    ]});
+                    if (i==bits) {
+                        if (fnFFTFinal) {
+                            task.push({cmd: "ALLOCSET", var: 4, buff: inv});
+                            task.push({cmd: "CALL", fnName: fnFFTFinal,  params:[
+                                {var: 0},
+                                {val: pointsInChunk},
+                                {var: 4},
+                            ]});
+                            task.push({cmd: "CALL", fnName: fnFFTFinal,  params:[
+                                {var: 1},
+                                {val: pointsInChunk},
+                                {var: 4},
+                            ]});
                         }
-                        opPromises.push(tm.queueAction(task));
+                        if (fnMid2Out) {
+                            task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:0}, {val: pointsInChunk}, {var: 0}]});
+                            task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:1}, {val: pointsInChunk}, {var: 1}]});
+                        }
+                        task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sOut});
+                        task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sOut});
+                    } else {
+                        task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sMid});
+                        task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sMid});
                     }
-                }
-
-                const res = await Promise.all(opPromises);
-                for (let j=0; j<nGroups; j++) {
-                    for (let k=0; k <nChunksPerGroup/2; k++) {
-                        const o1 = j*nChunksPerGroup + k;
-                        const o2 = j*nChunksPerGroup + k + nChunksPerGroup/2;
-                        const resChunk = res.shift();
-                        chunks[o1] = resChunk[0];
-                        chunks[o2] = resChunk[1];
-                    }
+                    opPromises.push(tm.queueAction(task));
                 }
             }
 
-            if (buff instanceof BigBuffer) {
-                buffOut = new BigBuffer(nPoints*sOut);
-            } else {
-                buffOut = new Uint8Array(nPoints*sOut);
+            const res = await Promise.all(opPromises);
+            for (let j=0; j<nGroups; j++) {
+                for (let k=0; k <nChunksPerGroup/2; k++) {
+                    const o1 = j*nChunksPerGroup + k;
+                    const o2 = j*nChunksPerGroup + k + nChunksPerGroup/2;
+                    const resChunk = res.shift();
+                    chunks[o1] = resChunk[0];
+                    chunks[o2] = resChunk[1];
+                }
             }
-            if (inverse) {
-                buffOut.set(chunks[0].slice((pointsInChunk-1)*sOut));
-                let p= sOut;
-                for (let i=nChunks-1; i>0; i--) {
-                    buffOut.set(chunks[i], p);
-                    p += pointsInChunk*sOut;
-                    delete chunks[i];  // Liberate mem
-                }
-                buffOut.set(chunks[0].slice(0, (pointsInChunk-1)*sOut), p);
-                delete chunks[0];
-            } else {
-                for (let i=0; i<nChunks; i++) {
-                    buffOut.set(chunks[i], pointsInChunk*sOut*i);
-                    delete chunks[i];
-                }
+        }
+
+        if (buff instanceof BigBuffer) {
+            buffOut = new BigBuffer(nPoints*sOut);
+        } else {
+            buffOut = new Uint8Array(nPoints*sOut);
+        }
+        if (inverse) {
+            buffOut.set(chunks[0].slice((pointsInChunk-1)*sOut));
+            let p= sOut;
+            for (let i=nChunks-1; i>0; i--) {
+                buffOut.set(chunks[i], p);
+                p += pointsInChunk*sOut;
+                delete chunks[i];  // Liberate mem
+            }
+            buffOut.set(chunks[0].slice(0, (pointsInChunk-1)*sOut), p);
+            delete chunks[0];
+        } else {
+            for (let i=0; i<nChunks; i++) {
+                buffOut.set(chunks[i], pointsInChunk*sOut*i);
+                delete chunks[i];
             }
         }
 
@@ -233,12 +253,178 @@ export default function buildFFT(curve, groupName) {
         }
     }
 
-    G.fft = async function(buff, inType, outType, logger) {
-        return await _fft(buff, false, inType, outType, logger);
+    async function _fftExt(buff, inType, outType, logger, loggerTxt) {
+        let b1, b2;
+        b1 = buff.slice( 0 , buff.byteLength/2);
+        b2 = buff.slice( buff.byteLength/2, buff.byteLength);
+
+        const promises = [];
+
+        [b1, b2] = await _fftJoinExt(b1, b2, "fftJoinExt", Fr.shift, inType, "jacobian", logger, loggerTxt);
+
+        promises.push( _fft(b1, false, "jacobian", outType, logger, loggerTxt));
+        promises.push( _fft(b2, false, "jacobian", outType, logger, loggerTxt));
+
+        const res1 = await Promise.all(promises);
+
+        let buffOut;
+        if (res1[0].byteLength > (1<<28)) {
+            buffOut = new BigBuffer(res1[0].byteLength*2);
+        } else {
+            buffOut = new Uint8Array(res1[0].byteLength*2);
+        }
+
+        buffOut.set(res1[0]);
+        buffOut.set(res1[1], res1[0].byteLength);
+
+        return buffOut;
+    }
+
+    async function _fftExtInv(buff, inType, outType, logger, loggerTxt) {
+        let b1, b2;
+        b1 = buff.slice( 0 , buff.byteLength/2);
+        b2 = buff.slice( buff.byteLength/2, buff.byteLength);
+
+        const promises = [];
+
+        promises.push( _fft(b1, true, inType, "jacobian", logger, loggerTxt));
+        promises.push( _fft(b2, true, inType, "jacobian", logger, loggerTxt));
+
+        [b1, b2] = await Promise.all(promises);
+
+        const res1 = await _fftJoinExt(b1, b2, "fftJoinExtInv", Fr.shiftInv, "jacobian", outType, logger, loggerTxt);
+
+        let buffOut;
+        if (res1[0].byteLength > (1<<28)) {
+            buffOut = new BigBuffer(res1[0].byteLength*2);
+        } else {
+            buffOut = new Uint8Array(res1[0].byteLength*2);
+        }
+
+        buffOut.set(res1[0]);
+        buffOut.set(res1[1], res1[0].byteLength);
+
+        return buffOut;
+    }
+
+
+    async function _fftJoinExt(buff1, buff2, fn, inc, inType, outType, logger, loggerTxt) {
+        const MAX_CHUNK_SIZE = 1<<16;
+
+        let fnName;
+        let fnIn2Mid, fnMid2Out;
+        let sOut, sIn;
+
+        if (groupName == "G1") {
+            if (inType == "affine") {
+                sIn = G.F.n8*2;
+                fnIn2Mid = "g1m_batchToJacobian";
+            } else {
+                sIn = G.F.n8*3;
+            }
+            fnName = "g1m_"+fn;
+            if (outType == "affine") {
+                fnMid2Out = "g1m_batchToAffine";
+                sOut = G.F.n8*2;
+            } else {
+                sOut = G.F.n8*3;
+            }
+        } else if (groupName == "G2") {
+            if (inType == "affine") {
+                sIn = G.F.n8*2;
+                fnIn2Mid = "g2m_batchToJacobian";
+            } else {
+                sIn = G.F.n8*3;
+            }
+            fnName = "g2m_"+fn;
+            if (outType == "affine") {
+                fnMid2Out = "g2m_batchToAffine";
+                sOut = G.F.n8*2;
+            } else {
+                sOut = G.F.n8*3;
+            }
+        } else if (groupName == "Fr") {
+            sIn = Fr.n8;
+            sOut = Fr.n8;
+            fnName = "frm_" + fn;
+        } else {
+            throw new Error("Invalid group");
+        }
+
+        if (buff1.byteLength != buff2.byteLength) {
+            throw new Error("Invalid buffer size");
+        }
+        const nPoints = Math.floor(buff1.byteLength / sIn);
+        if (nPoints != 1 << log2(nPoints)) {
+            throw new Error("Invalid number of points");
+        }
+
+        const opPromises = [];
+
+        for (let i=0; i<nPoints; i += MAX_CHUNK_SIZE) {
+            if (logger) logger.debug(`${loggerTxt}: fftJoinExt: ${i}/${nPoints}`);
+            const n= Math.min(nPoints - i, MAX_CHUNK_SIZE);
+
+            const first = Fr.exp( inc, i*MAX_CHUNK_SIZE);
+            const task = [];
+
+            const b1 = buff1.slice(i*sIn, (i+n)*sIn);
+            const b2 = buff2.slice(i*sIn, (i+n)*sIn);
+            task.push({cmd: "ALLOCSET", var: 0, buff: b1});
+            task.push({cmd: "ALLOCSET", var: 1, buff: b2});
+            task.push({cmd: "ALLOCSET", var: 2, buff: first});
+            task.push({cmd: "ALLOCSET", var: 3, buff: inc});
+            if (fnIn2Mid) {
+                task.push({cmd: "CALL", fnName:fnIn2Mid, params: [{var:0}, {val: n}, {var: 0}]});
+                task.push({cmd: "CALL", fnName:fnIn2Mid, params: [{var:1}, {val: n}, {var: 1}]});
+            }
+            task.push({cmd: "CALL", fnName: fnName, params: [
+                {var: 0},
+                {var: 1},
+                {val: n},
+                {var: 2},
+                {var: 3}
+            ]});
+            if (fnMid2Out) {
+                task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:0}, {val: n}, {var: 0}]});
+                task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:1}, {val: n}, {var: 1}]});
+            }
+            task.push({cmd: "GET", out: 0, var: 0, len: n*sOut});
+            task.push({cmd: "GET", out: 1, var: 1, len: n*sOut});
+            opPromises.push(
+                tm.queueAction(task)
+            );
+        }
+
+        const result = await Promise.all(opPromises);
+
+        let fullBuffOut1;
+        let fullBuffOut2;
+        if (nPoints * sOut > 1<<28) {
+            fullBuffOut1 = new BigBuffer(nPoints*sOut);
+            fullBuffOut2 = new BigBuffer(nPoints*sOut);
+        } else {
+            fullBuffOut1 = new Uint8Array(nPoints*sOut);
+            fullBuffOut2 = new Uint8Array(nPoints*sOut);
+        }
+
+        let p =0;
+        for (let i=0; i<result.length; i++) {
+            fullBuffOut1.set(result[i][0], p);
+            fullBuffOut2.set(result[i][1], p);
+            p+=result[i][0].byteLength;
+        }
+
+        return [fullBuffOut1, fullBuffOut2];
+    }
+
+
+    G.fft = async function(buff, inType, outType, logger, loggerTxt) {
+        return await _fft(buff, false, inType, outType, logger, loggerTxt);
     };
 
-    G.ifft = async function(buff, inType, outType, logger) {
-        return await _fft(buff, true, inType, outType, logger);
+    G.ifft = async function(buff, inType, outType, logger, loggerTxt) {
+        return await _fft(buff, true, inType, outType, logger, loggerTxt);
     };
 
     G.fftMix = async function fftMix(buff) {
@@ -355,6 +541,8 @@ export default function buildFFT(curve, groupName) {
             fnName = "g1m_fftJoin";
         } else if (groupName == "G2") {
             fnName = "g2m_fftJoin";
+        } else if (groupName == "Fr") {
+            fnName = "frm_fftJoin";
         } else {
             throw new Error("Invalid group");
         }
@@ -421,6 +609,8 @@ export default function buildFFT(curve, groupName) {
 
         return [fullBuffOut1, fullBuffOut2];
     };
+
+
 
     G.fftFinal =  async function fftFinal(buff, factor) {
         const sG = G.F.n8*3;
