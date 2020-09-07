@@ -7721,7 +7721,7 @@ async function buildBn128() {
         n8q: 32,
         n8r: 32,
         cofactorG2: e$2("30644e72e131a029b85045b68181585e06ceecda572a2489345f2299c0f9fa8d", 16),
-        singleThread: true
+        singleThread: false
     };
 
     curve = await buildEngine(params);
