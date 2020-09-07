@@ -260,7 +260,7 @@ export default function buildFFT(curve, groupName) {
 
         const promises = [];
 
-        [b1, b2] = await _fftJoinExt(b1, b2, "fftJoinExt", Fr.shift, inType, "jacobian", logger, loggerTxt);
+        [b1, b2] = await _fftJoinExt(b1, b2, "fftJoinExt", Fr.one, Fr.shift, inType, "jacobian", logger, loggerTxt);
 
         promises.push( _fft(b1, false, "jacobian", outType, logger, loggerTxt));
         promises.push( _fft(b2, false, "jacobian", outType, logger, loggerTxt));
@@ -292,7 +292,7 @@ export default function buildFFT(curve, groupName) {
 
         [b1, b2] = await Promise.all(promises);
 
-        const res1 = await _fftJoinExt(b1, b2, "fftJoinExtInv", Fr.shiftInv, "jacobian", outType, logger, loggerTxt);
+        const res1 = await _fftJoinExt(b1, b2, "fftJoinExtInv", Fr.one, Fr.shiftInv, "jacobian", outType, logger, loggerTxt);
 
         let buffOut;
         if (res1[0].byteLength > (1<<28)) {
@@ -308,12 +308,12 @@ export default function buildFFT(curve, groupName) {
     }
 
 
-    async function _fftJoinExt(buff1, buff2, fn, inc, inType, outType, logger, loggerTxt) {
+    async function _fftJoinExt(buff1, buff2, fn, first, inc, inType, outType, logger, loggerTxt) {
         const MAX_CHUNK_SIZE = 1<<16;
 
         let fnName;
         let fnIn2Mid, fnMid2Out;
-        let sOut, sIn;
+        let sOut, sIn, sMid;
 
         if (groupName == "G1") {
             if (inType == "affine") {
@@ -322,6 +322,7 @@ export default function buildFFT(curve, groupName) {
             } else {
                 sIn = G.F.n8*3;
             }
+            sMid = G.F.n8*3;
             fnName = "g1m_"+fn;
             if (outType == "affine") {
                 fnMid2Out = "g1m_batchToAffine";
@@ -337,6 +338,7 @@ export default function buildFFT(curve, groupName) {
                 sIn = G.F.n8*3;
             }
             fnName = "g2m_"+fn;
+            sMid = G.F.n8*3;
             if (outType == "affine") {
                 fnMid2Out = "g2m_batchToAffine";
                 sOut = G.F.n8*2;
@@ -346,6 +348,7 @@ export default function buildFFT(curve, groupName) {
         } else if (groupName == "Fr") {
             sIn = Fr.n8;
             sOut = Fr.n8;
+            sMid = Fr.n8;
             fnName = "frm_" + fn;
         } else {
             throw new Error("Invalid group");
@@ -365,14 +368,18 @@ export default function buildFFT(curve, groupName) {
             if (logger) logger.debug(`${loggerTxt}: fftJoinExt: ${i}/${nPoints}`);
             const n= Math.min(nPoints - i, MAX_CHUNK_SIZE);
 
-            const first = Fr.exp( inc, i*MAX_CHUNK_SIZE);
+            const firstChunk = Fr.mul(first, Fr.exp( inc, i*MAX_CHUNK_SIZE));
             const task = [];
 
             const b1 = buff1.slice(i*sIn, (i+n)*sIn);
             const b2 = buff2.slice(i*sIn, (i+n)*sIn);
-            task.push({cmd: "ALLOCSET", var: 0, buff: b1});
-            task.push({cmd: "ALLOCSET", var: 1, buff: b2});
-            task.push({cmd: "ALLOCSET", var: 2, buff: first});
+
+
+            task.push({cmd: "ALLOC", var: 0, len: sMid*n});
+            task.push({cmd: "SET", var: 0, buff: b1});
+            task.push({cmd: "ALLOC", var: 1, len: sMid*n});
+            task.push({cmd: "SET", var: 1, buff: b2});
+            task.push({cmd: "ALLOCSET", var: 2, buff: firstChunk});
             task.push({cmd: "ALLOCSET", var: 3, buff: inc});
             if (fnIn2Mid) {
                 task.push({cmd: "CALL", fnName:fnIn2Mid, params: [{var:0}, {val: n}, {var: 0}]});
@@ -425,6 +432,75 @@ export default function buildFFT(curve, groupName) {
 
     G.ifft = async function(buff, inType, outType, logger, loggerTxt) {
         return await _fft(buff, true, inType, outType, logger, loggerTxt);
+    };
+
+    G.lagrangeEvaluations = async function (buff, inType, outType, logger, loggerTxt) {
+        inType = inType || "affine";
+        outType = outType || "affine";
+
+        let sIn;
+        if (groupName == "G1") {
+            if (inType == "affine") {
+                sIn = G.F.n8*2;
+            } else {
+                sIn = G.F.n8*3;
+            }
+        } else if (groupName == "G2") {
+            if (inType == "affine") {
+                sIn = G.F.n8*2;
+            } else {
+                sIn = G.F.n8*3;
+            }
+        } else if (groupName == "Fr") {
+            sIn = Fr.n8;
+        } else {
+            throw new Error("Invalid group");
+        }
+
+        const nPoints = buff.byteLength /sIn;
+        const bits = log2(nPoints);
+
+        if ((2 ** bits)*sIn != buff.byteLength) {
+            if (logger) logger.error("lagrangeEvaluations iinvalid input size");
+            throw new Error("lagrangeEvaluations invalid Input size");
+        }
+
+        if (bits <= Fr.s) {
+            return await G.ifft(buff, inType, outType, logger, loggerTxt);
+        }
+
+        if (bits > Fr.s+1) {
+            if (logger) logger.error("lagrangeEvaluations input too big");
+            throw new Error("lagrangeEvaluations input too big");
+        }
+
+        let t0 = buff.slice(0, buff.byteLength/2);
+        let t1 = buff.slice(buff.byteLength/2, buff.byteLength);
+
+
+        const shiftToSmallM = Fr.exp(Fr.shift, nPoints/2);
+        const sConst = Fr.inv( Fr.sub(Fr.one, shiftToSmallM));
+
+        [t0, t1] = await _fftJoinExt(t0, t1, "prepareLagrangeEvaluation", sConst, Fr.shiftInv, inType, "jacobian", logger, loggerTxt + " prep");
+
+        const promises = [];
+
+        promises.push( _fft(t0, true, "jacobian", outType, logger, loggerTxt + " t0"));
+        promises.push( _fft(t1, true, "jacobian", outType, logger, loggerTxt + " t1"));
+
+        [t0, t1] = await Promise.all(promises);
+
+        let buffOut;
+        if (t0.byteLength > (1<<28)) {
+            buffOut = new BigBuffer(t0.byteLength*2);
+        } else {
+            buffOut = new Uint8Array(t0.byteLength*2);
+        }
+
+        buffOut.set(t0);
+        buffOut.set(t1, t0.byteLength);
+
+        return buffOut;
     };
 
     G.fftMix = async function fftMix(buff) {
