@@ -230,7 +230,7 @@ export default class WasmCurve {
     }
 
     fromRprUncompressed(arr, offset) {
-        const buff = arr.slice(offset, offset + this.F.n8*2);
+        const buff = arr.subarray(offset, offset + this.F.n8*2);
         this.tm.setBuff(this.pOp1, buff);
         this.tm.instance.exports[this.prefix + "_UtoLEM"](this.pOp1, this.pOp1);
         return this.tm.getBuff(this.pOp1, this.F.n8*2);
@@ -249,7 +249,7 @@ export default class WasmCurve {
     }
 
     fromRprCompressed(arr, offset) {
-        const buff = arr.slice(offset, offset + this.F.n8);
+        const buff = arr.subarray(offset, offset + this.F.n8);
         this.tm.setBuff(this.pOp1, buff);
         this.tm.instance.exports[this.prefix + "_CtoLEM"](this.pOp1, this.pOp2);
         return this.tm.getBuff(this.pOp2, this.F.n8*2);
