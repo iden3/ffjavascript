@@ -1,6 +1,7 @@
 import assert from "assert";
 import buildBn128 from "../src/bn128.js";
 import {log2} from "../src/utils.js";
+import BigBuffer from "../src/bigbuffer.js";
 
 describe("FFT", async function () {
     this.timeout(10000000);
@@ -12,7 +13,7 @@ describe("FFT", async function () {
     after( async() => {
         bn128.terminate();
     });
-
+/*
 
     it("It shoud do an inverse FFT in G1", async () => {
         const Fr = bn128.Fr;
@@ -36,8 +37,41 @@ describe("FFT", async function () {
             assert(G1.eq(aG_calculated[i], aG_expected[i]));
         }
     });
+*/
 
+    it("It shoud do a big FFT/IFFT in Fr", async () => {
+        const Fr = bn128.Fr;
 
+        const N = 1<<28;
+
+        const logger = {
+            error: (msg) => { console.log("ERROR: "+msg); },
+            warning: (msg) => { console.log("WARNING: "+msg); },
+            info: (msg) => { console.log("INFO: "+msg); },
+            debug: (msg) => { console.log("DEBUG: "+msg); },
+        };
+
+        const a = new BigBuffer(N*bn128.Fr.n8);
+        for (let i=0; i<N; i++) {
+            if (i%100000 == 0) logger.debug(`setup ${i}/${N}`);
+            const num = Fr.e(i+1);
+            a.set(num, i*bn128.Fr.n8);
+        }
+
+        const A = await bn128.Fr.fft(a, "", "", logger, "fft");
+        const Ainv = await bn128.Fr.ifft(A, "", "", logger, "ifft");
+
+        for (let i=0; i<N; i++) {
+            if (i%100000 == 0) logger.debug(`checking ${i}/${N}`);
+//            console.log(Fr.toString(Ainv[i]));
+            const num1 = Ainv.slice(i*Fr.n8, i*Fr.n8+Fr.n8);
+            const num2 = a.slice(i*Fr.n8, i*Fr.n8+Fr.n8);
+
+            assert(num1, num2);
+        }
+    });
+
+/*
     it("It shoud do a big FFT/IFFT in Fr", async () => {
         const Fr = bn128.Fr;
         const N = 8192*16;
@@ -119,6 +153,6 @@ describe("FFT", async function () {
 
         Fr.s = oldS;
     });
-
+*/
 });
 

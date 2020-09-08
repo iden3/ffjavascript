@@ -11,7 +11,7 @@ export default function buildFFT(curve, groupName) {
         outType = outType || "affine";
         const MAX_BITS_THREAD = 14;
 
-        let sIn, sMid, sOut, fnIn2Mid, fnMid2Out, fnName, fnFFTMix, fnFFTJoin, fnFFTFinal;
+        let sIn, sMid, sOut, fnIn2Mid, fnMid2Out, fnFFTMix, fnFFTJoin, fnFFTFinal;
         if (groupName == "G1") {
             if (inType == "affine") {
                 sIn = G.F.n8*2;
@@ -21,10 +21,7 @@ export default function buildFFT(curve, groupName) {
             }
             sMid = G.F.n8*3;
             if (inverse) {
-                fnName = "g1m_ifft";
                 fnFFTFinal = "g1m_fftFinal";
-            } else {
-                fnName = "g1m_fft";
             }
             fnFFTJoin = "g1m_fftJoin";
             fnFFTMix = "g1m_fftMix";
@@ -45,10 +42,7 @@ export default function buildFFT(curve, groupName) {
             }
             sMid = G.F.n8*3;
             if (inverse) {
-                fnName = "g2m_ifft";
                 fnFFTFinal = "g2m_fftFinal";
-            } else {
-                fnName = "g2m_fft";
             }
             fnFFTJoin = "g2m_fftJoin";
             fnFFTMix = "g2m_fftMix";
@@ -63,10 +57,7 @@ export default function buildFFT(curve, groupName) {
             sMid = G.n8;
             sOut = G.n8;
             if (inverse) {
-                fnName = "frm_ifft";
                 fnFFTFinal = "frm_fftFinal";
-            } else {
-                fnName = "frm_fft";
             }
             fnFFTMix = "frm_fftMix";
             fnFFTJoin = "frm_fftJoin";
@@ -124,6 +115,7 @@ export default function buildFFT(curve, groupName) {
 
         const promises = [];
         for (let i = 0; i< nChunks; i++) {
+            if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix start: ${i}/${nChunks}`);
             const task = [];
             task.push({cmd: "ALLOC", var: 0, len: sMid*pointsInChunk});
             const buffChunk = buff.slice( (pointsInChunk * i)*sIn, (pointsInChunk * (i+1))*sIn);
@@ -152,7 +144,7 @@ export default function buildFFT(curve, groupName) {
                 task.push({cmd: "GET", out:0, var: 0, len: sMid*pointsInChunk});
             }
             promises.push(tm.queueAction(task).then( (r) => {
-                if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix: ${i}/${nChunks}`);
+                if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix end: ${i}/${nChunks}`);
                 return r;
             }));
         }
@@ -208,7 +200,10 @@ export default function buildFFT(curve, groupName) {
                         task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sMid});
                         task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sMid});
                     }
-                    opPromises.push(tm.queueAction(task));
+                    opPromises.push(tm.queueAction(task).then( (r) => {
+                        if (logger) logger.debug(`${loggerTxt}: fft ${bits} join  ${i}/${bits}  ${j+1}/${nGroups} ${k}/${nChunksPerGroup/2 + 1}`);
+                        return r;
+                    }));
                 }
             }
 
@@ -365,7 +360,7 @@ export default function buildFFT(curve, groupName) {
         const opPromises = [];
 
         for (let i=0; i<nPoints; i += MAX_CHUNK_SIZE) {
-            if (logger) logger.debug(`${loggerTxt}: fftJoinExt: ${i}/${nPoints}`);
+            if (logger) logger.debug(`${loggerTxt}: fftJoinExt Start: ${i}/${nPoints}`);
             const n= Math.min(nPoints - i, MAX_CHUNK_SIZE);
 
             const firstChunk = Fr.mul(first, Fr.exp( inc, i*MAX_CHUNK_SIZE));
@@ -399,7 +394,10 @@ export default function buildFFT(curve, groupName) {
             task.push({cmd: "GET", out: 0, var: 0, len: n*sOut});
             task.push({cmd: "GET", out: 1, var: 1, len: n*sOut});
             opPromises.push(
-                tm.queueAction(task)
+                tm.queueAction(task).then( (r) => {
+                    if (logger) logger.debug(`${loggerTxt}: fftJoinExt End: ${i}/${nPoints}`);
+                    return r;
+                })
             );
         }
 
