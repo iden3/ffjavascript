@@ -117,11 +117,14 @@ export default function buildMultiexp(curve, groupName) {
 
         const opPromises = [];
         for (let i=0; i<nPoints; i += chunkSize) {
-            if (logger) logger.debug(`Multiexp: ${logText}: ${i}/${nPoints}`);
+            if (logger) logger.debug(`Multiexp start: ${logText}: ${i}/${nPoints}`);
             const n= Math.min(nPoints - i, chunkSize);
-            const buffBasesChunk = await buffBases.slice(i*sGIn, (i+n)*sGIn);
-            const buffScalarsChunk = await buffScalars.slice(i*sScalar, (i+n)*sScalar);
-            opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType));
+            const buffBasesChunk = buffBases.slice(i*sGIn, (i+n)*sGIn);
+            const buffScalarsChunk = buffScalars.slice(i*sScalar, (i+n)*sScalar);
+            opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType).then( (r) => {
+                if (logger) logger.debug(`Multiexp end: ${logText}: ${i}/${nPoints}`);
+                return r;
+            }));
         }
 
         const result = await Promise.all(opPromises);
