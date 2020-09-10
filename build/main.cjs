@@ -5078,7 +5078,7 @@ var _utils = /*#__PURE__*/Object.freeze({
     leInt2Buff: leInt2Buff$2
 });
 
-const PAGE_SIZE = 1<<28;
+const PAGE_SIZE = 1<<30;
 
 class BigBuffer {
 
@@ -5113,7 +5113,7 @@ class BigBuffer {
         while (r>0) {
             // bytes to copy from this page
             const l = (o+r > PAGE_SIZE) ? (PAGE_SIZE -o) : r;
-            const srcView = new Uint8Array(this.buffers[p].buffer, o, l);
+            const srcView = new Uint8Array(this.buffers[p].buffer, this.buffers[p].byteOffset+o, l);
             buff.set(srcView, len-r);
             r = r-l;
             p ++;
@@ -7105,7 +7105,7 @@ function buildFFT(curve, groupName) {
                         task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sMid});
                     }
                     opPromises.push(tm.queueAction(task).then( (r) => {
-                        if (logger) logger.debug(`${loggerTxt}: fft ${bits} join  ${i}/${bits}  ${j+1}/${nGroups} ${k}/${nChunksPerGroup/2 + 1}`);
+                        if (logger) logger.debug(`${loggerTxt}: fft ${bits} join  ${i}/${bits}  ${j+1}/${nGroups} ${k}/${nChunksPerGroup/2}`);
                         return r;
                     }));
                 }

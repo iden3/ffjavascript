@@ -201,7 +201,7 @@ export default function buildFFT(curve, groupName) {
                         task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sMid});
                     }
                     opPromises.push(tm.queueAction(task).then( (r) => {
-                        if (logger) logger.debug(`${loggerTxt}: fft ${bits} join  ${i}/${bits}  ${j+1}/${nGroups} ${k}/${nChunksPerGroup/2 + 1}`);
+                        if (logger) logger.debug(`${loggerTxt}: fft ${bits} join  ${i}/${bits}  ${j+1}/${nGroups} ${k}/${nChunksPerGroup/2}`);
                         return r;
                     }));
                 }

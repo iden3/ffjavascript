@@ -1,5 +1,5 @@
 
-const PAGE_SIZE = 1<<28;
+const PAGE_SIZE = 1<<30;
 
 export default class BigBuffer {
 
@@ -34,7 +34,7 @@ export default class BigBuffer {
         while (r>0) {
             // bytes to copy from this page
             const l = (o+r > PAGE_SIZE) ? (PAGE_SIZE -o) : r;
-            const srcView = new Uint8Array(this.buffers[p].buffer, o, l);
+            const srcView = new Uint8Array(this.buffers[p].buffer, this.buffers[p].byteOffset+o, l);
             buff.set(srcView, len-r);
             r = r-l;
             p ++;
