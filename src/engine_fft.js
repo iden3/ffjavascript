@@ -363,7 +363,7 @@ export default function buildFFT(curve, groupName) {
             if (logger) logger.debug(`${loggerTxt}: fftJoinExt Start: ${i}/${nPoints}`);
             const n= Math.min(nPoints - i, MAX_CHUNK_SIZE);
 
-            const firstChunk = Fr.mul(first, Fr.exp( inc, i*MAX_CHUNK_SIZE));
+            const firstChunk = Fr.mul(first, Fr.exp( inc, i));
             const task = [];
 
             const b1 = buff1.slice(i*sIn, (i+n)*sIn);

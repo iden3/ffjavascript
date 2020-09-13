@@ -21,7 +21,6 @@ describe("bn128", async function () {
         bn128.terminate();
     });
 
-
     it("It shoud do an inverse FFT in G1", async () => {
         const Fr = bn128.Fr;
         const G1 = bn128.G1;
@@ -155,8 +154,6 @@ describe("bn128", async function () {
         Fr.s = oldS;
     });
 
-
-
     it("It shoud do Multiexp", async () => {
         const Fr = bn128.Fr;
         const G1 = bn128.G1;
@@ -174,7 +171,7 @@ describe("bn128", async function () {
         }
 
         const accG = G1.timesFr(G1.g, acc);
-        const accG2 = await G1.multiExpAffine(bases, scalars);
+        const accG2 = await G1.multiExpAffine(bases, scalars, logger, "test");
 
         assert(G1.eq(accG, accG2 ));
     });

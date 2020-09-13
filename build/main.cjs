@@ -6770,7 +6770,15 @@ const pTSizes = [
 function buildMultiexp(curve, groupName) {
     const G = curve[groupName];
     const tm = G.tm;
-    async function _multiExpChunk(buffBases, buffScalars, inType) {
+    async function _multiExpChunk(buffBases, buffScalars, inType, logger, logText) {
+        if ( ! (buffBases instanceof Uint8Array) ) {
+            if (logger) logger.error(`${logText} _multiExpChunk buffBases is not Uint8Array`);
+            throw new Error(`${logText} _multiExpChunk buffBases is not Uint8Array`);
+        }
+        if ( ! (buffScalars instanceof Uint8Array) ) {
+            if (logger) logger.error(`${logText} _multiExpChunk buffScalars is not Uint8Array`);
+            throw new Error(`${logText} _multiExpChunk buffScalars is not Uint8Array`);
+        }
         inType = inType || "affine";
 
         let sGIn;
@@ -6881,7 +6889,7 @@ function buildMultiexp(curve, groupName) {
             const n= Math.min(nPoints - i, chunkSize);
             const buffBasesChunk = buffBases.slice(i*sGIn, (i+n)*sGIn);
             const buffScalarsChunk = buffScalars.slice(i*sScalar, (i+n)*sScalar);
-            opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType).then( (r) => {
+            opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType, logger, logText).then( (r) => {
                 if (logger) logger.debug(`Multiexp end: ${logText}: ${i}/${nPoints}`);
                 return r;
             }));
@@ -7267,7 +7275,7 @@ function buildFFT(curve, groupName) {
             if (logger) logger.debug(`${loggerTxt}: fftJoinExt Start: ${i}/${nPoints}`);
             const n= Math.min(nPoints - i, MAX_CHUNK_SIZE);
 
-            const firstChunk = Fr.mul(first, Fr.exp( inc, i*MAX_CHUNK_SIZE));
+            const firstChunk = Fr.mul(first, Fr.exp( inc, i));
             const task = [];
 
             const b1 = buff1.slice(i*sIn, (i+n)*sIn);

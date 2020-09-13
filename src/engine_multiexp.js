@@ -10,7 +10,15 @@ const pTSizes = [
 export default function buildMultiexp(curve, groupName) {
     const G = curve[groupName];
     const tm = G.tm;
-    async function _multiExpChunk(buffBases, buffScalars, inType) {
+    async function _multiExpChunk(buffBases, buffScalars, inType, logger, logText) {
+        if ( ! (buffBases instanceof Uint8Array) ) {
+            if (logger) logger.error(`${logText} _multiExpChunk buffBases is not Uint8Array`);
+            throw new Error(`${logText} _multiExpChunk buffBases is not Uint8Array`);
+        }
+        if ( ! (buffScalars instanceof Uint8Array) ) {
+            if (logger) logger.error(`${logText} _multiExpChunk buffScalars is not Uint8Array`);
+            throw new Error(`${logText} _multiExpChunk buffScalars is not Uint8Array`);
+        }
         inType = inType || "affine";
 
         let sGIn;
@@ -121,7 +129,7 @@ export default function buildMultiexp(curve, groupName) {
             const n= Math.min(nPoints - i, chunkSize);
             const buffBasesChunk = buffBases.slice(i*sGIn, (i+n)*sGIn);
             const buffScalarsChunk = buffScalars.slice(i*sScalar, (i+n)*sScalar);
-            opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType).then( (r) => {
+            opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType, logger, logText).then( (r) => {
                 if (logger) logger.debug(`Multiexp end: ${logText}: ${i}/${nPoints}`);
                 return r;
             }));
