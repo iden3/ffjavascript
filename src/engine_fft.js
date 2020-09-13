@@ -305,6 +305,7 @@ export default function buildFFT(curve, groupName) {
 
     async function _fftJoinExt(buff1, buff2, fn, first, inc, inType, outType, logger, loggerTxt) {
         const MAX_CHUNK_SIZE = 1<<16;
+        const MIN_CHUNK_SIZE = 1<<4;
 
         let fnName;
         let fnIn2Mid, fnMid2Out;
@@ -357,18 +358,21 @@ export default function buildFFT(curve, groupName) {
             throw new Error("Invalid number of points");
         }
 
+        let chunkSize = Math.floor(nPoints /tm.concurrency);
+        if (chunkSize < MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
+        if (chunkSize > MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
+
         const opPromises = [];
 
-        for (let i=0; i<nPoints; i += MAX_CHUNK_SIZE) {
+        for (let i=0; i<nPoints; i += chunkSize) {
             if (logger) logger.debug(`${loggerTxt}: fftJoinExt Start: ${i}/${nPoints}`);
-            const n= Math.min(nPoints - i, MAX_CHUNK_SIZE);
+            const n= Math.min(nPoints - i, chunkSize);
 
             const firstChunk = Fr.mul(first, Fr.exp( inc, i));
             const task = [];
 
             const b1 = buff1.slice(i*sIn, (i+n)*sIn);
             const b2 = buff2.slice(i*sIn, (i+n)*sIn);
-
 
             task.push({cmd: "ALLOC", var: 0, len: sMid*n});
             task.push({cmd: "SET", var: 0, buff: b1});
@@ -385,7 +389,8 @@ export default function buildFFT(curve, groupName) {
                 {var: 1},
                 {val: n},
                 {var: 2},
-                {var: 3}
+                {var: 3},
+                {val: Fr.s},
             ]});
             if (fnMid2Out) {
                 task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:0}, {val: n}, {var: 0}]});
