@@ -181,6 +181,18 @@ export default class WasmField3 {
         return buff;
     }
 
+    c1(a) {
+        return a.slice(0, this.F.n8);
+    }
+
+    c2(a) {
+        return a.slice(this.F.n8, this.F.n8*2);
+    }
+
+    c3(a) {
+        return a.slice(this.F.n8*2);
+    }
+
 }
 
 

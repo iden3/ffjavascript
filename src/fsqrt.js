@@ -51,7 +51,7 @@ function alg5_tonelliShanks(F) {
     while (F.eq(c0, F.one)) {
         const c = F.random();
         F.sqrt_z = F.pow(c, F.sqrt_t);
-        c0 = F.pow(F.sqrt_z, 1 << (F.sqrt_s-1) );
+        c0 = F.pow(F.sqrt_z, 2 ** (F.sqrt_s-1) );
     }
 
     F.sqrt_tm1d2 = Scalar.div(Scalar.sub(F.sqrt_t, 1),2);
@@ -60,7 +60,7 @@ function alg5_tonelliShanks(F) {
         const F=this;
         if (F.isZero(a)) return F.zero;
         let w = F.pow(a, F.sqrt_tm1d2);
-        const a0 = F.pow( F.mul(F.square(w), a), 1 << (F.sqrt_s-1) );
+        const a0 = F.pow( F.mul(F.square(w), a), 2 ** (F.sqrt_s-1) );
         if (F.eq(a0, F.negone)) return null;
 
         let v = F.sqrt_s;

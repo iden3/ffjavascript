@@ -92,6 +92,10 @@ export default class WasmField2 {
         return this.op2("_mul", a, b);
     }
 
+    mul1(a,b) {
+        return this.op2("_mul1", a, b);
+    }
+
     div(a, b) {
         this.tm.setBuff(this.pOp1, a);
         this.tm.setBuff(this.pOp2, b);
@@ -168,6 +172,14 @@ export default class WasmField2 {
         buff.set(b1);
         buff.set(b2, this.F.n8);
         return buff;
+    }
+
+    c1(a) {
+        return a.slice(0, this.F.n8);
+    }
+
+    c2(a) {
+        return a.slice(this.F.n8);
     }
 
 }

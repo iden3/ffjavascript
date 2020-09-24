@@ -20,4 +20,5 @@ export {default as ChaCha} from "./src/chacha.js";
 
 export {default as BigBuffer} from "./src/bigbuffer.js";
 
+export {getCurveFromR, getCurveFromQ, getCurveFromName} from "./src/curves.js";
 

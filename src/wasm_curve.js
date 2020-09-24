@@ -374,6 +374,16 @@ export default class WasmCurve {
         return this.fromObject(a);
     }
 
+    x(a) {
+        const tmp = this.toAffine(a);
+        return tmp.slice(0, this.F.n8);
+    }
+
+    y(a) {
+        const tmp = this.toAffine(a);
+        return tmp.slice(this.F.n8);
+    }
+
 }
 
 
