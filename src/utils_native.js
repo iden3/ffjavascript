@@ -4,6 +4,8 @@ import * as Scalar from "./scalar.js";
 export function stringifyBigInts(o) {
     if ((typeof(o) == "bigint") || o.eq !== undefined)  {
         return o.toString(10);
+    } else if (o instanceof Uint8Array) {
+        return Scalar.fromRprLE(o, 0);
     } else if (Array.isArray(o)) {
         return o.map(stringifyBigInts);
     } else if (typeof o == "object") {

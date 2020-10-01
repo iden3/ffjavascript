@@ -4,7 +4,7 @@ import * as Scalar from "./scalar.js";
 
 let curve;
 
-export default async function buildBn128() {
+export default async function buildBn128(singleThread) {
 
     if (curve) return curve;
     const params = {
@@ -15,7 +15,7 @@ export default async function buildBn128() {
         n8q: 32,
         n8r: 32,
         cofactorG2: Scalar.e("30644e72e131a029b85045b68181585e06ceecda572a2489345f2299c0f9fa8d", 16),
-        singleThread: false
+        singleThread: singleThread ? true : false
     };
 
     curve = await buildEngine(params);

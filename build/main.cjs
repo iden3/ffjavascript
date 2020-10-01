@@ -4760,6 +4760,8 @@ var wasmcurves = {
 function stringifyBigInts(o) {
     if ((typeof(o) == "bigint") || o.eq !== undefined)  {
         return o.toString(10);
+    } else if (o instanceof Uint8Array) {
+        return fromRprLE(o, 0);
     } else if (Array.isArray(o)) {
         return o.map(stringifyBigInts);
     } else if (typeof o == "object") {
@@ -7767,7 +7769,7 @@ async function buildEngine(params) {
 
 let curve;
 
-async function buildBn128() {
+async function buildBn128(singleThread) {
 
     if (curve) return curve;
     const params = {
@@ -7778,7 +7780,7 @@ async function buildBn128() {
         n8q: 32,
         n8r: 32,
         cofactorG2: e$2("30644e72e131a029b85045b68181585e06ceecda572a2489345f2299c0f9fa8d", 16),
-        singleThread: false
+        singleThread: singleThread ? true : false
     };
 
     curve = await buildEngine(params);
@@ -7794,7 +7796,7 @@ async function buildBn128() {
 
 let curve$1;
 
-async function buildBls12381() {
+async function buildBls12381(singleThread) {
 
     if (curve$1) return curve$1;
     const params = {
@@ -7806,7 +7808,7 @@ async function buildBls12381() {
         n8r: 32,
         cofactorG1: e$2("0x396c8c005555e1568c00aaab0000aaab", 16),
         cofactorG2: e$2("0x5d543a95414e7f1091d50792876a202cd91de4547085abaa68a205b2e5a7ddfa628f1cb4d9e82ef21537e293a6691ae1616ec6e786f0c70cf1c38e31c7238e5", 16),
-        singleThread: false
+        singleThread: singleThread ? true : false
     };
 
     curve$1 = await buildEngine(params);
@@ -7824,37 +7826,37 @@ const bn128r = e$2("218882428718392752222464057452572750885483644004160343436982
 const bls12381q = e$2("1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab", 16);
 const bn128q = e$2("21888242871839275222246405745257275088696311157297823662689037894645226208583");
 
-async function getCurveFromR(r) {
+async function getCurveFromR(r, singleThread) {
     let curve;
     if (eq$2(r, bn128r)) {
-        curve = await buildBn128();
+        curve = await buildBn128(singleThread);
     } else if (eq$2(r, bls12381r)) {
-        curve = await buildBn128();
+        curve = await buildBn128(singleThread);
     } else {
         throw new Error(`Curve not supported: ${toString(r)}`);
     }
     return curve;
 }
 
-async function getCurveFromQ(q) {
+async function getCurveFromQ(q, singleThread) {
     let curve;
     if (eq$2(q, bn128q)) {
-        curve = await buildBn128();
+        curve = await buildBn128(singleThread);
     } else if (eq$2(q, bls12381q)) {
-        curve = await buildBn128();
+        curve = await buildBn128(singleThread);
     } else {
         throw new Error(`Curve not supported: ${toString(q)}`);
     }
     return curve;
 }
 
-async function getCurveFromName(name) {
+async function getCurveFromName(name, singleThread) {
     let curve;
     const normName = normalizeName(name);
     if (["BN128", "BN254", "ALTBN128"].indexOf(normName) >= 0) {
-        curve = await buildBn128();
+        curve = await buildBn128(singleThread);
     } else if (["BLS12381"].indexOf(normName) >= 0) {
-        curve = await buildBn128();
+        curve = await buildBn128(singleThread);
     } else {
         throw new Error(`Curve not supported: ${name}`);
     }
