@@ -1,6 +1,7 @@
 /* global WebAssembly */
 
 export default function thread(self) {
+    const MAXMEM = 32767;
     let instance;
     let memory;
 
@@ -29,7 +30,7 @@ export default function thread(self) {
     async function init(data) {
         const code = new Uint8Array(data.code);
         const wasmModule = await WebAssembly.compile(code);
-        memory = new WebAssembly.Memory({initial:data.init, maximum: 32767});
+        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
 
         instance = await WebAssembly.instantiate(wasmModule, {
             env: {
@@ -48,7 +49,7 @@ export default function thread(self) {
         if (u32[0] + length > memory.buffer.byteLength) {
             const currentPages = memory.buffer.byteLength / 0x10000;
             let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;
-            if (requiredPages>32767) requiredPages=32767;
+            if (requiredPages>MAXMEM) requiredPages=MAXMEM;
             memory.grow(requiredPages-currentPages);
         }
         return res;

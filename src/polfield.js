@@ -63,6 +63,7 @@ export default class PolField {
     }
 
     _setRoots(n) {
+        if (n > this.F.sqrt_s) n = this.s;
         for (let i=n; (i>=0) && (!this.roots[i]); i--) {
             let r = this.F.one;
             const nroots = 1 << i;

@@ -18,7 +18,8 @@
     along with wasmsnark. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const MEM_SIZE = 1000;  // Memory size in 64K Pakes (512Mb)
+// const MEM_SIZE = 1000;  // Memory size in 64K Pakes (512Mb)
+const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
 
 
 import thread from "./threadman_thread.js";
@@ -111,6 +112,8 @@ export default async function buildThreadManager(wasm, singleThread) {
         } else {
             concurrency = os.cpus().length;
         }
+        // Limit to 64 threads for memory reasons.
+        if (concurrency>64) concurrency=64;
         tm.concurrency = concurrency;
 
         for (let i = 0; i<concurrency; i++) {
