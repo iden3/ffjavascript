@@ -2135,6 +2135,7 @@ class PolField {
     }
 
     _setRoots(n) {
+        if (n > this.F.sqrt_s) n = this.s;
         for (let i=n; (i>=0) && (!this.roots[i]); i--) {
             let r = this.F.one;
             const nroots = 1 << i;
@@ -6185,6 +6186,7 @@ class WasmCurve {
 /* global WebAssembly */
 
 function thread(self) {
+    const MAXMEM = 32767;
     let instance;
     let memory;
 
@@ -6213,7 +6215,7 @@ function thread(self) {
     async function init(data) {
         const code = new Uint8Array(data.code);
         const wasmModule = await WebAssembly.compile(code);
-        memory = new WebAssembly.Memory({initial:data.init, maximum: 32767});
+        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
 
         instance = await WebAssembly.instantiate(wasmModule, {
             env: {
@@ -6232,7 +6234,7 @@ function thread(self) {
         if (u32[0] + length > memory.buffer.byteLength) {
             const currentPages = memory.buffer.byteLength / 0x10000;
             let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;
-            if (requiredPages>32767) requiredPages=32767;
+            if (requiredPages>MAXMEM) requiredPages=MAXMEM;
             memory.grow(requiredPages-currentPages);
         }
         return res;
@@ -6324,7 +6326,8 @@ function thread(self) {
     along with wasmsnark. If not, see <https://www.gnu.org/licenses/>.
 */
 
-const MEM_SIZE = 1000;  // Memory size in 64K Pakes (512Mb)
+// const MEM_SIZE = 1000;  // Memory size in 64K Pakes (512Mb)
+const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
 const inBrowser = (typeof window !== "undefined");
 let NodeWorker;
 if (!inBrowser) {
@@ -6411,6 +6414,8 @@ async function buildThreadManager(wasm, singleThread) {
         } else {
             concurrency = os.cpus().length;
         }
+        // Limit to 64 threads for memory reasons.
+        if (concurrency>64) concurrency=64;
         tm.concurrency = concurrency;
 
         for (let i = 0; i<concurrency; i++) {
