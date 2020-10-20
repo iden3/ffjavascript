@@ -22,11 +22,6 @@ export default class BigBuffer {
 
         let buff;
 
-        if (len <= PAGE_SIZE) {
-            buff = new Uint8Array(len);
-        } else {
-            buff = new BigBuffer(len);
-        }
         let p = firstPage;
         let o = fr % PAGE_SIZE;
         // Remaining bytes to read
@@ -35,6 +30,14 @@ export default class BigBuffer {
             // bytes to copy from this page
             const l = (o+r > PAGE_SIZE) ? (PAGE_SIZE -o) : r;
             const srcView = new Uint8Array(this.buffers[p].buffer, this.buffers[p].byteOffset+o, l);
+            if (l == len) return srcView;
+            if (!buff) {
+                if (len <= PAGE_SIZE) {
+                    buff = new Uint8Array(len);
+                } else {
+                    buff = new BigBuffer(len);
+                }
+            }
             buff.set(srcView, len-r);
             r = r-l;
             p ++;

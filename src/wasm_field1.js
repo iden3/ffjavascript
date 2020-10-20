@@ -227,6 +227,7 @@ export default class WasmField1 {
     }
 
     fromRprLE(buff, offset) {
+        offset = offset || 0;
         const res = buff.slice(offset, offset + this.n8);
         return this.toMontgomery(res);
     }
