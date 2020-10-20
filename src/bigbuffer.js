@@ -30,7 +30,7 @@ export default class BigBuffer {
             // bytes to copy from this page
             const l = (o+r > PAGE_SIZE) ? (PAGE_SIZE -o) : r;
             const srcView = new Uint8Array(this.buffers[p].buffer, this.buffers[p].byteOffset+o, l);
-            if (l == len) return srcView;
+            if (l == len) return srcView.slice();
             if (!buff) {
                 if (len <= PAGE_SIZE) {
                     buff = new Uint8Array(len);
