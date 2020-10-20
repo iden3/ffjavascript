@@ -7776,11 +7776,11 @@ async function buildEngine(params) {
     return curve;
 }
 
-let curve;
+global.curve_bn128 = null;
 
 async function buildBn128(singleThread) {
 
-    if (curve) return curve;
+    if ((!singleThread)&&(global.curve_bn128)) return global.curve_bn128;
     const params = {
         name: "bn128",
         wasm: wasmcurves.bn128_wasm,
@@ -7792,22 +7792,26 @@ async function buildBn128(singleThread) {
         singleThread: singleThread ? true : false
     };
 
-    curve = await buildEngine(params);
+    const curve = await buildEngine(params);
     curve.terminate = async function() {
-        curve = null;
         if (!params.singleThread) {
+            global.curve_bn128 = null;
             await this.tm.terminate();
         }
     };
 
+    if (!singleThread) {
+        global.curve_bn128 = curve;
+    }
+
     return curve;
 }
 
-let curve$1;
+global.curve_bls12381 = null;
 
 async function buildBls12381(singleThread) {
 
-    if (curve$1) return curve$1;
+    if ((!singleThread)&&(global.curve_bls12381)) return global.curve_bls12381;
     const params = {
         name: "bls12381",
         wasm: wasmcurves.bls12381_wasm,
@@ -7820,13 +7824,15 @@ async function buildBls12381(singleThread) {
         singleThread: singleThread ? true : false
     };
 
-    curve$1 = await buildEngine(params);
-
-    curve$1.terminate = async function() {
-        curve$1 = null;
-        await this.tm.terminate();
+    const curve = await buildEngine(params);
+    curve.terminate = async function() {
+        if (!params.singleThread) {
+            global.curve_bls12381 = null;
+            await this.tm.terminate();
+        }
     };
-    return curve$1;
+
+    return curve;
 }
 
 const bls12381r = e$2("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001", 16);

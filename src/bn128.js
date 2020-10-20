@@ -2,11 +2,11 @@ import wasmcurves from "wasmcurves";
 import buildEngine from "./engine.js";
 import * as Scalar from "./scalar.js";
 
-let curve;
+global.curve_bn128 = null;
 
 export default async function buildBn128(singleThread) {
 
-    if (curve) return curve;
+    if ((!singleThread)&&(global.curve_bn128)) return global.curve_bn128;
     const params = {
         name: "bn128",
         wasm: wasmcurves.bn128_wasm,
@@ -18,13 +18,17 @@ export default async function buildBn128(singleThread) {
         singleThread: singleThread ? true : false
     };
 
-    curve = await buildEngine(params);
+    const curve = await buildEngine(params);
     curve.terminate = async function() {
-        curve = null;
         if (!params.singleThread) {
+            global.curve_bn128 = null;
             await this.tm.terminate();
         }
     };
+
+    if (!singleThread) {
+        global.curve_bn128 = curve;
+    }
 
     return curve;
 }
