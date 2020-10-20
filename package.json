@@ -1,7 +1,7 @@
 {
   "name": "ffjavascript",
   "type": "module",
-  "version": "0.2.26",
+  "version": "0.2.27",
   "description": "Finite Field Library in Javascript",
   "main": "./build/main.cjs",
   "module": "./main.js",
