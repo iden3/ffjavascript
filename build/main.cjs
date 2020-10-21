@@ -5103,7 +5103,7 @@ class BigBuffer {
         const firstPage = Math.floor(fr / PAGE_SIZE);
         const lastPage = Math.floor((fr+len-1) / PAGE_SIZE);
 
-        if (firstPage == lastPage)
+        if ((firstPage == lastPage)||(len==0))
             return this.buffers[firstPage].slice(fr%PAGE_SIZE, fr%PAGE_SIZE + len);
 
         let buff;
@@ -5137,6 +5137,8 @@ class BigBuffer {
         if (offset === undefined) offset = 0;
 
         const len = buff.byteLength;
+
+        if (len==0) return;
 
         const firstPage = Math.floor(offset / PAGE_SIZE);
         const lastPage = Math.floor((offset+len-1) / PAGE_SIZE);
