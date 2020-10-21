@@ -5096,11 +5096,15 @@ class BigBuffer {
     }
 
     slice(fr, to) {
-        if (typeof to == "undefined") to = this.byteLength;
-        if (typeof fr == "undefined") fr = 0;
+        if ( to === undefined ) to = this.byteLength;
+        fr |= 0;
         const len = to-fr;
 
         const firstPage = Math.floor(fr / PAGE_SIZE);
+        const lastPage = Math.floor((fr+len-1) / PAGE_SIZE);
+
+        if (firstPage == lastPage)
+            return this.buffers[firstPage].slice(fr%PAGE_SIZE, fr%PAGE_SIZE + len);
 
         let buff;
 
@@ -5130,16 +5134,23 @@ class BigBuffer {
     }
 
     set(buff, offset) {
-        if (typeof offset == "undefined") offset = 0;
+        offset |= 0;
+
+        const len = buff.byteLength;
 
         const firstPage = Math.floor(offset / PAGE_SIZE);
+        const lastPage = Math.floor((offset+len-1) / PAGE_SIZE);
+
+        if (firstPage == lastPage)
+            return this.buffers[firstPage].set(buff, offset % PAGE_SIZE);
+
 
         let p = firstPage;
         let o = offset % PAGE_SIZE;
-        let r = buff.byteLength;
+        let r = len;
         while (r>0) {
             const l = (o+r > PAGE_SIZE) ? (PAGE_SIZE -o) : r;
-            const srcView = buff.slice( buff.byteLength -r, buff.byteLength -r+l);
+            const srcView = buff.slice( len -r, len -r+l);
             const dstView = new Uint8Array(this.buffers[p].buffer, this.buffers[p].byteOffset + o, l);
             dstView.set(srcView);
             r = r-l;
