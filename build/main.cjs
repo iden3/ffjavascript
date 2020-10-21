@@ -5097,7 +5097,7 @@ class BigBuffer {
 
     slice(fr, to) {
         if ( to === undefined ) to = this.byteLength;
-        fr |= 0;
+        if ( fr === undefined ) fr = 0;
         const len = to-fr;
 
         const firstPage = Math.floor(fr / PAGE_SIZE);
@@ -5134,7 +5134,7 @@ class BigBuffer {
     }
 
     set(buff, offset) {
-        offset |= 0;
+        if (offset === undefined) offset = 0;
 
         const len = buff.byteLength;
 
