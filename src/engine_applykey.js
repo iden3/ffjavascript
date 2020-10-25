@@ -1,3 +1,4 @@
+import BigBuffer from "./bigbuffer.js";
 
 export default function buildBatchApplyKey(curve, groupName) {
     const G = curve[groupName];
@@ -101,7 +102,13 @@ export default function buildBatchApplyKey(curve, groupName) {
 
         const result = await Promise.all(opPromises);
 
-        const outBuff = new Uint8Array(nPoints*sGout);
+        let outBuff;
+        if (buff instanceof BigBuffer) {
+            outBuff = new BigBuffer(nPoints*sGout);
+        } else {
+            outBuff = new Uint8Array(nPoints*sGout);
+        }
+
         let p=0;
         for (let i=0; i<result.length; i++) {
             outBuff.set(result[i][0], p);
