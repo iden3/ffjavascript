@@ -6345,11 +6345,7 @@ function thread(self) {
 
 // const MEM_SIZE = 1000;  // Memory size in 64K Pakes (512Mb)
 const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
-const inBrowser = (typeof window !== "undefined");
-let NodeWorker;
-if (!inBrowser) {
-    NodeWorker = NodeWorker_mod.Worker;
-}
+const NodeWorker = NodeWorker_mod.Worker;
 
 class Deferred {
     constructor() {
@@ -6437,19 +6433,9 @@ async function buildThreadManager(wasm, singleThread) {
 
         for (let i = 0; i<concurrency; i++) {
 
-            if (inBrowser) {
-                const blob = new Blob(["(", thread.toString(), ")(self);"], { type: "text/javascript" });
-                const url = URL.createObjectURL(blob);
+            tm.workers[i] = new NodeWorker("(" + thread.toString()+ ")(require('worker_threads').parentPort);", {eval: true});
 
-                tm.workers[i] = new Worker(url);
-
-                tm.workers[i].onmessage = getOnMsg(i);
-
-            } else {
-                tm.workers[i] = new NodeWorker("(" + thread.toString()+ ")(require('worker_threads').parentPort);", {eval: true});
-
-                tm.workers[i].on("message", getOnMsg(i));
-            }
+            tm.workers[i].on("message", getOnMsg(i));
 
             tm.working[i]=false;
         }
