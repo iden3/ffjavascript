@@ -5,6 +5,9 @@
   "description": "Finite Field Library in Javascript",
   "main": "./build/main.cjs",
   "module": "./main.js",
+  "browser": {
+    "./src/threadman.js": "./src/threadman.browser.js"
+  },
   "exports": {
     "import": "./main.js",
     "require": "./build/main.cjs"
@@ -33,6 +36,7 @@
   "homepage": "https://github.com/iden3/ffjs#readme",
   "dependencies": {
     "big-integer": "^1.6.48",
+    "mocha": "^8.2.1",
     "wasmcurves": "0.0.14",
     "worker-threads": "^1.0.0"
   },
