@@ -22,10 +22,8 @@
 const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
 
 
-import thread from "./threadman_thread.js";
+import thread from "ffjavascript/src/threadman_thread";
 import os from "os";
-import NodeWorker_mod from 'worker_threads';
-const NodeWorker = NodeWorker_mod.Worker;
 
 class Deferred {
     constructor() {
@@ -113,9 +111,12 @@ export default async function buildThreadManager(wasm, singleThread) {
 
         for (let i = 0; i<concurrency; i++) {
 
-            tm.workers[i] = new NodeWorker("(" + thread.toString()+ ")(require('worker_threads').parentPort);", {eval: true});
+            const blob = new Blob(["(", thread.toString(), ")(self);"], { type: "text/javascript" });
+            const url = URL.createObjectURL(blob);
 
-            tm.workers[i].on("message", getOnMsg(i));
+            tm.workers[i] = new Worker(url);
+
+            tm.workers[i].onmessage = getOnMsg(i);
 
             tm.working[i]=false;
         }
@@ -240,3 +241,4 @@ class ThreadManager {
     }
 
 }
+
