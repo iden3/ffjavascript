@@ -7837,6 +7837,10 @@ async function buildBls12381(singleThread) {
         }
     };
 
+    if (!singleThread) {
+        global.curve_bls12381 = curve;
+    }
+
     return curve;
 }
 
@@ -7851,7 +7855,7 @@ async function getCurveFromR(r, singleThread) {
     if (eq$2(r, bn128r)) {
         curve = await buildBn128(singleThread);
     } else if (eq$2(r, bls12381r)) {
-        curve = await buildBn128(singleThread);
+        curve = await buildBls12381(singleThread);
     } else {
         throw new Error(`Curve not supported: ${toString(r)}`);
     }
@@ -7863,7 +7867,7 @@ async function getCurveFromQ(q, singleThread) {
     if (eq$2(q, bn128q)) {
         curve = await buildBn128(singleThread);
     } else if (eq$2(q, bls12381q)) {
-        curve = await buildBn128(singleThread);
+        curve = await buildBls12381(singleThread);
     } else {
         throw new Error(`Curve not supported: ${toString(q)}`);
     }
@@ -7876,7 +7880,7 @@ async function getCurveFromName(name, singleThread) {
     if (["BN128", "BN254", "ALTBN128"].indexOf(normName) >= 0) {
         curve = await buildBn128(singleThread);
     } else if (["BLS12381"].indexOf(normName) >= 0) {
-        curve = await buildBn128(singleThread);
+        curve = await buildBls12381(singleThread);
     } else {
         throw new Error(`Curve not supported: ${name}`);
     }
