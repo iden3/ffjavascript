@@ -1,6 +1,6 @@
 import * as Scalar from "./scalar.js";
 import {default as buildBn128} from "./bn128.js";
-import {default as buildBls12381} from "./bn128.js";
+import {default as buildBls12381} from "./bls12381.js";
 
 const bls12381r = Scalar.e("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001", 16);
 const bn128r = Scalar.e("21888242871839275222246405745257275088548364400416034343698204186575808495617");
