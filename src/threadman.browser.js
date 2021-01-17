@@ -22,7 +22,7 @@
 const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
 
 
-import thread from "ffjavascript/src/threadman_thread";
+import thread from "./threadman_thread.js";
 import os from "os";
 
 class Deferred {
