@@ -1,5 +1,7 @@
-import resolve from "rollup-plugin-node-resolve";
-import commonJS from "rollup-plugin-commonjs";
+import fs from "fs";
+import { builtinModules as builtin } from "module";
+
+const pkg = JSON.parse(fs.readFileSync("./package.json"));
 
 export default {
     input: "main.js",
@@ -7,12 +9,8 @@ export default {
         file: "build/main.cjs",
         format: "cjs",
     },
-    external: ["crypto", "os", "worker_threads"],
-    plugins: [
-        resolve({ preferBuiltins: true }),
-        commonJS({
-            preserveSymlinks: true
-        }),
+    external: [
+        ...Object.keys(pkg.dependencies),
+        ...builtin,
     ]
 };
-
