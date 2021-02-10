@@ -24,8 +24,7 @@ const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
 
 import thread from "./threadman_thread.js";
 import os from "os";
-import NodeWorker_mod from 'worker_threads';
-const NodeWorker = NodeWorker_mod.Worker;
+import Worker from "web-worker";
 
 class Deferred {
     constructor() {
@@ -54,6 +53,16 @@ function base64ToArrayBuffer(base64) {
     }
 }
 
+function stringToBase64(str) {
+    if (process.browser) {
+        return window.btoa(str);
+    } else {
+        return Buffer.from(str).toString("base64");
+    }
+}
+
+const threadSource = stringToBase64("(" + thread.toString() + ")(self)");
+const workerSource = "data:application/javascript;base64," + threadSource;
 
 
 
@@ -113,9 +122,9 @@ export default async function buildThreadManager(wasm, singleThread) {
 
         for (let i = 0; i<concurrency; i++) {
 
-            tm.workers[i] = new NodeWorker("(" + thread.toString()+ ")(require('worker_threads').parentPort);", {eval: true});
+            tm.workers[i] = new Worker(workerSource);
 
-            tm.workers[i].on("message", getOnMsg(i));
+            tm.workers[i].addEventListener("message", getOnMsg(i));
 
             tm.working[i]=false;
         }

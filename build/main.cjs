@@ -6,7 +6,7 @@ var bigInt = require('big-integer');
 var crypto = require('crypto');
 var wasmcurves = require('wasmcurves');
 var os = require('os');
-var NodeWorker_mod = require('worker_threads');
+var Worker = require('web-worker');
 
 function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
 
@@ -14,7 +14,7 @@ var bigInt__default = /*#__PURE__*/_interopDefaultLegacy(bigInt);
 var crypto__default = /*#__PURE__*/_interopDefaultLegacy(crypto);
 var wasmcurves__default = /*#__PURE__*/_interopDefaultLegacy(wasmcurves);
 var os__default = /*#__PURE__*/_interopDefaultLegacy(os);
-var NodeWorker_mod__default = /*#__PURE__*/_interopDefaultLegacy(NodeWorker_mod);
+var Worker__default = /*#__PURE__*/_interopDefaultLegacy(Worker);
 
 /* global BigInt */
 const hexLen = [ 0, 1, 2, 2, 3, 3, 3, 3, 4 ,4 ,4 ,4 ,4 ,4 ,4 ,4];
@@ -4797,7 +4797,6 @@ function thread(self) {
 
 // const MEM_SIZE = 1000;  // Memory size in 64K Pakes (512Mb)
 const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
-const NodeWorker = NodeWorker_mod__default['default'].Worker;
 
 class Deferred {
     constructor() {
@@ -4826,6 +4825,16 @@ function base64ToArrayBuffer(base64) {
     }
 }
 
+function stringToBase64(str) {
+    if (process.browser) {
+        return window.btoa(str);
+    } else {
+        return Buffer.from(str).toString("base64");
+    }
+}
+
+const threadSource = stringToBase64("(" + thread.toString() + ")(self)");
+const workerSource = "data:application/javascript;base64," + threadSource;
 
 
 
@@ -4885,9 +4894,9 @@ async function buildThreadManager(wasm, singleThread) {
 
         for (let i = 0; i<concurrency; i++) {
 
-            tm.workers[i] = new NodeWorker("(" + thread.toString()+ ")(require('worker_threads').parentPort);", {eval: true});
+            tm.workers[i] = new Worker__default['default'](workerSource);
 
-            tm.workers[i].on("message", getOnMsg(i));
+            tm.workers[i].addEventListener("message", getOnMsg(i));
 
             tm.working[i]=false;
         }
