@@ -1,5 +1,5 @@
 {
-  "name": "ffjavascript",
+  "name": "@toruslabs/ffjavascript",
   "type": "module",
   "version": "0.2.35",
   "description": "Finite Field Library in Javascript",
@@ -38,9 +38,10 @@
   },
   "devDependencies": {
     "blake2b": "^2.1.3",
-    "chai": "^4.2.0",
+    "chai": "^4.3.4",
     "eslint": "^6.8.0",
-    "mocha": "^8.2.1",
-    "rollup": "^2.38.5"
+    "eslint-plugin-prettier": "^3.4.0",
+    "mocha": "^8.3.2",
+    "rollup": "^2.45.2"
   }
 }
