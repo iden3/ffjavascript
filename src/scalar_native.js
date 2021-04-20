@@ -16,7 +16,7 @@ export function fromString(s, radix) {
 export const e = fromString;
 
 export function fromArray(a, radix) {
-    let acc =0n;
+    let acc =BigInt(0);
     radix = BigInt(radix);
     for (let i=0; i<a.length; i++) {
         acc = acc*radix + BigInt(a[i]);
@@ -30,7 +30,7 @@ export function bitLength(a) {
 }
 
 export function isNegative(a) {
-    return BigInt(a) < 0n;
+    return BigInt(a) < BigInt(0);
 }
 
 export function isZero(a) {
@@ -49,7 +49,7 @@ export const shl = shiftLeft;
 export const shr = shiftRight;
 
 export function isOdd(a) {
-    return (BigInt(a) & 1n) == 1n;
+    return (BigInt(a) & BigInt(1)) == BigInt(1);
 }
 
 
@@ -57,14 +57,14 @@ export function naf(n) {
     let E = BigInt(n);
     const res = [];
     while (E) {
-        if (E & 1n) {
-            const z = 2 - Number(E % 4n);
+        if (E & BigInt(1)) {
+            const z = 2 - Number(E % BigInt(4));
             res.push( z );
             E = E - BigInt(z);
         } else {
             res.push( 0 );
         }
-        E = E >> 1n;
+        E = E >> BigInt(1);
     }
     return res;
 }
@@ -74,12 +74,12 @@ export function bits(n) {
     let E = BigInt(n);
     const res = [];
     while (E) {
-        if (E & 1n) {
+        if (E & BigInt(1)) {
             res.push(1);
         } else {
             res.push( 0 );
         }
-        E = E >> 1n;
+        E = E >> BigInt(1);
     }
     return res;
 }
