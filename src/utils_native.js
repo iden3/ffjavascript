@@ -39,7 +39,7 @@ export function unstringifyBigInts(o) {
 }
 
 export function beBuff2int(buff) {
-    let res = 0n;
+    let res = BigInt(0);
     let i = buff.length;
     let offset = 0;
     const buffV = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
@@ -69,16 +69,16 @@ export function beInt2Buff(n, len) {
     while (o > 0) {
         if (o-4 >= 0) {
             o -= 4;
-            buffV.setUint32(o, Number(r & 0xFFFFFFFFn));
-            r = r >> 32n;
+            buffV.setUint32(o, Number(r & BigInt(0xFFFFFFFF)));
+            r = r >> BigInt(32);
         } else if (o-2 >= 0) {
             o -= 2;
-            buffV.setUint16(o, Number(r & 0xFFFFn));
-            r = r >> 16n;
+            buffV.setUint16(o, Number(r & BigInt(0xFFFF)));
+            r = r >> BigInt(16);
         } else {
             o -= 1;
-            buffV.setUint8(o, Number(r & 0xFFn));
-            r = r >> 8n;
+            buffV.setUint8(o, Number(r & BigInt(0xFF)));
+            r = r >> BigInt(8);
         }
     }
     if (r) {
@@ -89,7 +89,7 @@ export function beInt2Buff(n, len) {
 
 
 export function leBuff2int(buff) {
-    let res = 0n;
+    let res = BigInt(0);
     let i = 0;
     const buffV = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
     while (i<buff.length) {
@@ -118,17 +118,17 @@ export function leInt2Buff(n, len) {
     let o = 0;
     while (o < len) {
         if (o+4 <= len) {
-            buffV.setUint32(o, Number(r & 0xFFFFFFFFn), true );
+            buffV.setUint32(o, Number(r & BigInt(0xFFFFFFFF)), true );
             o += 4;
-            r = r >> 32n;
+            r = r >> BigInt(32);
         } else if (o+2 <= len) {
-            buffV.setUint16(Number(o, r & 0xFFFFn), true );
+            buffV.setUint16(Number(o, r & BigInt(0xFFFF)), true );
             o += 2;
-            r = r >> 16n;
+            r = r >> BigInt(16);
         } else {
-            buffV.setUint8(Number(o, r & 0xFFn), true );
+            buffV.setUint8(Number(o, r & BigInt(0xFF)), true );
             o += 1;
-            r = r >> 8n;
+            r = r >> BigInt(8);
         }
     }
     if (r) {
