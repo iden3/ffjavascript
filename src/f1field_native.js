@@ -140,7 +140,7 @@ export default class ZqField {
             [t, newt] = [newt, t-q*newt];
             [r, newr] = [newr, r-q*newr];
         }
-        if (t<0n) t += this.p;
+        if (t<this.zero) t += this.p;
         return t;
     }
 
