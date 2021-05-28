@@ -35,7 +35,10 @@ export default function thread(self) {
         instance = await WebAssembly.instantiate(wasmModule, {
             env: {
                 "memory": memory
-            }
+            },
+            imports: {
+                reportProgress: val => console.log(`progress = ${val}`)
+            },
         });
     }
 
@@ -93,6 +96,7 @@ export default function thread(self) {
                 setBuffer(ctx.vars[task[i].var], task[i].buff);
                 break;
             case "CALL": {
+                console.debug(`CALL ${i} ${task[i].params.length}`);
                 const params = [];
                 for (let j=0; j<task[i].params.length; j++) {
                     const p = task[i].params[j];
@@ -115,6 +119,10 @@ export default function thread(self) {
         const u32b = new Uint32Array(memory.buffer, 0, 1);
         u32b[0] = oldAlloc;
         return ctx.out;
+    }
+
+    function reportProgress(count) {
+        console.log(`progress: ${count}`);
     }
 
 
