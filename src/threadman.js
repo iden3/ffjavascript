@@ -78,6 +78,9 @@ export default async function buildThreadManager(wasm, singleThread) {
     tm.instance = await WebAssembly.instantiate(wasmModule, {
         env: {
             "memory": tm.memory
+        },
+        imports: {
+            reportProgress: val => console.log(`progress: ${val}`)
         }
     });
 

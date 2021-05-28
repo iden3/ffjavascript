@@ -2,13 +2,19 @@
 
 Object.defineProperty(exports, '__esModule', { value: true });
 
-function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
+var bigInt = require('big-integer');
+var crypto = require('crypto');
+var wasmcurves = require('wasmcurves');
+var os = require('os');
+var Worker = require('web-worker');
 
-var bigInt = _interopDefault(require('big-integer'));
-var crypto = _interopDefault(require('crypto'));
-var wasmcurves = _interopDefault(require('wasmcurves'));
-var os = _interopDefault(require('os'));
-var Worker = _interopDefault(require('web-worker'));
+function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
+
+var bigInt__default = /*#__PURE__*/_interopDefaultLegacy(bigInt);
+var crypto__default = /*#__PURE__*/_interopDefaultLegacy(crypto);
+var wasmcurves__default = /*#__PURE__*/_interopDefaultLegacy(wasmcurves);
+var os__default = /*#__PURE__*/_interopDefaultLegacy(os);
+var Worker__default = /*#__PURE__*/_interopDefaultLegacy(Worker);
 
 /* global BigInt */
 const hexLen = [ 0, 1, 2, 2, 3, 3, 3, 3, 4 ,4 ,4 ,4 ,4 ,4 ,4 ,4];
@@ -247,53 +253,53 @@ var Scalar_native = /*#__PURE__*/Object.freeze({
 function fromString$1(s, radix) {
     if (typeof s == "string") {
         if (s.slice(0,2) == "0x") {
-            return bigInt(s.slice(2), 16);
+            return bigInt__default['default'](s.slice(2), 16);
         } else {
-            return bigInt(s,radix);
+            return bigInt__default['default'](s,radix);
         }
     } else {
-        return bigInt(s, radix);
+        return bigInt__default['default'](s, radix);
     }
 }
 
 const e$1 = fromString$1;
 
 function fromArray$1(a, radix) {
-    return bigInt.fromArray(a, radix);
+    return bigInt__default['default'].fromArray(a, radix);
 }
 
 function bitLength$1(a) {
-    return bigInt(a).bitLength();
+    return bigInt__default['default'](a).bitLength();
 }
 
 function isNegative$1(a) {
-    return bigInt(a).isNegative();
+    return bigInt__default['default'](a).isNegative();
 }
 
 function isZero$1(a) {
-    return bigInt(a).isZero();
+    return bigInt__default['default'](a).isZero();
 }
 
 function shiftLeft$1(a, n) {
-    return bigInt(a).shiftLeft(n);
+    return bigInt__default['default'](a).shiftLeft(n);
 }
 
 function shiftRight$1(a, n) {
-    return bigInt(a).shiftRight(n);
+    return bigInt__default['default'](a).shiftRight(n);
 }
 
 const shl$1 = shiftLeft$1;
 const shr$1 = shiftRight$1;
 
 function isOdd$1(a) {
-    return bigInt(a).isOdd();
+    return bigInt__default['default'](a).isOdd();
 }
 
 
 function naf$1(n) {
-    let E = bigInt(n);
+    let E = bigInt__default['default'](n);
     const res = [];
-    while (E.gt(bigInt.zero)) {
+    while (E.gt(bigInt__default['default'].zero)) {
         if (E.isOdd()) {
             const z = 2 - E.mod(4).toJSNumber();
             res.push( z );
@@ -307,9 +313,9 @@ function naf$1(n) {
 }
 
 function bits$1(n) {
-    let E = bigInt(n);
+    let E = bigInt__default['default'](n);
     const res = [];
-    while (E.gt(bigInt.zero)) {
+    while (E.gt(bigInt__default['default'].zero)) {
         if (E.isOdd()) {
             res.push(1);
         } else {
@@ -321,102 +327,102 @@ function bits$1(n) {
 }
 
 function toNumber$1(s) {
-    if (!s.lt(bigInt("9007199254740992", 10))) {
+    if (!s.lt(bigInt__default['default']("9007199254740992", 10))) {
         throw new Error("Number too big");
     }
     return s.toJSNumber();
 }
 
 function toArray$1(s, radix) {
-    return bigInt(s).toArray(radix);
+    return bigInt__default['default'](s).toArray(radix);
 }
 
 function add$1(a, b) {
-    return bigInt(a).add(bigInt(b));
+    return bigInt__default['default'](a).add(bigInt__default['default'](b));
 }
 
 function sub$1(a, b) {
-    return bigInt(a).minus(bigInt(b));
+    return bigInt__default['default'](a).minus(bigInt__default['default'](b));
 }
 
 function neg$1(a) {
-    return bigInt.zero.minus(bigInt(a));
+    return bigInt__default['default'].zero.minus(bigInt__default['default'](a));
 }
 
 function mul$1(a, b) {
-    return bigInt(a).times(bigInt(b));
+    return bigInt__default['default'](a).times(bigInt__default['default'](b));
 }
 
 function square$1(a) {
-    return bigInt(a).square();
+    return bigInt__default['default'](a).square();
 }
 
 function pow$1(a, b) {
-    return bigInt(a).pow(bigInt(b));
+    return bigInt__default['default'](a).pow(bigInt__default['default'](b));
 }
 
 function exp$1(a, b) {
-    return bigInt(a).pow(bigInt(b));
+    return bigInt__default['default'](a).pow(bigInt__default['default'](b));
 }
 
 function abs$1(a) {
-    return bigInt(a).abs();
+    return bigInt__default['default'](a).abs();
 }
 
 function div$1(a, b) {
-    return bigInt(a).divide(bigInt(b));
+    return bigInt__default['default'](a).divide(bigInt__default['default'](b));
 }
 
 function mod$1(a, b) {
-    return bigInt(a).mod(bigInt(b));
+    return bigInt__default['default'](a).mod(bigInt__default['default'](b));
 }
 
 function eq$1(a, b) {
-    return bigInt(a).eq(bigInt(b));
+    return bigInt__default['default'](a).eq(bigInt__default['default'](b));
 }
 
 function neq$1(a, b) {
-    return bigInt(a).neq(bigInt(b));
+    return bigInt__default['default'](a).neq(bigInt__default['default'](b));
 }
 
 function lt$1(a, b) {
-    return bigInt(a).lt(bigInt(b));
+    return bigInt__default['default'](a).lt(bigInt__default['default'](b));
 }
 
 function gt$1(a, b) {
-    return bigInt(a).gt(bigInt(b));
+    return bigInt__default['default'](a).gt(bigInt__default['default'](b));
 }
 
 function leq$1(a, b) {
-    return bigInt(a).leq(bigInt(b));
+    return bigInt__default['default'](a).leq(bigInt__default['default'](b));
 }
 
 function geq$1(a, b) {
-    return bigInt(a).geq(bigInt(b));
+    return bigInt__default['default'](a).geq(bigInt__default['default'](b));
 }
 
 function band$1(a, b) {
-    return bigInt(a).and(bigInt(b));
+    return bigInt__default['default'](a).and(bigInt__default['default'](b));
 }
 
 function bor$1(a, b) {
-    return bigInt(a).or(bigInt(b));
+    return bigInt__default['default'](a).or(bigInt__default['default'](b));
 }
 
 function bxor$1(a, b) {
-    return bigInt(a).xor(bigInt(b));
+    return bigInt__default['default'](a).xor(bigInt__default['default'](b));
 }
 
 function land$1(a, b) {
-    return (!bigInt(a).isZero()) && (!bigInt(b).isZero());
+    return (!bigInt__default['default'](a).isZero()) && (!bigInt__default['default'](b).isZero());
 }
 
 function lor$1(a, b) {
-    return (!bigInt(a).isZero()) || (!bigInt(b).isZero());
+    return (!bigInt__default['default'](a).isZero()) || (!bigInt__default['default'](b).isZero());
 }
 
 function lnot$1(a) {
-    return bigInt(a).isZero();
+    return bigInt__default['default'](a).isZero();
 }
 
 var Scalar_bigint = /*#__PURE__*/Object.freeze({
@@ -1600,7 +1606,7 @@ function getRandomBytes(n) {
         }
     }
     else { // NodeJS
-        crypto.randomFillSync(array);
+        crypto__default['default'].randomFillSync(array);
     }
     return array;
 }
@@ -1928,20 +1934,20 @@ class ZqField {
 class ZqField$1 {
     constructor(p) {
         this.type="F1";
-        this.one = bigInt.one;
-        this.zero = bigInt.zero;
-        this.p = bigInt(p);
+        this.one = bigInt__default['default'].one;
+        this.zero = bigInt__default['default'].zero;
+        this.p = bigInt__default['default'](p);
         this.m = 1;
-        this.negone = this.p.minus(bigInt.one);
-        this.two = bigInt(2);
+        this.negone = this.p.minus(bigInt__default['default'].one);
+        this.two = bigInt__default['default'](2);
         this.half = this.p.shiftRight(1);
         this.bitLength = this.p.bitLength();
-        this.mask = bigInt.one.shiftLeft(this.bitLength).minus(bigInt.one);
+        this.mask = bigInt__default['default'].one.shiftLeft(this.bitLength).minus(bigInt__default['default'].one);
 
         this.n64 = Math.floor((this.bitLength - 1) / 64)+1;
         this.n32 = this.n64*2;
         this.n8 = this.n64*8;
-        this.R = bigInt.one.shiftLeft(this.n64*64);
+        this.R = bigInt__default['default'].one.shiftLeft(this.n64*64);
         this.Ri = this.inv(this.R);
 
         const e = this.negone.shiftRight(this.one);
@@ -1967,7 +1973,7 @@ class ZqField$1 {
 
     e(a,b) {
 
-        const res = bigInt(a,b);
+        const res = bigInt__default['default'](a,b);
 
         return this.normalize(res);
 
@@ -1999,7 +2005,7 @@ class ZqField$1 {
     }
 
     mulScalar(base, s) {
-        return base.times(bigInt(s)).mod(this.p);
+        return base.times(bigInt__default['default'](s)).mod(this.p);
     }
 
     square(a) {
@@ -2089,7 +2095,7 @@ class ZqField$1 {
             if (nb.lt(this.bitLength)) {
                 return this.shr(a, nb);
             } else {
-                return bigInt.zero;
+                return bigInt__default['default'].zero;
             }
         }
     }
@@ -2102,21 +2108,21 @@ class ZqField$1 {
             if (nb.lt(this.bitLength)) {
                 return this.shl(a, nb);
             } else {
-                return bigInt.zero;
+                return bigInt__default['default'].zero;
             }
         }
     }
 
     land(a, b) {
-        return (a.isZero() || b.isZero()) ? bigInt.zero : bigInt.one;
+        return (a.isZero() || b.isZero()) ? bigInt__default['default'].zero : bigInt__default['default'].one;
     }
 
     lor(a, b) {
-        return (a.isZero() && b.isZero()) ? bigInt.zero : bigInt.one;
+        return (a.isZero() && b.isZero()) ? bigInt__default['default'].zero : bigInt__default['default'].one;
     }
 
     lnot(a) {
-        return a.isZero() ? bigInt.one : bigInt.zero;
+        return a.isZero() ? bigInt__default['default'].one : bigInt__default['default'].zero;
     }
 
     sqrt_old(n) {
@@ -2158,7 +2164,7 @@ class ZqField$1 {
     }
 
     normalize(a) {
-        a = bigInt(a);
+        a = bigInt__default['default'](a);
         if (a.isNegative()) {
             return this.p.minus(a.abs().mod(this.p));
         } else {
@@ -2167,10 +2173,10 @@ class ZqField$1 {
     }
 
     random() {
-        let res = bigInt(0);
-        let n = bigInt(this.p.square());
+        let res = bigInt__default['default'](0);
+        let n = bigInt__default['default'](this.p.square());
         while (!n.isZero()) {
-            res = res.shiftLeft(8).add(bigInt(getRandomBytes(1)[0]));
+            res = res.shiftLeft(8).add(bigInt__default['default'](getRandomBytes(1)[0]));
             n = n.shiftRight(8);
         }
         return res.mod(this.p);
@@ -2178,7 +2184,7 @@ class ZqField$1 {
 
     toString(a, base) {
         let vs;
-        if (!a.lesserOrEquals(this.p.shiftRight(bigInt(1)))) {
+        if (!a.lesserOrEquals(this.p.shiftRight(bigInt__default['default'](1)))) {
             const v = this.p.minus(a);
             vs = "-"+v.toString(base);
         } else {
@@ -2195,7 +2201,7 @@ class ZqField$1 {
     fromRng(rng) {
         let v;
         do {
-            v = bigInt(0);
+            v = bigInt__default['default'](0);
             for (let i=0; i<this.n64; i++) {
                 v = v.add(v, rng.nextU64().shiftLeft(64*i));
             }
@@ -3369,7 +3375,7 @@ function stringifyBigInts$1(o) {
 
 function unstringifyBigInts$1(o) {
     if ((typeof(o) == "string") && (/^[0-9]+$/.test(o) ))  {
-        return bigInt(o);
+        return bigInt__default['default'](o);
     } else if (Array.isArray(o)) {
         return o.map(unstringifyBigInts$1);
     } else if (typeof o == "object") {
@@ -3385,9 +3391,9 @@ function unstringifyBigInts$1(o) {
 }
 
 function beBuff2int$1(buff) {
-    let res = bigInt.zero;
+    let res = bigInt__default['default'].zero;
     for (let i=0; i<buff.length; i++) {
-        const n = bigInt(buff[buff.length - i - 1]);
+        const n = bigInt__default['default'](buff[buff.length - i - 1]);
         res = res.add(n.shiftLeft(i*8));
     }
     return res;
@@ -3397,13 +3403,13 @@ function beInt2Buff$1(n, len) {
     let r = n;
     let o =len-1;
     const buff = new Uint8Array(len);
-    while ((r.gt(bigInt.zero))&&(o>=0)) {
-        let c = Number(r.and(bigInt("255")));
+    while ((r.gt(bigInt__default['default'].zero))&&(o>=0)) {
+        let c = Number(r.and(bigInt__default['default']("255")));
         buff[o] = c;
         o--;
         r = r.shiftRight(8);
     }
-    if (!r.eq(bigInt.zero)) {
+    if (!r.eq(bigInt__default['default'].zero)) {
         throw new Error("Number does not fit in this length");
     }
     return buff;
@@ -3411,9 +3417,9 @@ function beInt2Buff$1(n, len) {
 
 
 function leBuff2int$1 (buff) {
-    let res = bigInt.zero;
+    let res = bigInt__default['default'].zero;
     for (let i=0; i<buff.length; i++) {
-        const n = bigInt(buff[i]);
+        const n = bigInt__default['default'](buff[i]);
         res = res.add(n.shiftLeft(i*8));
     }
     return res;
@@ -3423,13 +3429,13 @@ function leInt2Buff$1(n, len) {
     let r = n;
     let o =0;
     const buff = new Uint8Array(len);
-    while ((r.gt(bigInt.zero))&&(o<buff.length)) {
-        let c = Number(r.and(bigInt(255)));
+    while ((r.gt(bigInt__default['default'].zero))&&(o<buff.length)) {
+        let c = Number(r.and(bigInt__default['default'](255)));
         buff[o] = c;
         o++;
         r = r.shiftRight(8);
     }
-    if (!r.eq(bigInt.zero)) {
+    if (!r.eq(bigInt__default['default'].zero)) {
         throw new Error("Number does not fit in this length");
     }
     return buff;
@@ -4683,7 +4689,10 @@ function thread(self) {
         instance = await WebAssembly.instantiate(wasmModule, {
             env: {
                 "memory": memory
-            }
+            },
+            imports: {
+                reportProgress: val => console.log(`progress = ${val}`)
+            },
         });
     }
 
@@ -4845,6 +4854,9 @@ async function buildThreadManager(wasm, singleThread) {
     tm.instance = await WebAssembly.instantiate(wasmModule, {
         env: {
             "memory": tm.memory
+        },
+        imports: {
+            reportProgress: val => console.log(`progress: ${val}`)
         }
     });
 
@@ -4881,7 +4893,7 @@ async function buildThreadManager(wasm, singleThread) {
         if ((typeof(navigator) === "object") && navigator.hardwareConcurrency) {
             concurrency = navigator.hardwareConcurrency;
         } else {
-            concurrency = os.cpus().length;
+            concurrency = os__default['default'].cpus().length;
         }
         // Limit to 64 threads for memory reasons.
         if (concurrency>64) concurrency=64;
@@ -4889,7 +4901,7 @@ async function buildThreadManager(wasm, singleThread) {
 
         for (let i = 0; i<concurrency; i++) {
 
-            tm.workers[i] = new Worker(workerSource);
+            tm.workers[i] = new Worker__default['default'](workerSource);
 
             tm.workers[i].addEventListener("message", getOnMsg(i));
 
@@ -6244,7 +6256,7 @@ async function buildBn128(singleThread) {
     if ((!singleThread)&&(global.curve_bn128)) return global.curve_bn128;
     const params = {
         name: "bn128",
-        wasm: wasmcurves.bn128_wasm,
+        wasm: wasmcurves__default['default'].bn128_wasm,
         q: e$2("21888242871839275222246405745257275088696311157297823662689037894645226208583"),
         r: e$2("21888242871839275222246405745257275088548364400416034343698204186575808495617"),
         n8q: 32,
@@ -6275,7 +6287,7 @@ async function buildBls12381(singleThread) {
     if ((!singleThread)&&(global.curve_bls12381)) return global.curve_bls12381;
     const params = {
         name: "bls12381",
-        wasm: wasmcurves.bls12381_wasm,
+        wasm: wasmcurves__default['default'].bls12381_wasm,
         q: e$2("1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab", 16),
         r: e$2("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001", 16),
         n8q: 48,
