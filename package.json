@@ -1,7 +1,7 @@
 {
   "name": "ffjavascript",
   "type": "module",
-  "version": "0.2.35",
+  "version": "0.2.36",
   "description": "Finite Field Library in Javascript",
   "main": "./build/main.cjs",
   "module": "./main.js",
@@ -34,7 +34,7 @@
   "dependencies": {
     "big-integer": "^1.6.48",
     "reify": "^0.20.12",
-    "wasmcurves": "0.0.14",
+    "wasmcurves": "^0.0.14",
     "web-worker": "^1.0.0"
   },
   "devDependencies": {
