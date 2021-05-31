@@ -4692,7 +4692,7 @@ function thread(self) {
             },
             imports: {
                 reportProgress: val => {
-                    console.log(`progress = ${val}`);
+                    //console.log(`progress = ${val}`);
                     self.postMessage({ type: 'progress', data: val });
                 }
             },
