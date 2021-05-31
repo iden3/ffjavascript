@@ -34,6 +34,7 @@ Scalar.toRprBE = function rprLEM(buff, o, e, n8) {
 // Pases a buffer with Little Endian Representation
 Scalar.fromRprLE = function rprLEM(buff, o, n8) {
     n8 = n8 || buff.byteLength;
+    o = o || 0;
     const v = new Uint32Array(buff.buffer, o, n8/4);
     const a = new Array(n8/4);
     v.forEach( (ch,i) => a[a.length-i-1] = ch.toString(16).padStart(8,"0") );
@@ -43,6 +44,7 @@ Scalar.fromRprLE = function rprLEM(buff, o, n8) {
 // Pases a buffer with Big Endian Representation
 Scalar.fromRprBE = function rprLEM(buff, o, n8) {
     n8 = n8 || buff.byteLength;
+    o = o || 0;
     const v = new DataView(buff.buffer, buff.byteOffset + o, n8);
     const a = new Array(n8/4);
     for (let i=0; i<n8/4; i++) {

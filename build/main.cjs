@@ -498,6 +498,7 @@ Scalar.toRprBE = function rprLEM(buff, o, e, n8) {
 // Pases a buffer with Little Endian Representation
 Scalar.fromRprLE = function rprLEM(buff, o, n8) {
     n8 = n8 || buff.byteLength;
+    o = o || 0;
     const v = new Uint32Array(buff.buffer, o, n8/4);
     const a = new Array(n8/4);
     v.forEach( (ch,i) => a[a.length-i-1] = ch.toString(16).padStart(8,"0") );
@@ -507,6 +508,7 @@ Scalar.fromRprLE = function rprLEM(buff, o, n8) {
 // Pases a buffer with Big Endian Representation
 Scalar.fromRprBE = function rprLEM(buff, o, n8) {
     n8 = n8 || buff.byteLength;
+    o = o || 0;
     const v = new DataView(buff.buffer, buff.byteOffset + o, n8);
     const a = new Array(n8/4);
     for (let i=0; i<n8/4; i++) {
@@ -3595,8 +3597,14 @@ class BigBuffer {
         const firstPage = Math.floor(offset / PAGE_SIZE);
         const lastPage = Math.floor((offset+len-1) / PAGE_SIZE);
 
-        if (firstPage == lastPage)
-            return this.buffers[firstPage].set(buff, offset % PAGE_SIZE);
+        if (firstPage == lastPage) {
+            if ((buff instanceof BigBuffer)&&(buff.buffers.length==1)) {
+                return this.buffers[firstPage].set(buff.buffers[0], offset % PAGE_SIZE);
+            } else {
+                return this.buffers[firstPage].set(buff, offset % PAGE_SIZE);
+            }
+
+        }
 
 
         let p = firstPage;
@@ -3887,12 +3895,75 @@ class WasmField1 {
         buff.set(this.fromMontgomery(a), offset);
     }
 
+    toRprBE(buff, offset, a) {
+        const buff2 = this.fromMontgomery(a);
+        for (let i=0; i<this.n8/2; i++) {
+            const aux = buff2[i];
+            buff2[i] = buff2[this.n8-1-i];
+            buff2[this.n8-1-i] = aux;
+        }
+        buff.set(buff2, offset);
+    }
+
     fromRprLE(buff, offset) {
         offset = offset || 0;
         const res = buff.slice(offset, offset + this.n8);
         return this.toMontgomery(res);
     }
 
+    async batchInverse(buffIn) {
+        const sIn = this.n8;
+        const sOut = this.n8;
+        const nPoints = Math.floor(buffIn.byteLength / sIn);
+        if ( nPoints * sIn !== buffIn.byteLength) {
+            throw new Error("Invalid buffer size");
+        }
+        const pointsPerChunk = Math.floor(nPoints/this.tm.concurrency);
+        const opPromises = [];
+        for (let i=0; i<this.tm.concurrency; i++) {
+            let n;
+            if (i< this.tm.concurrency-1) {
+                n = pointsPerChunk;
+            } else {
+                n = nPoints - i*pointsPerChunk;
+            }
+            if (n==0) continue;
+
+            const buffChunk = buffIn.slice(i*pointsPerChunk*sIn, i*pointsPerChunk*sIn + n*sIn);
+            const task = [
+                {cmd: "ALLOCSET", var: 0, buff:buffChunk},
+                {cmd: "ALLOC", var: 1, len:sOut * n},
+                {cmd: "CALL", fnName: this.prefix + "_batchInverse", params: [
+                    {var: 0},
+                    {val: sIn},
+                    {val: n},
+                    {var: 1},
+                    {val: sOut},
+                ]},
+                {cmd: "GET", out: 0, var: 1, len:sOut * n},
+            ];
+            opPromises.push(
+                this.tm.queueAction(task)
+            );
+        }
+
+        const result = await Promise.all(opPromises);
+
+        let fullBuffOut;
+        if (buffIn instanceof BigBuffer) {
+            fullBuffOut = new BigBuffer(nPoints*sOut);
+        } else {
+            fullBuffOut = new Uint8Array(nPoints*sOut);
+        }
+
+        let p =0;
+        for (let i=0; i<result.length; i++) {
+            fullBuffOut.set(result[i][0], p);
+            p+=result[i][0].byteLength;
+        }
+
+        return fullBuffOut;
+    };
 
 }
 
@@ -4561,6 +4632,16 @@ class WasmCurve {
         }
     }
 
+    isValid(a) {
+        if (this.isZero(a)) return true;
+        const F = this.F;
+        const aa = this.toAffine(a);
+        const x = aa.slice(0, this.F.n8);
+        const y = aa.slice(this.F.n8, this.F.n8*2);
+        const x3b = F.add(F.mul(F.square(x),x), this.b);
+        const y2 = F.square(y);
+        return F.eq(x3b, y2);
+    }
 
     fromRng(rng) {
         const F = this.F;
@@ -5491,6 +5572,8 @@ function buildFFT(curve, groupName) {
         if (Array.isArray(buff)) {
             buff = curve.array2buffer(buff, sIn);
             returnArray = true;
+        } else {
+            buff = buff.slice(0, buff.byteLength);
         }
 
         const nPoints = buff.byteLength / sIn;
