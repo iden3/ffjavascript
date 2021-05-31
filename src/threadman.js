@@ -80,7 +80,7 @@ export default async function buildThreadManager(wasm, singleThread) {
             "memory": tm.memory
         },
         imports: {
-            reportProgress: val => console.log(`progress: ${val}`)
+            reportProgress: val => console.debug(`progress: ${val}`)
         }
     });
 
@@ -176,6 +176,9 @@ export default async function buildThreadManager(wasm, singleThread) {
         if (!tm.singleThread) {
             const p = tm.progress.reduce((tot, val) => tot+=val );
             console.debug(`Compute progress: ${p}`);
+            if (tm.progressCallback) {
+                tm.progressCallback(p);
+            }
         }
     }
 

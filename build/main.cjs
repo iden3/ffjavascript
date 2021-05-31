@@ -4749,8 +4749,7 @@ function thread(self) {
             case "SET":
                 setBuffer(ctx.vars[task[i].var], task[i].buff);
                 break;
-            case "CALL": {
-                console.debug(`CALL ${i} ${task[i].params.length}`);
+            case "CALL": {                
                 const params = [];
                 for (let j=0; j<task[i].params.length; j++) {
                     const p = task[i].params[j];
@@ -4776,10 +4775,8 @@ function thread(self) {
     }
 
     function reportProgress(count) {
-        //console.log(`progress = ${val}`);
         self.postMessage({ type: 'progress', data: count });
     }
-
 
     return runTask;
 }
@@ -4861,7 +4858,7 @@ async function buildThreadManager(wasm, singleThread) {
             "memory": tm.memory
         },
         imports: {
-            reportProgress: val => console.log(`progress: ${val}`)
+            reportProgress: val => console.debug(`progress: ${val}`)
         }
     });
 
@@ -4936,7 +4933,7 @@ async function buildThreadManager(wasm, singleThread) {
             let data;
             if ((e)&&(e.data)) {
                 if (e.data.type) { // interim progress 
-                    console.log(`Message ${e.data.type} ${e.data.data}`);
+                    //console.log(`Message ${e.data.type} ${e.data.data}`);
                     tm.progress[i] = e.data.data;
                     aggregateProgress();
                     return;
@@ -4957,6 +4954,9 @@ async function buildThreadManager(wasm, singleThread) {
         if (!tm.singleThread) {
             const p = tm.progress.reduce((tot, val) => tot+=val );
             console.debug(`Compute progress: ${p}`);
+            if (tm.progressCallback) {
+                tm.progressCallback(p);
+            }
         }
     }
 
@@ -5056,7 +5056,7 @@ function buildBatchApplyKey(curve, groupName) {
     const Fr = curve.Fr;
     const tm = curve.tm;
 
-    curve[groupName].batchApplyKey = async function(buff, first, inc, inType, outType) {
+    curve[groupName].batchApplyKey = async function(buff, first, inc, inType, outType, progress) {
         inType = inType || "affine";
         outType = outType || "affine";
         let fnName, fnAffine;
@@ -5101,6 +5101,9 @@ function buildBatchApplyKey(curve, groupName) {
         }
         const nPoints = Math.floor(buff.byteLength / sGin);
         const pointsPerChunk = Math.floor(nPoints/tm.concurrency);
+        if (progress) {
+            tm.progressCallback = progress.progressCallback;
+        }
         const opPromises = [];
         inc = Fr.e(inc);
         let t = Fr.e(first);
@@ -5152,6 +5155,8 @@ function buildBatchApplyKey(curve, groupName) {
         }
 
         const result = await Promise.all(opPromises);
+
+        if (progress.progressCallback) progress.progressCallback({type: "end-chunk", count: nPoints});
 
         let outBuff;
         if (buff instanceof BigBuffer) {

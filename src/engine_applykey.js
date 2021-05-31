@@ -5,7 +5,7 @@ export default function buildBatchApplyKey(curve, groupName) {
     const Fr = curve.Fr;
     const tm = curve.tm;
 
-    curve[groupName].batchApplyKey = async function(buff, first, inc, inType, outType) {
+    curve[groupName].batchApplyKey = async function(buff, first, inc, inType, outType, progress) {
         inType = inType || "affine";
         outType = outType || "affine";
         let fnName, fnAffine;
@@ -50,6 +50,9 @@ export default function buildBatchApplyKey(curve, groupName) {
         }
         const nPoints = Math.floor(buff.byteLength / sGin);
         const pointsPerChunk = Math.floor(nPoints/tm.concurrency);
+        if (progress) {
+            tm.progressCallback = progress.progressCallback;
+        }
         const opPromises = [];
         inc = Fr.e(inc);
         let t = Fr.e(first);
@@ -101,6 +104,8 @@ export default function buildBatchApplyKey(curve, groupName) {
         }
 
         const result = await Promise.all(opPromises);
+
+        if (progress.progressCallback) progress.progressCallback({type: "end-chunk", count: nPoints});
 
         let outBuff;
         if (buff instanceof BigBuffer) {

@@ -95,8 +95,7 @@ export default function thread(self) {
             case "SET":
                 setBuffer(ctx.vars[task[i].var], task[i].buff);
                 break;
-            case "CALL": {
-                console.debug(`CALL ${i} ${task[i].params.length}`);
+            case "CALL": {                
                 const params = [];
                 for (let j=0; j<task[i].params.length; j++) {
                     const p = task[i].params[j];
@@ -122,10 +121,8 @@ export default function thread(self) {
     }
 
     function reportProgress(count) {
-        //console.log(`progress = ${val}`);
         self.postMessage({ type: 'progress', data: count });
     }
-
 
     return runTask;
 }
