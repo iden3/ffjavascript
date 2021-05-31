@@ -151,7 +151,12 @@ export default async function buildThreadManager(wasm, singleThread) {
         return function(e) {
             let data;
             if ((e)&&(e.data)) {
-                data = e.data;
+                if (e.data.type) { // interim progress 
+                    console.log(`Message ${e.data.type} ${e.data.data}`);
+                    return;
+                } else { // result
+                    data = e.data;
+                }
             } else {
                 data = e;
             }
