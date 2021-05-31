@@ -4691,10 +4691,7 @@ function thread(self) {
                 "memory": memory
             },
             imports: {
-                reportProgress: val => {
-                    //console.log(`progress = ${val}`);
-                    self.postMessage({ type: 'progress', data: val });
-                }
+                reportProgress: val => reportProgress(val)
             },
         });
     }
@@ -4776,6 +4773,11 @@ function thread(self) {
         const u32b = new Uint32Array(memory.buffer, 0, 1);
         u32b[0] = oldAlloc;
         return ctx.out;
+    }
+
+    function reportProgress(count) {
+        //console.log(`progress = ${val}`);
+        self.postMessage({ type: 'progress', data: count });
     }
 
 
@@ -4890,6 +4892,7 @@ async function buildThreadManager(wasm, singleThread) {
         tm.workers = [];
         tm.pendingDeferreds = [];
         tm.working = [];
+        tm.progress = [];
 
         let concurrency;
 
@@ -4909,6 +4912,8 @@ async function buildThreadManager(wasm, singleThread) {
             tm.workers[i].addEventListener("message", getOnMsg(i));
 
             tm.working[i]=false;
+
+            tm.progress[i] = 0;
         }
 
         const initPromises = [];
@@ -4932,6 +4937,8 @@ async function buildThreadManager(wasm, singleThread) {
             if ((e)&&(e.data)) {
                 if (e.data.type) { // interim progress 
                     console.log(`Message ${e.data.type} ${e.data.data}`);
+                    tm.progress[i] = e.data.data;
+                    aggregateProgress();
                     return;
                 } else { // result
                     data = e.data;
@@ -4944,6 +4951,13 @@ async function buildThreadManager(wasm, singleThread) {
             tm.pendingDeferreds[i].resolve(data);
             tm.processWorks();
         };
+    }
+
+    function aggregateProgress() {
+        if (!tm.singleThread) {
+            const p = tm.progress.reduce((tot, val) => tot+=val );
+            console.debug(`Compute progress: ${p}`);
+        }
     }
 
 }

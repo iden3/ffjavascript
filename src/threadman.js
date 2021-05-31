@@ -111,6 +111,7 @@ export default async function buildThreadManager(wasm, singleThread) {
         tm.workers = [];
         tm.pendingDeferreds = [];
         tm.working = [];
+        tm.progress = [];
 
         let concurrency;
 
@@ -130,6 +131,8 @@ export default async function buildThreadManager(wasm, singleThread) {
             tm.workers[i].addEventListener("message", getOnMsg(i));
 
             tm.working[i]=false;
+
+            tm.progress[i] = 0;
         }
 
         const initPromises = [];
@@ -152,7 +155,9 @@ export default async function buildThreadManager(wasm, singleThread) {
             let data;
             if ((e)&&(e.data)) {
                 if (e.data.type) { // interim progress 
-                    console.log(`Message ${e.data.type} ${e.data.data}`);
+                    //console.log(`Message ${e.data.type} ${e.data.data}`);
+                    tm.progress[i] = e.data.data;
+                    aggregateProgress();
                     return;
                 } else { // result
                     data = e.data;
@@ -165,6 +170,13 @@ export default async function buildThreadManager(wasm, singleThread) {
             tm.pendingDeferreds[i].resolve(data);
             tm.processWorks();
         };
+    }
+
+    function aggregateProgress() {
+        if (!tm.singleThread) {
+            const p = tm.progress.reduce((tot, val) => tot+=val );
+            console.debug(`Compute progress: ${p}`);
+        }
     }
 
 }

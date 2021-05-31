@@ -37,10 +37,7 @@ export default function thread(self) {
                 "memory": memory
             },
             imports: {
-                reportProgress: val => {
-                    console.log(`progress = ${val}`);
-                    self.postMessage({ type: 'progress', data: val });
-                }
+                reportProgress: val => reportProgress(val)
             },
         });
     }
@@ -125,7 +122,8 @@ export default function thread(self) {
     }
 
     function reportProgress(count) {
-        console.log(`progress: ${count}`);
+        //console.log(`progress = ${val}`);
+        self.postMessage({ type: 'progress', data: count });
     }
 
 
