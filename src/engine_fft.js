@@ -68,6 +68,8 @@ export default function buildFFT(curve, groupName) {
         if (Array.isArray(buff)) {
             buff = curve.array2buffer(buff, sIn);
             returnArray = true;
+        } else {
+            buff = buff.slice(0, buff.byteLength);
         }
 
         const nPoints = buff.byteLength / sIn;

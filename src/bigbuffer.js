@@ -61,8 +61,14 @@ export default class BigBuffer {
         const firstPage = Math.floor(offset / PAGE_SIZE);
         const lastPage = Math.floor((offset+len-1) / PAGE_SIZE);
 
-        if (firstPage == lastPage)
-            return this.buffers[firstPage].set(buff, offset % PAGE_SIZE);
+        if (firstPage == lastPage) {
+            if ((buff instanceof BigBuffer)&&(buff.buffers.length==1)) {
+                return this.buffers[firstPage].set(buff.buffers[0], offset % PAGE_SIZE);
+            } else {
+                return this.buffers[firstPage].set(buff, offset % PAGE_SIZE);
+            }
+
+        }
 
 
         let p = firstPage;

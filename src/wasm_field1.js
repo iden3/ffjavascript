@@ -1,9 +1,8 @@
-
-
 import * as Scalar from "./scalar.js";
 import * as utils from "./utils.js";
 import { getThreadRng } from "./random.js";
 import buildBatchConvert from "./engine_batchconvert.js";
+import BigBuffer from "./bigbuffer.js";
 
 
 export default class WasmField1 {
@@ -226,12 +225,75 @@ export default class WasmField1 {
         buff.set(this.fromMontgomery(a), offset);
     }
 
+    toRprBE(buff, offset, a) {
+        const buff2 = this.fromMontgomery(a);
+        for (let i=0; i<this.n8/2; i++) {
+            const aux = buff2[i];
+            buff2[i] = buff2[this.n8-1-i];
+            buff2[this.n8-1-i] = aux;
+        }
+        buff.set(buff2, offset);
+    }
+
     fromRprLE(buff, offset) {
         offset = offset || 0;
         const res = buff.slice(offset, offset + this.n8);
         return this.toMontgomery(res);
     }
 
+    async batchInverse(buffIn) {
+        const sIn = this.n8;
+        const sOut = this.n8;
+        const nPoints = Math.floor(buffIn.byteLength / sIn);
+        if ( nPoints * sIn !== buffIn.byteLength) {
+            throw new Error("Invalid buffer size");
+        }
+        const pointsPerChunk = Math.floor(nPoints/this.tm.concurrency);
+        const opPromises = [];
+        for (let i=0; i<this.tm.concurrency; i++) {
+            let n;
+            if (i< this.tm.concurrency-1) {
+                n = pointsPerChunk;
+            } else {
+                n = nPoints - i*pointsPerChunk;
+            }
+            if (n==0) continue;
+
+            const buffChunk = buffIn.slice(i*pointsPerChunk*sIn, i*pointsPerChunk*sIn + n*sIn);
+            const task = [
+                {cmd: "ALLOCSET", var: 0, buff:buffChunk},
+                {cmd: "ALLOC", var: 1, len:sOut * n},
+                {cmd: "CALL", fnName: this.prefix + "_batchInverse", params: [
+                    {var: 0},
+                    {val: sIn},
+                    {val: n},
+                    {var: 1},
+                    {val: sOut},
+                ]},
+                {cmd: "GET", out: 0, var: 1, len:sOut * n},
+            ];
+            opPromises.push(
+                this.tm.queueAction(task)
+            );
+        }
+
+        const result = await Promise.all(opPromises);
+
+        let fullBuffOut;
+        if (buffIn instanceof BigBuffer) {
+            fullBuffOut = new BigBuffer(nPoints*sOut);
+        } else {
+            fullBuffOut = new Uint8Array(nPoints*sOut);
+        }
+
+        let p =0;
+        for (let i=0; i<result.length; i++) {
+            fullBuffOut.set(result[i][0], p);
+            p+=result[i][0].byteLength;
+        }
+
+        return fullBuffOut;
+    };
 
 }
 

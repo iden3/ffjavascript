@@ -295,6 +295,16 @@ export default class WasmCurve {
         }
     }
 
+    isValid(a) {
+        if (this.isZero(a)) return true;
+        const F = this.F;
+        const aa = this.toAffine(a);
+        const x = aa.slice(0, this.F.n8);
+        const y = aa.slice(this.F.n8, this.F.n8*2);
+        const x3b = F.add(F.mul(F.square(x),x), this.b);
+        const y2 = F.square(y);
+        return F.eq(x3b, y2);
+    }
 
     fromRng(rng) {
         const F = this.F;
