@@ -61,7 +61,28 @@ function stringToBase64(str) {
     }
 }
 
-const threadSource = stringToBase64("(" + thread.toString() + ")(self)");
+function postMsg(self) {
+    if (self) {
+        self.onmessage = async function(e) {
+            let data;
+            if (e.data) {
+                data = e.data;
+            } else {
+                data = e;
+            }
+
+            if (data[0].cmd == "INIT") {
+                    await self.postMessage('received INIT');
+            } else if (data[0].cmd == "TERMINATE") {
+                process.exit();
+            }
+        };
+    }
+}
+
+const pm = thread.toString();
+console.debug(`postMsg: ${pm}`);
+const threadSource = stringToBase64("(" + pm + ")(self)");
 const workerSource = "data:application/javascript;base64," + threadSource;
 
 
@@ -74,6 +95,7 @@ export default async function buildThreadManager(wasm, singleThread) {
     tm.u32 = new Uint32Array(tm.memory.buffer);
 
     const wasmModule = await WebAssembly.compile(base64ToArrayBuffer(wasm.code));
+
 
     tm.instance = await WebAssembly.instantiate(wasmModule, {
         env: {
@@ -125,6 +147,8 @@ export default async function buildThreadManager(wasm, singleThread) {
         tm.concurrency = concurrency;
 
         for (let i = 0; i<concurrency; i++) {
+
+            //tm.workers[i] = new Worker('data:,postMessage("hello")');
 
             tm.workers[i] = new Worker(workerSource);
 

@@ -25,7 +25,10 @@ export default function thread(self) {
                 self.postMessage(res);
             }
         };
+    } else {
+        console.warn(`No self defined for thread`);
     }
+
 
     async function init(data) {
         console.debug(`init`);
