@@ -22,9 +22,9 @@
 const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
 
 
-import thread from "./threadman_thread.js";
+//import thread from "threadman_thread.js";
 import os from "os";
-import Worker from "web-worker";
+import WorkerThread from "web-worker:./threadman_thread.js";
 
 class Deferred {
     constructor() {
@@ -80,10 +80,10 @@ function postMsg(self) {
     }
 }
 
-const pm = thread.toString();
-console.debug(`postMsg: ${pm}`);
-const threadSource = stringToBase64("(" + pm + ")(self)");
-const workerSource = "data:application/javascript;base64," + threadSource;
+//const pm = thread.toString();
+//console.debug(`postMsg: ${pm}`);
+//const threadSource = stringToBase64("(" + pm + ")(self)");
+//const workerSource = "data:application/javascript;base64," + threadSource;
 
 
 
@@ -122,7 +122,7 @@ export default async function buildThreadManager(wasm, singleThread) {
 
     if (singleThread) {
         tm.code = base64ToArrayBuffer(wasm.code);
-        tm.taskManager = thread();
+        tm.taskManager = new WorkerThread();
         await tm.taskManager([{
             cmd: "INIT",
             init: MEM_SIZE,
@@ -150,7 +150,7 @@ export default async function buildThreadManager(wasm, singleThread) {
 
             //tm.workers[i] = new Worker('data:,postMessage("hello")');
 
-            tm.workers[i] = new Worker(workerSource);
+            tm.workers[i] = new WorkerThread();
 
             tm.workers[i].addEventListener("message", getOnMsg(i));
 
