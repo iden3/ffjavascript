@@ -30,24 +30,29 @@ export default function thread(self) {
     }
 
 
-    async function init(data) {
+    function init(data) {
         console.debug(`init`);
         const code = new Uint8Array(data.code);
-        const wasmModule = await WebAssembly.compile(code);
-        console.debug(`compiled ${data.init}`);
-        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
-
-        instance = await WebAssembly.instantiate(wasmModule, {
-            env: {
-                "memory": memory
-            },
-            imports: {
-                reportProgress: val => reportProgress(val)
-            },
+        const promA = new Promise((resolve, reject) => {
+            WebAssembly.compile(code).then( wasmModule => {
+                console.debug(`compiled ${data.init}`);
+                memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
+                resolve( new Promise((resolveB, rejectB) => {
+                    WebAssembly.instantiate(wasmModule, {
+                        env: {
+                            "memory": memory
+                        },
+                        imports: {
+                            reportProgress: val => reportProgress(val)
+                        },
+                    }).then( instance => {
+                        resolveB(instance);
+                    }).catch(err => rejectB(err));
+                }));
+            }).catch(err => reject(err));
         });
+        return promA;
     }
-
-
 
     function alloc(length) {
         const u32 = new Uint32Array(memory.buffer, 0, 1);
