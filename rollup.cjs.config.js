@@ -1,6 +1,6 @@
 import fs from "fs";
 import { builtinModules as builtin } from "module";
-import webWorkerLoader from 'rollup-plugin-web-worker-loader';
+//import webWorkerLoader from 'rollup-plugin-web-worker-loader';
 
 const pkg = JSON.parse(fs.readFileSync("./package.json"));
 
@@ -14,9 +14,10 @@ export default {
         ...Object.keys(pkg.dependencies),
         ...builtin,
     ],
-    plugins: [
-        webWorkerLoader({ 
-            "sourceMap": true,            
-            "inline": true,
-        }),
-    ]};
+    // plugins: [
+    //     webWorkerLoader({ 
+    //         "sourceMap": true,            
+    //         "inline": true,
+    //     }),
+    // ]
+};

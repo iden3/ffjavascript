@@ -4731,76 +4731,144 @@ class WasmCurve {
 
 }
 
-var WorkerClass = null;
+/* global WebAssembly */
 
-try {
-    var WorkerThreads =
-        typeof module !== 'undefined' && typeof module.require === 'function' && module.require('worker_threads') ||
-        typeof __non_webpack_require__ === 'function' && __non_webpack_require__('worker_threads') ||
-        typeof require === 'function' && require('worker_threads');
-    WorkerClass = WorkerThreads.Worker;
-} catch(e) {} // eslint-disable-line
+function thread(self) {
+    const MAXMEM = 32767;
+    let instance;
+    let memory;
 
-function decodeBase64(base64, enableUnicode) {
-    return Buffer.from(base64, 'base64').toString(enableUnicode ? 'utf16' : 'utf8');
-}
+    if (self) {
+        self.onmessage = function(e) {
+            let data;
+            if (e.data) {
+                data = e.data;
+            } else {
+                data = e;
+            }
 
-function createBase64WorkerFactory(base64, sourcemapArg, enableUnicodeArg) {
-    var sourcemap = sourcemapArg === undefined ? null : sourcemapArg;
-    var enableUnicode = enableUnicodeArg === undefined ? false : enableUnicodeArg;
-    var source = decodeBase64(base64, enableUnicode);
-    var start = source.indexOf('\n', 10) + 1;
-    var body = source.substring(start) + (sourcemap ? '\/\/# sourceMappingURL=' + sourcemap : '');
-    return function WorkerFactory(options) {
-        return new WorkerClass(body, Object.assign({}, options, { eval: true }));
-    };
-}
+            if (data[0].cmd == "INIT") {
+                init(data[0]).then(function() {
+                    self.postMessage(data.result);
+                });
+            } else if (data[0].cmd == "TERMINATE") {
+                process.exit();
+            } else {
+                const res = runTask(data);
+                self.postMessage(res);
+            }
+        };
+    } else {
+        console.warn(`No self defined for thread`);
+    }
 
-function decodeBase64$1(base64, enableUnicode) {
-    var binaryString = atob(base64);
-    if (enableUnicode) {
-        var binaryView = new Uint8Array(binaryString.length);
-        for (var i = 0, n = binaryString.length; i < n; ++i) {
-            binaryView[i] = binaryString.charCodeAt(i);
+
+    function init(data) {
+        console.debug(`init`);
+        const code = new Uint8Array(data.code);
+        const promA = new Promise((resolve, reject) => {
+            WebAssembly.compile(code).then( wasmModule => {
+                console.debug(`compiled ${data.init}`);
+                memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
+                resolve( new Promise((resolveB, rejectB) => {
+                    WebAssembly.instantiate(wasmModule, {
+                        env: {
+                            "memory": memory
+                        },
+                        imports: {
+                            reportProgress: val => reportProgress(val)
+                        },
+                    }).then( instance => {
+                        resolveB(instance);
+                    }).catch(err => rejectB(err));
+                }));
+            }).catch(err => reject(err));
+        });
+        return promA;
+    }
+
+    function alloc(length) {
+        const u32 = new Uint32Array(memory.buffer, 0, 1);
+        while (u32[0] & 3) u32[0]++;  // Return always aligned pointers
+        const res = u32[0];
+        u32[0] += length;
+        if (u32[0] + length > memory.buffer.byteLength) {
+            const currentPages = memory.buffer.byteLength / 0x10000;
+            let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;
+            if (requiredPages>MAXMEM) requiredPages=MAXMEM;
+            memory.grow(requiredPages-currentPages);
         }
-        return String.fromCharCode.apply(null, new Uint16Array(binaryView.buffer));
+        return res;
     }
-    return binaryString;
-}
 
-function createURL(base64, sourcemapArg, enableUnicodeArg) {
-    var sourcemap = sourcemapArg === undefined ? null : sourcemapArg;
-    var enableUnicode = enableUnicodeArg === undefined ? false : enableUnicodeArg;
-    var source = decodeBase64$1(base64, enableUnicode);
-    var start = source.indexOf('\n', 10) + 1;
-    var body = source.substring(start) + (sourcemap ? '\/\/# sourceMappingURL=' + sourcemap : '');
-    var blob = new Blob([body], { type: 'application/javascript' });
-    return URL.createObjectURL(blob);
-}
-
-function createBase64WorkerFactory$1(base64, sourcemapArg, enableUnicodeArg) {
-    var url;
-    return function WorkerFactory(options) {
-        url = url || createURL(base64, sourcemapArg, enableUnicodeArg);
-        return new Worker(url, options);
-    };
-}
-
-var kIsNodeJS = Object.prototype.toString.call(typeof process !== 'undefined' ? process : 0) === '[object process]';
-
-function isNodeJS() {
-    return kIsNodeJS;
-}
-
-function createBase64WorkerFactory$2(base64, sourcemapArg, enableUnicodeArg) {
-    if (isNodeJS()) {
-        return createBase64WorkerFactory(base64, sourcemapArg, enableUnicodeArg);
+    function allocBuffer(buffer) {
+        const p = alloc(buffer.byteLength);
+        setBuffer(p, buffer);
+        return p;
     }
-    return createBase64WorkerFactory$1(base64, sourcemapArg, enableUnicodeArg);
-}
 
-var WorkerFactory = createBase64WorkerFactory$2('Lyogcm9sbHVwLXBsdWdpbi13ZWItd29ya2VyLWxvYWRlciAqLwp2YXIgd29ya2VyX2NvZGUgPSAoZnVuY3Rpb24gKCkgewogICAgJ3VzZSBzdHJpY3QnOwoKICAgIC8qIGdsb2JhbCBXZWJBc3NlbWJseSAqLwoKICAgIGZ1bmN0aW9uIHRocmVhZChzZWxmKSB7CiAgICAgICAgY29uc3QgTUFYTUVNID0gMzI3Njc7CiAgICAgICAgbGV0IGluc3RhbmNlOwogICAgICAgIGxldCBtZW1vcnk7CgogICAgICAgIGlmIChzZWxmKSB7CiAgICAgICAgICAgIHNlbGYub25tZXNzYWdlID0gZnVuY3Rpb24oZSkgewogICAgICAgICAgICAgICAgbGV0IGRhdGE7CiAgICAgICAgICAgICAgICBpZiAoZS5kYXRhKSB7CiAgICAgICAgICAgICAgICAgICAgZGF0YSA9IGUuZGF0YTsKICAgICAgICAgICAgICAgIH0gZWxzZSB7CiAgICAgICAgICAgICAgICAgICAgZGF0YSA9IGU7CiAgICAgICAgICAgICAgICB9CgogICAgICAgICAgICAgICAgaWYgKGRhdGFbMF0uY21kID09ICJJTklUIikgewogICAgICAgICAgICAgICAgICAgIGluaXQoZGF0YVswXSkudGhlbihmdW5jdGlvbigpIHsKICAgICAgICAgICAgICAgICAgICAgICAgc2VsZi5wb3N0TWVzc2FnZShkYXRhLnJlc3VsdCk7CiAgICAgICAgICAgICAgICAgICAgfSk7CiAgICAgICAgICAgICAgICB9IGVsc2UgaWYgKGRhdGFbMF0uY21kID09ICJURVJNSU5BVEUiKSB7CiAgICAgICAgICAgICAgICAgICAgcHJvY2Vzcy5leGl0KCk7CiAgICAgICAgICAgICAgICB9IGVsc2UgewogICAgICAgICAgICAgICAgICAgIGNvbnN0IHJlcyA9IHJ1blRhc2soZGF0YSk7CiAgICAgICAgICAgICAgICAgICAgc2VsZi5wb3N0TWVzc2FnZShyZXMpOwogICAgICAgICAgICAgICAgfQogICAgICAgICAgICB9OwogICAgICAgIH0gZWxzZSB7CiAgICAgICAgICAgIGNvbnNvbGUud2FybihgTm8gc2VsZiBkZWZpbmVkIGZvciB0aHJlYWRgKTsKICAgICAgICB9CgoKICAgICAgICBmdW5jdGlvbiBpbml0KGRhdGEpIHsKICAgICAgICAgICAgY29uc29sZS5kZWJ1ZyhgaW5pdGApOwogICAgICAgICAgICBjb25zdCBjb2RlID0gbmV3IFVpbnQ4QXJyYXkoZGF0YS5jb2RlKTsKICAgICAgICAgICAgY29uc3QgcHJvbUEgPSBuZXcgUHJvbWlzZSgocmVzb2x2ZSwgcmVqZWN0KSA9PiB7CiAgICAgICAgICAgICAgICBXZWJBc3NlbWJseS5jb21waWxlKGNvZGUpLnRoZW4oIHdhc21Nb2R1bGUgPT4gewogICAgICAgICAgICAgICAgICAgIGNvbnNvbGUuZGVidWcoYGNvbXBpbGVkICR7ZGF0YS5pbml0fWApOwogICAgICAgICAgICAgICAgICAgIG1lbW9yeSA9IG5ldyBXZWJBc3NlbWJseS5NZW1vcnkoe2luaXRpYWw6ZGF0YS5pbml0LCBtYXhpbXVtOiBNQVhNRU19KTsKICAgICAgICAgICAgICAgICAgICByZXNvbHZlKCBuZXcgUHJvbWlzZSgocmVzb2x2ZUIsIHJlamVjdEIpID0+IHsKICAgICAgICAgICAgICAgICAgICAgICAgV2ViQXNzZW1ibHkuaW5zdGFudGlhdGUod2FzbU1vZHVsZSwgewogICAgICAgICAgICAgICAgICAgICAgICAgICAgZW52OiB7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIm1lbW9yeSI6IG1lbW9yeQogICAgICAgICAgICAgICAgICAgICAgICAgICAgfSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGltcG9ydHM6IHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICByZXBvcnRQcm9ncmVzczogdmFsID0+IHJlcG9ydFByb2dyZXNzKHZhbCkKICAgICAgICAgICAgICAgICAgICAgICAgICAgIH0sCiAgICAgICAgICAgICAgICAgICAgICAgIH0pLnRoZW4oIGluc3RhbmNlID0+IHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIHJlc29sdmVCKGluc3RhbmNlKTsKICAgICAgICAgICAgICAgICAgICAgICAgfSkuY2F0Y2goZXJyID0+IHJlamVjdEIoZXJyKSk7CiAgICAgICAgICAgICAgICAgICAgfSkpOwogICAgICAgICAgICAgICAgfSkuY2F0Y2goZXJyID0+IHJlamVjdChlcnIpKTsKICAgICAgICAgICAgfSk7CiAgICAgICAgICAgIHJldHVybiBwcm9tQTsKICAgICAgICB9CgogICAgICAgIGZ1bmN0aW9uIGFsbG9jKGxlbmd0aCkgewogICAgICAgICAgICBjb25zdCB1MzIgPSBuZXcgVWludDMyQXJyYXkobWVtb3J5LmJ1ZmZlciwgMCwgMSk7CiAgICAgICAgICAgIHdoaWxlICh1MzJbMF0gJiAzKSB1MzJbMF0rKzsgIC8vIFJldHVybiBhbHdheXMgYWxpZ25lZCBwb2ludGVycwogICAgICAgICAgICBjb25zdCByZXMgPSB1MzJbMF07CiAgICAgICAgICAgIHUzMlswXSArPSBsZW5ndGg7CiAgICAgICAgICAgIGlmICh1MzJbMF0gKyBsZW5ndGggPiBtZW1vcnkuYnVmZmVyLmJ5dGVMZW5ndGgpIHsKICAgICAgICAgICAgICAgIGNvbnN0IGN1cnJlbnRQYWdlcyA9IG1lbW9yeS5idWZmZXIuYnl0ZUxlbmd0aCAvIDB4MTAwMDA7CiAgICAgICAgICAgICAgICBsZXQgcmVxdWlyZWRQYWdlcyA9IE1hdGguZmxvb3IoKHUzMlswXSArIGxlbmd0aCkgLyAweDEwMDAwKSsxOwogICAgICAgICAgICAgICAgaWYgKHJlcXVpcmVkUGFnZXM+TUFYTUVNKSByZXF1aXJlZFBhZ2VzPU1BWE1FTTsKICAgICAgICAgICAgICAgIG1lbW9yeS5ncm93KHJlcXVpcmVkUGFnZXMtY3VycmVudFBhZ2VzKTsKICAgICAgICAgICAgfQogICAgICAgICAgICByZXR1cm4gcmVzOwogICAgICAgIH0KCiAgICAgICAgZnVuY3Rpb24gYWxsb2NCdWZmZXIoYnVmZmVyKSB7CiAgICAgICAgICAgIGNvbnN0IHAgPSBhbGxvYyhidWZmZXIuYnl0ZUxlbmd0aCk7CiAgICAgICAgICAgIHNldEJ1ZmZlcihwLCBidWZmZXIpOwogICAgICAgICAgICByZXR1cm4gcDsKICAgICAgICB9CgogICAgICAgIGZ1bmN0aW9uIGdldEJ1ZmZlcihwb2ludGVyLCBsZW5ndGgpIHsKICAgICAgICAgICAgY29uc3QgdTggPSBuZXcgVWludDhBcnJheShtZW1vcnkuYnVmZmVyKTsKICAgICAgICAgICAgcmV0dXJuIG5ldyBVaW50OEFycmF5KHU4LmJ1ZmZlciwgdTguYnl0ZU9mZnNldCArIHBvaW50ZXIsIGxlbmd0aCk7CiAgICAgICAgfQoKICAgICAgICBmdW5jdGlvbiBzZXRCdWZmZXIocG9pbnRlciwgYnVmZmVyKSB7CiAgICAgICAgICAgIGNvbnN0IHU4ID0gbmV3IFVpbnQ4QXJyYXkobWVtb3J5LmJ1ZmZlcik7CiAgICAgICAgICAgIHU4LnNldChuZXcgVWludDhBcnJheShidWZmZXIpLCBwb2ludGVyKTsKICAgICAgICB9CgogICAgICAgIGZ1bmN0aW9uIHJ1blRhc2sodGFzaykgewogICAgICAgICAgICBpZiAodGFza1swXS5jbWQgPT0gIklOSVQiKSB7CiAgICAgICAgICAgICAgICByZXR1cm4gaW5pdCh0YXNrWzBdKTsKICAgICAgICAgICAgfQogICAgICAgICAgICBjb25zdCBjdHggPSB7CiAgICAgICAgICAgICAgICB2YXJzOiBbXSwKICAgICAgICAgICAgICAgIG91dDogW10KICAgICAgICAgICAgfTsKICAgICAgICAgICAgY29uc3QgdTMyYSA9IG5ldyBVaW50MzJBcnJheShtZW1vcnkuYnVmZmVyLCAwLCAxKTsKICAgICAgICAgICAgY29uc3Qgb2xkQWxsb2MgPSB1MzJhWzBdOwogICAgICAgICAgICBmb3IgKGxldCBpPTA7IGk8dGFzay5sZW5ndGg7IGkrKykgewogICAgICAgICAgICAgICAgc3dpdGNoICh0YXNrW2ldLmNtZCkgewogICAgICAgICAgICAgICAgY2FzZSAiQUxMT0NTRVQiOgogICAgICAgICAgICAgICAgICAgIGN0eC52YXJzW3Rhc2tbaV0udmFyXSA9IGFsbG9jQnVmZmVyKHRhc2tbaV0uYnVmZik7CiAgICAgICAgICAgICAgICAgICAgYnJlYWs7CiAgICAgICAgICAgICAgICBjYXNlICJBTExPQyI6CiAgICAgICAgICAgICAgICAgICAgY3R4LnZhcnNbdGFza1tpXS52YXJdID0gYWxsb2ModGFza1tpXS5sZW4pOwogICAgICAgICAgICAgICAgICAgIGJyZWFrOwogICAgICAgICAgICAgICAgY2FzZSAiU0VUIjoKICAgICAgICAgICAgICAgICAgICBzZXRCdWZmZXIoY3R4LnZhcnNbdGFza1tpXS52YXJdLCB0YXNrW2ldLmJ1ZmYpOwogICAgICAgICAgICAgICAgICAgIGJyZWFrOwogICAgICAgICAgICAgICAgY2FzZSAiQ0FMTCI6IHsgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgY29uc3QgcGFyYW1zID0gW107CiAgICAgICAgICAgICAgICAgICAgZm9yIChsZXQgaj0wOyBqPHRhc2tbaV0ucGFyYW1zLmxlbmd0aDsgaisrKSB7CiAgICAgICAgICAgICAgICAgICAgICAgIGNvbnN0IHAgPSB0YXNrW2ldLnBhcmFtc1tqXTsKICAgICAgICAgICAgICAgICAgICAgICAgaWYgKHR5cGVvZiBwLnZhciAhPT0gInVuZGVmaW5lZCIpIHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIHBhcmFtcy5wdXNoKGN0eC52YXJzW3AudmFyXSArIChwLm9mZnNldCB8fCAwKSk7CiAgICAgICAgICAgICAgICAgICAgICAgIH0gZWxzZSBpZiAodHlwZW9mIHAudmFsICE9ICJ1bmRlZmluZWQiKSB7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICBwYXJhbXMucHVzaChwLnZhbCk7CiAgICAgICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgaW5zdGFuY2UuZXhwb3J0c1t0YXNrW2ldLmZuTmFtZV0oLi4ucGFyYW1zKTsKICAgICAgICAgICAgICAgICAgICBicmVhazsKICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIGNhc2UgIkdFVCI6CiAgICAgICAgICAgICAgICAgICAgY3R4Lm91dFt0YXNrW2ldLm91dF0gPSBnZXRCdWZmZXIoY3R4LnZhcnNbdGFza1tpXS52YXJdLCB0YXNrW2ldLmxlbikuc2xpY2UoKTsKICAgICAgICAgICAgICAgICAgICBicmVhazsKICAgICAgICAgICAgICAgIGRlZmF1bHQ6CiAgICAgICAgICAgICAgICAgICAgdGhyb3cgbmV3IEVycm9yKCJJbnZhbGlkIGNtZCIpOwogICAgICAgICAgICAgICAgfQogICAgICAgICAgICB9CiAgICAgICAgICAgIGNvbnN0IHUzMmIgPSBuZXcgVWludDMyQXJyYXkobWVtb3J5LmJ1ZmZlciwgMCwgMSk7CiAgICAgICAgICAgIHUzMmJbMF0gPSBvbGRBbGxvYzsKICAgICAgICAgICAgcmV0dXJuIGN0eC5vdXQ7CiAgICAgICAgfQoKICAgICAgICBmdW5jdGlvbiByZXBvcnRQcm9ncmVzcyhjb3VudCkgewogICAgICAgICAgICBzZWxmLnBvc3RNZXNzYWdlKHsgdHlwZTogJ3Byb2dyZXNzJywgZGF0YTogY291bnQgfSk7CiAgICAgICAgfQoKICAgICAgICByZXR1cm4gcnVuVGFzazsKICAgIH0KCiAgICByZXR1cm4gdGhyZWFkOwoKfSgpKTsKCg==', null, false);
-/* eslint-enable */
+    function getBuffer(pointer, length) {
+        const u8 = new Uint8Array(memory.buffer);
+        return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);
+    }
+
+    function setBuffer(pointer, buffer) {
+        const u8 = new Uint8Array(memory.buffer);
+        u8.set(new Uint8Array(buffer), pointer);
+    }
+
+    function runTask(task) {
+        if (task[0].cmd == "INIT") {
+            return init(task[0]);
+        }
+        const ctx = {
+            vars: [],
+            out: []
+        };
+        const u32a = new Uint32Array(memory.buffer, 0, 1);
+        const oldAlloc = u32a[0];
+        for (let i=0; i<task.length; i++) {
+            switch (task[i].cmd) {
+            case "ALLOCSET":
+                ctx.vars[task[i].var] = allocBuffer(task[i].buff);
+                break;
+            case "ALLOC":
+                ctx.vars[task[i].var] = alloc(task[i].len);
+                break;
+            case "SET":
+                setBuffer(ctx.vars[task[i].var], task[i].buff);
+                break;
+            case "CALL": {                
+                const params = [];
+                for (let j=0; j<task[i].params.length; j++) {
+                    const p = task[i].params[j];
+                    if (typeof p.var !== "undefined") {
+                        params.push(ctx.vars[p.var] + (p.offset || 0));
+                    } else if (typeof p.val != "undefined") {
+                        params.push(p.val);
+                    }
+                }
+                instance.exports[task[i].fnName](...params);
+                break;
+            }
+            case "GET":
+                ctx.out[task[i].out] = getBuffer(ctx.vars[task[i].var], task[i].len).slice();
+                break;
+            default:
+                throw new Error("Invalid cmd");
+            }
+        }
+        const u32b = new Uint32Array(memory.buffer, 0, 1);
+        u32b[0] = oldAlloc;
+        return ctx.out;
+    }
+
+    function reportProgress(count) {
+        self.postMessage({ type: 'progress', data: count });
+    }
+
+    return runTask;
+}
 
 /* global window, navigator, Blob, Worker, WebAssembly */
 /*
@@ -4824,6 +4892,7 @@ var WorkerFactory = createBase64WorkerFactory$2('Lyogcm9sbHVwLXBsdWdpbi13ZWItd29
 
 // const MEM_SIZE = 1000;  // Memory size in 64K Pakes (512Mb)
 const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
+//import WorkerThread from "web-worker:./threadman_thread.js";
 
 class Deferred {
     constructor() {
@@ -4852,10 +4921,18 @@ function base64ToArrayBuffer(base64) {
     }
 }
 
-//const pm = thread.toString();
-//console.debug(`postMsg: ${pm}`);
-//const threadSource = stringToBase64("(" + pm + ")(self)");
-//const workerSource = "data:application/javascript;base64," + threadSource;
+function stringToBase64(str) {
+    if (process.browser) {
+        return window.btoa(str);
+    } else {
+        return Buffer.from(str).toString("base64");
+    }
+}
+
+const pm = thread.toString();
+console.debug(`postMsg: ${pm}`);
+const threadSource = stringToBase64("(" + pm + ")(self)");
+const workerSource = "data:application/javascript;base64," + threadSource;
 
 
 
@@ -4894,7 +4971,7 @@ async function buildThreadManager(wasm, singleThread) {
 
     if (singleThread) {
         tm.code = base64ToArrayBuffer(wasm.code);
-        tm.taskManager = new WorkerFactory();
+        tm.taskManager = new Worker(workerSource);
         await tm.taskManager([{
             cmd: "INIT",
             init: MEM_SIZE,
@@ -4922,7 +4999,7 @@ async function buildThreadManager(wasm, singleThread) {
 
             //tm.workers[i] = new Worker('data:,postMessage("hello")');
 
-            tm.workers[i] = new WorkerFactory();
+            tm.workers[i] = new Worker(workerSource);
 
             tm.workers[i].addEventListener("message", getOnMsg(i));
 
