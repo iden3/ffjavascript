@@ -4778,8 +4778,9 @@ function thread(self) {
                         imports: {
                             reportProgress: val => reportProgress(val)
                         },
-                    }).then( instance => {
-                        resolveB(instance);
+                    }).then( inst => {
+                        instance = inst;
+                        resolveB(inst);
                     }).catch(err => rejectB(err));
                 }));
             }).catch(err => reject(err));
