@@ -32,16 +32,14 @@ export default function thread(self) {
         const promA = new Promise((resolve, reject) => {
             WebAssembly.compile(code).then( wasmModule => {
                 memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
-                resolve( new Promise((resolveB, rejectB) => {
-                    WebAssembly.instantiate(wasmModule, {
-                        env: {
-                            "memory": memory
-                        },
-                    }).then( inst => {
-                        instance = inst;
-                        resolveB(inst);
-                    }).catch(err => rejectB(err));
-                }));
+                WebAssembly.instantiate(wasmModule, {
+                    env: {
+                        "memory": memory
+                    },
+                }).then( inst => {
+                    instance = inst;
+                    resolve(inst);
+                });
             }).catch(err => reject(err));
         });
         return promA;
