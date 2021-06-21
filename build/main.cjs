@@ -6,7 +6,6 @@ var bigInt = require('big-integer');
 var crypto = require('crypto');
 var wasmcurves = require('wasmcurves');
 var os = require('os');
-var Worker = require('web-worker');
 
 function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
 
@@ -14,7 +13,6 @@ var bigInt__default = /*#__PURE__*/_interopDefaultLegacy(bigInt);
 var crypto__default = /*#__PURE__*/_interopDefaultLegacy(crypto);
 var wasmcurves__default = /*#__PURE__*/_interopDefaultLegacy(wasmcurves);
 var os__default = /*#__PURE__*/_interopDefaultLegacy(os);
-var Worker__default = /*#__PURE__*/_interopDefaultLegacy(Worker);
 
 /* global BigInt */
 const hexLen = [ 0, 1, 2, 2, 3, 3, 3, 3, 4 ,4 ,4 ,4 ,4 ,4 ,4 ,4];
@@ -4760,21 +4758,30 @@ function thread(self) {
                 self.postMessage(res);
             }
         };
+    } else {
+        console.warn(`No self defined for thread`);
     }
 
-    async function init(data) {
+    function init(data) {
         const code = new Uint8Array(data.code);
-        const wasmModule = await WebAssembly.compile(code);
-        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
-
-        instance = await WebAssembly.instantiate(wasmModule, {
-            env: {
-                "memory": memory
-            }
+        const promA = new Promise((resolve, reject) => {
+            WebAssembly.compile(code).then( wasmModule => {
+                memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
+                WebAssembly.instantiate(wasmModule, {
+                    env: {
+                        "memory": memory
+                    },
+                    imports: {
+                        reportProgress: val => reportProgress(val)
+                    },
+            }).then( inst => {
+                    instance = inst;
+                    resolve(inst);
+                });
+            }).catch(err => reject(err));
         });
+        return promA;
     }
-
-
 
     function alloc(length) {
         const u32 = new Uint32Array(memory.buffer, 0, 1);
@@ -4827,7 +4834,7 @@ function thread(self) {
             case "SET":
                 setBuffer(ctx.vars[task[i].var], task[i].buff);
                 break;
-            case "CALL": {
+            case "CALL": {                
                 const params = [];
                 for (let j=0; j<task[i].params.length; j++) {
                     const p = task[i].params[j];
@@ -4852,6 +4859,9 @@ function thread(self) {
         return ctx.out;
     }
 
+    function reportProgress(count) {
+        self.postMessage({ type: 'progress', data: count });
+    }
 
     return runTask;
 }
@@ -4918,7 +4928,6 @@ const threadSource = stringToBase64("(" + thread.toString() + ")(self)");
 const workerSource = "data:application/javascript;base64," + threadSource;
 
 
-
 async function buildThreadManager(wasm, singleThread) {
     const tm = new ThreadManager();
 
@@ -4928,9 +4937,13 @@ async function buildThreadManager(wasm, singleThread) {
 
     const wasmModule = await WebAssembly.compile(base64ToArrayBuffer(wasm.code));
 
+
     tm.instance = await WebAssembly.instantiate(wasmModule, {
         env: {
             "memory": tm.memory
+        },
+        imports: {
+            reportProgress: val => console.debug(`progress: ${val}`)
         }
     });
 
@@ -4950,7 +4963,7 @@ async function buildThreadManager(wasm, singleThread) {
 
     if (singleThread) {
         tm.code = base64ToArrayBuffer(wasm.code);
-        tm.taskManager = thread();
+        tm.taskManager = new Worker(workerSource);
         await tm.taskManager([{
             cmd: "INIT",
             init: MEM_SIZE,
@@ -4961,6 +4974,7 @@ async function buildThreadManager(wasm, singleThread) {
         tm.workers = [];
         tm.pendingDeferreds = [];
         tm.working = [];
+        tm.progress = [];
 
         let concurrency;
 
@@ -4975,11 +4989,13 @@ async function buildThreadManager(wasm, singleThread) {
 
         for (let i = 0; i<concurrency; i++) {
 
-            tm.workers[i] = new Worker__default['default'](workerSource);
+            tm.workers[i] = new Worker(workerSource);
 
             tm.workers[i].addEventListener("message", getOnMsg(i));
 
             tm.working[i]=false;
+
+            tm.progress[i] = 0;
         }
 
         const initPromises = [];
@@ -5001,7 +5017,13 @@ async function buildThreadManager(wasm, singleThread) {
         return function(e) {
             let data;
             if ((e)&&(e.data)) {
-                data = e.data;
+                if (e.data.type) { // interim progress 
+                    tm.progress[i] = e.data.data;
+                    aggregateProgress();
+                    return;
+                } else { // result
+                    data = e.data;
+                }
             } else {
                 data = e;
             }
@@ -5010,6 +5032,16 @@ async function buildThreadManager(wasm, singleThread) {
             tm.pendingDeferreds[i].resolve(data);
             tm.processWorks();
         };
+    }
+
+    function aggregateProgress() {
+        if (!tm.singleThread) {
+            const p = tm.progress.reduce((tot, val) => tot+=val );
+            //console.debug(`Compute progress: ${p}`);
+            if (tm.progressCallback) {
+                tm.progressCallback(p);
+            }
+        }
     }
 
 }
@@ -5033,7 +5065,7 @@ class ThreadManager {
 
     postAction(workerId, e, transfers, _deferred) {
         if (this.working[workerId]) {
-            throw new Error("Posting a job t a working worker");
+            throw new Error("Posting a job to a working worker");
         }
         this.working[workerId] = true;
 
@@ -5108,7 +5140,7 @@ function buildBatchApplyKey(curve, groupName) {
     const Fr = curve.Fr;
     const tm = curve.tm;
 
-    curve[groupName].batchApplyKey = async function(buff, first, inc, inType, outType) {
+    curve[groupName].batchApplyKey = async function(buff, first, inc, inType, outType, progress) {
         inType = inType || "affine";
         outType = outType || "affine";
         let fnName, fnAffine;
@@ -5153,6 +5185,9 @@ function buildBatchApplyKey(curve, groupName) {
         }
         const nPoints = Math.floor(buff.byteLength / sGin);
         const pointsPerChunk = Math.floor(nPoints/tm.concurrency);
+        if (progress) {
+            tm.progressCallback = progress.progressCallback;
+        }
         const opPromises = [];
         inc = Fr.e(inc);
         let t = Fr.e(first);
@@ -5204,6 +5239,8 @@ function buildBatchApplyKey(curve, groupName) {
         }
 
         const result = await Promise.all(opPromises);
+
+        if (progress.progressCallback) progress.progressCallback({type: "end-chunk", count: nPoints});
 
         let outBuff;
         if (buff instanceof BigBuffer) {

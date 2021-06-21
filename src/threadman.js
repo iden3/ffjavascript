@@ -24,7 +24,6 @@ const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
 
 import thread from "./threadman_thread.js";
 import os from "os";
-import Worker from "web-worker";
 
 class Deferred {
     constructor() {
@@ -65,7 +64,6 @@ const threadSource = stringToBase64("(" + thread.toString() + ")(self)");
 const workerSource = "data:application/javascript;base64," + threadSource;
 
 
-
 export default async function buildThreadManager(wasm, singleThread) {
     const tm = new ThreadManager();
 
@@ -75,9 +73,13 @@ export default async function buildThreadManager(wasm, singleThread) {
 
     const wasmModule = await WebAssembly.compile(base64ToArrayBuffer(wasm.code));
 
+
     tm.instance = await WebAssembly.instantiate(wasmModule, {
         env: {
             "memory": tm.memory
+        },
+        imports: {
+            reportProgress: val => console.debug(`progress: ${val}`)
         }
     });
 
@@ -97,7 +99,7 @@ export default async function buildThreadManager(wasm, singleThread) {
 
     if (singleThread) {
         tm.code = base64ToArrayBuffer(wasm.code);
-        tm.taskManager = thread();
+        tm.taskManager = new Worker(workerSource);
         await tm.taskManager([{
             cmd: "INIT",
             init: MEM_SIZE,
@@ -108,6 +110,7 @@ export default async function buildThreadManager(wasm, singleThread) {
         tm.workers = [];
         tm.pendingDeferreds = [];
         tm.working = [];
+        tm.progress = [];
 
         let concurrency;
 
@@ -127,6 +130,8 @@ export default async function buildThreadManager(wasm, singleThread) {
             tm.workers[i].addEventListener("message", getOnMsg(i));
 
             tm.working[i]=false;
+
+            tm.progress[i] = 0;
         }
 
         const initPromises = [];
@@ -148,7 +153,13 @@ export default async function buildThreadManager(wasm, singleThread) {
         return function(e) {
             let data;
             if ((e)&&(e.data)) {
-                data = e.data;
+                if (e.data.type) { // interim progress 
+                    tm.progress[i] = e.data.data;
+                    aggregateProgress();
+                    return;
+                } else { // result
+                    data = e.data;
+                }
             } else {
                 data = e;
             }
@@ -157,6 +168,16 @@ export default async function buildThreadManager(wasm, singleThread) {
             tm.pendingDeferreds[i].resolve(data);
             tm.processWorks();
         };
+    }
+
+    function aggregateProgress() {
+        if (!tm.singleThread) {
+            const p = tm.progress.reduce((tot, val) => tot+=val );
+            //console.debug(`Compute progress: ${p}`);
+            if (tm.progressCallback) {
+                tm.progressCallback(p);
+            }
+        }
     }
 
 }
@@ -180,7 +201,7 @@ class ThreadManager {
 
     postAction(workerId, e, transfers, _deferred) {
         if (this.working[workerId]) {
-            throw new Error("Posting a job t a working worker");
+            throw new Error("Posting a job to a working worker");
         }
         this.working[workerId] = true;
 

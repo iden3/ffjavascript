@@ -25,21 +25,30 @@ export default function thread(self) {
                 self.postMessage(res);
             }
         };
+    } else {
+        console.warn(`No self defined for thread`);
     }
 
-    async function init(data) {
+    function init(data) {
         const code = new Uint8Array(data.code);
-        const wasmModule = await WebAssembly.compile(code);
-        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
-
-        instance = await WebAssembly.instantiate(wasmModule, {
-            env: {
-                "memory": memory
-            }
+        const promA = new Promise((resolve, reject) => {
+            WebAssembly.compile(code).then( wasmModule => {
+                memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
+                WebAssembly.instantiate(wasmModule, {
+                    env: {
+                        "memory": memory
+                    },
+                    imports: {
+                        reportProgress: val => reportProgress(val)
+                    },
+            }).then( inst => {
+                    instance = inst;
+                    resolve(inst);
+                });
+            }).catch(err => reject(err));
         });
+        return promA;
     }
-
-
 
     function alloc(length) {
         const u32 = new Uint32Array(memory.buffer, 0, 1);
@@ -92,7 +101,7 @@ export default function thread(self) {
             case "SET":
                 setBuffer(ctx.vars[task[i].var], task[i].buff);
                 break;
-            case "CALL": {
+            case "CALL": {                
                 const params = [];
                 for (let j=0; j<task[i].params.length; j++) {
                     const p = task[i].params[j];
@@ -117,6 +126,9 @@ export default function thread(self) {
         return ctx.out;
     }
 
+    function reportProgress(count) {
+        self.postMessage({ type: 'progress', data: count });
+    }
 
     return runTask;
 }
