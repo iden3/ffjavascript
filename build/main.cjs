@@ -32,7 +32,7 @@ function fromString(s, radix) {
 const e = fromString;
 
 function fromArray(a, radix) {
-    let acc =0n;
+    let acc =BigInt(0);
     radix = BigInt(radix);
     for (let i=0; i<a.length; i++) {
         acc = acc*radix + BigInt(a[i]);
@@ -46,7 +46,7 @@ function bitLength(a) {
 }
 
 function isNegative(a) {
-    return BigInt(a) < 0n;
+    return BigInt(a) < BigInt(0);
 }
 
 function isZero(a) {
@@ -65,7 +65,7 @@ const shl = shiftLeft;
 const shr = shiftRight;
 
 function isOdd(a) {
-    return (BigInt(a) & 1n) == 1n;
+    return (BigInt(a) & BigInt(1)) == BigInt(1);
 }
 
 
@@ -73,14 +73,14 @@ function naf(n) {
     let E = BigInt(n);
     const res = [];
     while (E) {
-        if (E & 1n) {
-            const z = 2 - Number(E % 4n);
+        if (E & BigInt(1)) {
+            const z = 2 - Number(E % BigInt(4));
             res.push( z );
             E = E - BigInt(z);
         } else {
             res.push( 0 );
         }
-        E = E >> 1n;
+        E = E >> BigInt(1);
     }
     return res;
 }
@@ -90,12 +90,12 @@ function bits(n) {
     let E = BigInt(n);
     const res = [];
     while (E) {
-        if (E & 1n) {
+        if (E & BigInt(1)) {
             res.push(1);
         } else {
             res.push( 0 );
         }
-        E = E >> 1n;
+        E = E >> BigInt(1);
     }
     return res;
 }
@@ -1634,27 +1634,27 @@ function getThreadRng() {
 class ZqField {
     constructor(p) {
         this.type="F1";
-        this.one = 1n;
-        this.zero = 0n;
+        this.one = BigInt(1);
+        this.zero = BigInt(0);
         this.p = BigInt(p);
         this.m = 1;
-        this.negone = this.p-1n;
-        this.two = 2n;
-        this.half = this.p >> 1n;
+        this.negone = this.p-this.one;
+        this.two = BigInt(2);
+        this.half = this.p >> this.one;
         this.bitLength = bitLength$2(this.p);
-        this.mask = (1n << BigInt(this.bitLength)) - 1n;
+        this.mask = (this.one << BigInt(this.bitLength)) - this.one;
 
         this.n64 = Math.floor((this.bitLength - 1) / 64)+1;
         this.n32 = this.n64*2;
         this.n8 = this.n64*8;
-        this.R = this.e(1n << BigInt(this.n64*64));
+        this.R = this.e(this.one << BigInt(this.n64*64));
         this.Ri = this.inv(this.R);
 
-        const e = this.negone >> 1n;
+        const e = this.negone >> this.one;
         this.nqr = this.two;
         let r = this.pow(this.nqr, e);
         while (!this.eq(r, this.negone)) {
-            this.nqr = this.nqr + 1n;
+            this.nqr = this.nqr + this.one;
             r = this.pow(this.nqr, e);
         }
 
@@ -1662,9 +1662,9 @@ class ZqField {
         this.s = 0;
         this.t = this.negone;
 
-        while ((this.t & 1n) == 0n) {
+        while ((this.t & this.one) == this.zero) {
             this.s = this.s + 1;
-            this.t = this.t >> 1n;
+            this.t = this.t >> this.one;
         }
 
         this.nqr_to_t = this.pow(this.nqr, this.t);
@@ -1758,16 +1758,16 @@ class ZqField {
     inv(a) {
         if (!a) throw new Error("Division by zero");
 
-        let t = 0n;
+        let t = this.zero;
         let r = this.p;
-        let newt = 1n;
+        let newt = this.one;
         let newr = a % this.p;
         while (newr) {
             let q = r/newr;
             [t, newt] = [newt, t-q*newt];
             [r, newr] = [newr, r-q*newr];
         }
-        if (t<0n) t += this.p;
+        if (t<this.zero) t += this.p;
         return t;
     }
 
@@ -1812,7 +1812,7 @@ class ZqField {
             if (Number(nb) < this.bitLength) {
                 return a >> nb;
             } else {
-                return 0n;
+                return this.zero;
             }
         }
     }
@@ -1832,34 +1832,34 @@ class ZqField {
     }
 
     land(a, b) {
-        return (a && b) ? 1n : 0n;
+        return (a && b) ? this.one : this.zero;
     }
 
     lor(a, b) {
-        return (a || b) ? 1n : 0n;
+        return (a || b) ? this.one : this.zero;
     }
 
     lnot(a) {
-        return (a) ? 0n : 1n;
+        return (a) ? this.zero : this.one;
     }
 
     sqrt_old(n) {
 
-        if (n == 0n) return this.zero;
+        if (n == this.zero) return this.zero;
 
         // Test that have solution
         const res = this.pow(n, this.negone >> this.one);
-        if ( res != 1n ) return null;
+        if ( res != this.one ) return null;
 
         let m = this.s;
         let c = this.nqr_to_t;
         let t = this.pow(n, this.t);
-        let r = this.pow(n, this.add(this.t, this.one) >> 1n );
+        let r = this.pow(n, this.add(this.t, this.one) >> this.one );
 
-        while ( t != 1n ) {
+        while ( t != this.one ) {
             let sq = this.square(t);
             let i = 1;
-            while (sq != 1n ) {
+            while (sq != this.one ) {
                 i++;
                 sq = this.square(sq);
             }
@@ -1874,7 +1874,7 @@ class ZqField {
             r = this.mul(r, b);
         }
 
-        if (r > (this.p >> 1n)) {
+        if (r > (this.p >> this.one)) {
             r = this.neg(r);
         }
 
@@ -1894,9 +1894,9 @@ class ZqField {
 
     random() {
         const nBytes = (this.bitLength*2 / 8);
-        let res =0n;
+        let res =this.zero;
         for (let i=0; i<nBytes; i++) {
-            res = (res << 8n) + BigInt(getRandomBytes(1)[0]);
+            res = (res << BigInt(8)) + BigInt(getRandomBytes(1)[0]);
         }
         return res % this.p;
     }
@@ -1913,13 +1913,13 @@ class ZqField {
     }
 
     isZero(a) {
-        return a == 0n;
+        return a == this.zero;
     }
 
     fromRng(rng) {
         let v;
         do {
-            v=0n;
+            v=this.zero;
             for (let i=0; i<this.n64; i++) {
                 v += rng.nextU64() << BigInt(64 *i);
             }
@@ -3248,7 +3248,7 @@ function unstringifyBigInts(o) {
 }
 
 function beBuff2int(buff) {
-    let res = 0n;
+    let res = BigInt(0);
     let i = buff.length;
     let offset = 0;
     const buffV = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
@@ -3278,16 +3278,16 @@ function beInt2Buff(n, len) {
     while (o > 0) {
         if (o-4 >= 0) {
             o -= 4;
-            buffV.setUint32(o, Number(r & 0xFFFFFFFFn));
-            r = r >> 32n;
+            buffV.setUint32(o, Number(r & BigInt(0xFFFFFFFF)));
+            r = r >> BigInt(32);
         } else if (o-2 >= 0) {
             o -= 2;
-            buffV.setUint16(o, Number(r & 0xFFFFn));
-            r = r >> 16n;
+            buffV.setUint16(o, Number(r & BigInt(0xFFFF)));
+            r = r >> BigInt(16);
         } else {
             o -= 1;
-            buffV.setUint8(o, Number(r & 0xFFn));
-            r = r >> 8n;
+            buffV.setUint8(o, Number(r & BigInt(0xFF)));
+            r = r >> BigInt(8);
         }
     }
     if (r) {
@@ -3298,7 +3298,7 @@ function beInt2Buff(n, len) {
 
 
 function leBuff2int(buff) {
-    let res = 0n;
+    let res = BigInt(0);
     let i = 0;
     const buffV = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
     while (i<buff.length) {
@@ -3327,17 +3327,17 @@ function leInt2Buff(n, len) {
     let o = 0;
     while (o < len) {
         if (o+4 <= len) {
-            buffV.setUint32(o, Number(r & 0xFFFFFFFFn), true );
+            buffV.setUint32(o, Number(r & BigInt(0xFFFFFFFF)), true );
             o += 4;
-            r = r >> 32n;
+            r = r >> BigInt(32);
         } else if (o+2 <= len) {
-            buffV.setUint16(Number(o, r & 0xFFFFn), true );
+            buffV.setUint16(Number(o, r & BigInt(0xFFFF)), true );
             o += 2;
-            r = r >> 16n;
+            r = r >> BigInt(16);
         } else {
-            buffV.setUint8(Number(o, r & 0xFFn), true );
+            buffV.setUint8(Number(o, r & BigInt(0xFF)), true );
             o += 1;
-            r = r >> 8n;
+            r = r >> BigInt(8);
         }
     }
     if (r) {

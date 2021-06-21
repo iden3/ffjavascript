@@ -7,27 +7,27 @@ import {getRandomBytes} from "./random.js";
 export default class ZqField {
     constructor(p) {
         this.type="F1";
-        this.one = 1n;
-        this.zero = 0n;
+        this.one = BigInt(1);
+        this.zero = BigInt(0);
         this.p = BigInt(p);
         this.m = 1;
-        this.negone = this.p-1n;
-        this.two = 2n;
-        this.half = this.p >> 1n;
+        this.negone = this.p-this.one;
+        this.two = BigInt(2);
+        this.half = this.p >> this.one;
         this.bitLength = Scalar.bitLength(this.p);
-        this.mask = (1n << BigInt(this.bitLength)) - 1n;
+        this.mask = (this.one << BigInt(this.bitLength)) - this.one;
 
         this.n64 = Math.floor((this.bitLength - 1) / 64)+1;
         this.n32 = this.n64*2;
         this.n8 = this.n64*8;
-        this.R = this.e(1n << BigInt(this.n64*64));
+        this.R = this.e(this.one << BigInt(this.n64*64));
         this.Ri = this.inv(this.R);
 
-        const e = this.negone >> 1n;
+        const e = this.negone >> this.one;
         this.nqr = this.two;
         let r = this.pow(this.nqr, e);
         while (!this.eq(r, this.negone)) {
-            this.nqr = this.nqr + 1n;
+            this.nqr = this.nqr + this.one;
             r = this.pow(this.nqr, e);
         }
 
@@ -35,9 +35,9 @@ export default class ZqField {
         this.s = 0;
         this.t = this.negone;
 
-        while ((this.t & 1n) == 0n) {
+        while ((this.t & this.one) == this.zero) {
             this.s = this.s + 1;
-            this.t = this.t >> 1n;
+            this.t = this.t >> this.one;
         }
 
         this.nqr_to_t = this.pow(this.nqr, this.t);
@@ -131,16 +131,16 @@ export default class ZqField {
     inv(a) {
         if (!a) throw new Error("Division by zero");
 
-        let t = 0n;
+        let t = this.zero;
         let r = this.p;
-        let newt = 1n;
+        let newt = this.one;
         let newr = a % this.p;
         while (newr) {
             let q = r/newr;
             [t, newt] = [newt, t-q*newt];
             [r, newr] = [newr, r-q*newr];
         }
-        if (t<0n) t += this.p;
+        if (t<this.zero) t += this.p;
         return t;
     }
 
@@ -185,7 +185,7 @@ export default class ZqField {
             if (Number(nb) < this.bitLength) {
                 return a >> nb;
             } else {
-                return 0n;
+                return this.zero;
             }
         }
     }
@@ -205,34 +205,34 @@ export default class ZqField {
     }
 
     land(a, b) {
-        return (a && b) ? 1n : 0n;
+        return (a && b) ? this.one : this.zero;
     }
 
     lor(a, b) {
-        return (a || b) ? 1n : 0n;
+        return (a || b) ? this.one : this.zero;
     }
 
     lnot(a) {
-        return (a) ? 0n : 1n;
+        return (a) ? this.zero : this.one;
     }
 
     sqrt_old(n) {
 
-        if (n == 0n) return this.zero;
+        if (n == this.zero) return this.zero;
 
         // Test that have solution
         const res = this.pow(n, this.negone >> this.one);
-        if ( res != 1n ) return null;
+        if ( res != this.one ) return null;
 
         let m = this.s;
         let c = this.nqr_to_t;
         let t = this.pow(n, this.t);
-        let r = this.pow(n, this.add(this.t, this.one) >> 1n );
+        let r = this.pow(n, this.add(this.t, this.one) >> this.one );
 
-        while ( t != 1n ) {
+        while ( t != this.one ) {
             let sq = this.square(t);
             let i = 1;
-            while (sq != 1n ) {
+            while (sq != this.one ) {
                 i++;
                 sq = this.square(sq);
             }
@@ -247,7 +247,7 @@ export default class ZqField {
             r = this.mul(r, b);
         }
 
-        if (r > (this.p >> 1n)) {
+        if (r > (this.p >> this.one)) {
             r = this.neg(r);
         }
 
@@ -267,9 +267,9 @@ export default class ZqField {
 
     random() {
         const nBytes = (this.bitLength*2 / 8);
-        let res =0n;
+        let res =this.zero;
         for (let i=0; i<nBytes; i++) {
-            res = (res << 8n) + BigInt(getRandomBytes(1)[0]);
+            res = (res << BigInt(8)) + BigInt(getRandomBytes(1)[0]);
         }
         return res % this.p;
     }
@@ -286,13 +286,13 @@ export default class ZqField {
     }
 
     isZero(a) {
-        return a == 0n;
+        return a == this.zero;
     }
 
     fromRng(rng) {
         let v;
         do {
-            v=0n;
+            v=this.zero;
             for (let i=0; i<this.n64; i++) {
                 v += rng.nextU64() << BigInt(64 *i);
             }
