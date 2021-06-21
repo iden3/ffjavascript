@@ -4762,27 +4762,22 @@ function thread(self) {
         console.warn(`No self defined for thread`);
     }
 
-
     function init(data) {
-        console.debug(`init`);
         const code = new Uint8Array(data.code);
         const promA = new Promise((resolve, reject) => {
             WebAssembly.compile(code).then( wasmModule => {
-                console.debug(`compiled ${data.init}`);
                 memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
-                resolve( new Promise((resolveB, rejectB) => {
-                    WebAssembly.instantiate(wasmModule, {
-                        env: {
-                            "memory": memory
-                        },
-                        imports: {
-                            reportProgress: val => reportProgress(val)
-                        },
-                    }).then( inst => {
-                        instance = inst;
-                        resolveB(inst);
-                    }).catch(err => rejectB(err));
-                }));
+                WebAssembly.instantiate(wasmModule, {
+                    env: {
+                        "memory": memory
+                    },
+                    imports: {
+                        reportProgress: val => reportProgress(val)
+                    },
+            }).then( inst => {
+                    instance = inst;
+                    resolve(inst);
+                });
             }).catch(err => reject(err));
         });
         return promA;
