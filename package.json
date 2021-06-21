@@ -35,7 +35,7 @@
     "@babel/runtime": "^7.14.6",
     "big-integer": "^1.6.48",
     "reify": "^0.20.12",
-    "wasmcurves": "file:../wasmcurves",
+    "wasmcurves": "^0.0.15",
     "web-worker": "^1.0.0"
   },
   "devDependencies": {
