@@ -4893,7 +4893,6 @@ function thread(self) {
 
 // const MEM_SIZE = 1000;  // Memory size in 64K Pakes (512Mb)
 const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
-//import WorkerThread from "web-worker:./threadman_thread.js";
 
 class Deferred {
     constructor() {
@@ -4930,11 +4929,8 @@ function stringToBase64(str) {
     }
 }
 
-const pm = thread.toString();
-console.debug(`postMsg: ${pm}`);
-const threadSource = stringToBase64("(" + pm + ")(self)");
+const threadSource = stringToBase64("(" + thread.toString() + ")(self)");
 const workerSource = "data:application/javascript;base64," + threadSource;
-
 
 
 async function buildThreadManager(wasm, singleThread) {
@@ -4998,8 +4994,6 @@ async function buildThreadManager(wasm, singleThread) {
 
         for (let i = 0; i<concurrency; i++) {
 
-            //tm.workers[i] = new Worker('data:,postMessage("hello")');
-
             tm.workers[i] = new Worker(workerSource);
 
             tm.workers[i].addEventListener("message", getOnMsg(i));
@@ -5029,7 +5023,6 @@ async function buildThreadManager(wasm, singleThread) {
             let data;
             if ((e)&&(e.data)) {
                 if (e.data.type) { // interim progress 
-                    //console.log(`Message ${e.data.type} ${e.data.data}`);
                     tm.progress[i] = e.data.data;
                     aggregateProgress();
                     return;
@@ -5049,7 +5042,7 @@ async function buildThreadManager(wasm, singleThread) {
     function aggregateProgress() {
         if (!tm.singleThread) {
             const p = tm.progress.reduce((tot, val) => tot+=val );
-            console.debug(`Compute progress: ${p}`);
+            //console.debug(`Compute progress: ${p}`);
             if (tm.progressCallback) {
                 tm.progressCallback(p);
             }

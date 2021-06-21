@@ -24,7 +24,6 @@ const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
 
 import thread from "./threadman_thread.js";
 import os from "os";
-//import WorkerThread from "web-worker:./threadman_thread.js";
 
 class Deferred {
     constructor() {
@@ -61,30 +60,8 @@ function stringToBase64(str) {
     }
 }
 
-function postMsg(self) {
-    if (self) {
-        self.onmessage = async function(e) {
-            let data;
-            if (e.data) {
-                data = e.data;
-            } else {
-                data = e;
-            }
-
-            if (data[0].cmd == "INIT") {
-                    await self.postMessage('received INIT');
-            } else if (data[0].cmd == "TERMINATE") {
-                process.exit();
-            }
-        };
-    }
-}
-
-const pm = thread.toString();
-console.debug(`postMsg: ${pm}`);
-const threadSource = stringToBase64("(" + pm + ")(self)");
+const threadSource = stringToBase64("(" + thread.toString() + ")(self)");
 const workerSource = "data:application/javascript;base64," + threadSource;
-
 
 
 export default async function buildThreadManager(wasm, singleThread) {
@@ -148,8 +125,6 @@ export default async function buildThreadManager(wasm, singleThread) {
 
         for (let i = 0; i<concurrency; i++) {
 
-            //tm.workers[i] = new Worker('data:,postMessage("hello")');
-
             tm.workers[i] = new Worker(workerSource);
 
             tm.workers[i].addEventListener("message", getOnMsg(i));
@@ -179,7 +154,6 @@ export default async function buildThreadManager(wasm, singleThread) {
             let data;
             if ((e)&&(e.data)) {
                 if (e.data.type) { // interim progress 
-                    //console.log(`Message ${e.data.type} ${e.data.data}`);
                     tm.progress[i] = e.data.data;
                     aggregateProgress();
                     return;
@@ -199,7 +173,7 @@ export default async function buildThreadManager(wasm, singleThread) {
     function aggregateProgress() {
         if (!tm.singleThread) {
             const p = tm.progress.reduce((tot, val) => tot+=val );
-            console.debug(`Compute progress: ${p}`);
+            //console.debug(`Compute progress: ${p}`);
             if (tm.progressCallback) {
                 tm.progressCallback(p);
             }
