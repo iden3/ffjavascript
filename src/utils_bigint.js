@@ -20,6 +20,8 @@ export function stringifyBigInts(o) {
 export function unstringifyBigInts(o) {
     if ((typeof(o) == "string") && (/^[0-9]+$/.test(o) ))  {
         return bigInt(o);
+    } else if ((typeof(o) == "string") && (/^0x[0-9a-fA-F]+$/.test(o) ))  {
+        return bigInt(o);
     } else if (Array.isArray(o)) {
         return o.map(unstringifyBigInts);
     } else if (typeof o == "object") {

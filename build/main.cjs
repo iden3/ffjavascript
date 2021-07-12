@@ -3234,6 +3234,8 @@ function stringifyBigInts(o) {
 function unstringifyBigInts(o) {
     if ((typeof(o) == "string") && (/^[0-9]+$/.test(o) ))  {
         return BigInt(o);
+    } else if ((typeof(o) == "string") && (/^0x[0-9a-fA-F]+$/.test(o) ))  {
+        return BigInt(o);
     } else if (Array.isArray(o)) {
         return o.map(unstringifyBigInts);
     } else if (typeof o == "object") {
@@ -3377,6 +3379,8 @@ function stringifyBigInts$1(o) {
 
 function unstringifyBigInts$1(o) {
     if ((typeof(o) == "string") && (/^[0-9]+$/.test(o) ))  {
+        return bigInt__default['default'](o);
+    } else if ((typeof(o) == "string") && (/^0x[0-9a-fA-F]+$/.test(o) ))  {
         return bigInt__default['default'](o);
     } else if (Array.isArray(o)) {
         return o.map(unstringifyBigInts$1);
