@@ -1,4 +1,4 @@
-/* global window, navigator, Blob, Worker, WebAssembly */
+/* global navigator, WebAssembly */
 /*
     Copyright 2019 0KIMS association.
 
@@ -41,7 +41,7 @@ function sleep(ms) {
 
 function base64ToArrayBuffer(base64) {
     if (process.browser) {
-        var binary_string = window.atob(base64);
+        var binary_string = globalThis.atob(base64);
         var len = binary_string.length;
         var bytes = new Uint8Array(len);
         for (var i = 0; i < len; i++) {
@@ -55,7 +55,7 @@ function base64ToArrayBuffer(base64) {
 
 function stringToBase64(str) {
     if (process.browser) {
-        return window.btoa(str);
+        return globalThis.btoa(str);
     } else {
         return Buffer.from(str).toString("base64");
     }
