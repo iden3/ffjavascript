@@ -1594,13 +1594,11 @@ class ChaCha {
     }
 }
 
-/* global window */
-
 function getRandomBytes(n) {
     let array = new Uint8Array(n);
-    if (typeof window !== "undefined") { // Browser
-        if (typeof window.crypto !== "undefined") { // Supported
-            window.crypto.getRandomValues(array);
+    if (process.browser) { // Browser
+        if (typeof globalThis.crypto !== "undefined") { // Supported
+            globalThis.crypto.getRandomValues(array);
         } else { // fallback
             for (let i=0; i<n; i++) {
                 array[i] = (Math.random()*4294967296)>>>0;
@@ -4860,7 +4858,7 @@ function thread(self) {
     return runTask;
 }
 
-/* global window, navigator, Blob, Worker, WebAssembly */
+/* global navigator, WebAssembly */
 /*
     Copyright 2019 0KIMS association.
 
@@ -4898,7 +4896,7 @@ function sleep(ms) {
 
 function base64ToArrayBuffer(base64) {
     if (process.browser) {
-        var binary_string = window.atob(base64);
+        var binary_string = globalThis.atob(base64);
         var len = binary_string.length;
         var bytes = new Uint8Array(len);
         for (var i = 0; i < len; i++) {
@@ -4912,7 +4910,7 @@ function base64ToArrayBuffer(base64) {
 
 function stringToBase64(str) {
     if (process.browser) {
-        return window.btoa(str);
+        return globalThis.btoa(str);
     } else {
         return Buffer.from(str).toString("base64");
     }
@@ -6329,11 +6327,11 @@ async function buildEngine(params) {
     return curve;
 }
 
-global.curve_bn128 = null;
+globalThis.curve_bn128 = null;
 
 async function buildBn128(singleThread) {
 
-    if ((!singleThread)&&(global.curve_bn128)) return global.curve_bn128;
+    if ((!singleThread)&&(globalThis.curve_bn128)) return globalThis.curve_bn128;
     const params = {
         name: "bn128",
         wasm: wasmcurves__default['default'].bn128_wasm,
@@ -6348,23 +6346,23 @@ async function buildBn128(singleThread) {
     const curve = await buildEngine(params);
     curve.terminate = async function() {
         if (!params.singleThread) {
-            global.curve_bn128 = null;
+            globalThis.curve_bn128 = null;
             await this.tm.terminate();
         }
     };
 
     if (!singleThread) {
-        global.curve_bn128 = curve;
+        globalThis.curve_bn128 = curve;
     }
 
     return curve;
 }
 
-global.curve_bls12381 = null;
+globalThis.curve_bls12381 = null;
 
 async function buildBls12381(singleThread) {
 
-    if ((!singleThread)&&(global.curve_bls12381)) return global.curve_bls12381;
+    if ((!singleThread)&&(globalThis.curve_bls12381)) return globalThis.curve_bls12381;
     const params = {
         name: "bls12381",
         wasm: wasmcurves__default['default'].bls12381_wasm,
@@ -6380,7 +6378,7 @@ async function buildBls12381(singleThread) {
     const curve = await buildEngine(params);
     curve.terminate = async function() {
         if (!params.singleThread) {
-            global.curve_bls12381 = null;
+            globalThis.curve_bls12381 = null;
             await this.tm.terminate();
         }
     };
