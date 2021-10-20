@@ -2,11 +2,11 @@ import wasmcurves from "wasmcurves";
 import buildEngine from "./engine.js";
 import * as Scalar from "./scalar.js";
 
-global.curve_bls12381 = null;
+globalThis.curve_bls12381 = null;
 
 export default async function buildBls12381(singleThread) {
 
-    if ((!singleThread)&&(global.curve_bls12381)) return global.curve_bls12381;
+    if ((!singleThread)&&(globalThis.curve_bls12381)) return globalThis.curve_bls12381;
     const params = {
         name: "bls12381",
         wasm: wasmcurves.bls12381_wasm,
@@ -22,7 +22,7 @@ export default async function buildBls12381(singleThread) {
     const curve = await buildEngine(params);
     curve.terminate = async function() {
         if (!params.singleThread) {
-            global.curve_bls12381 = null;
+            globalThis.curve_bls12381 = null;
             await this.tm.terminate();
         }
     };
