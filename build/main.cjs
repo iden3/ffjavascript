@@ -4756,7 +4756,7 @@ function thread(self) {
                     self.postMessage(data.result);
                 });
             } else if (data[0].cmd == "TERMINATE") {
-                process.exit();
+                self.close();
             } else {
                 const res = runTask(data);
                 self.postMessage(res);

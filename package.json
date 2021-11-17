@@ -34,7 +34,7 @@
   "dependencies": {
     "big-integer": "^1.6.48",
     "wasmcurves": "0.0.14",
-    "web-worker": "^1.0.0"
+    "web-worker": "^1.2.0"
   },
   "devDependencies": {
     "blake2b": "^2.1.3",
