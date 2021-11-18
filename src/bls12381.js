@@ -27,6 +27,10 @@ export default async function buildBls12381(singleThread) {
         }
     };
 
+    if (!singleThread) {
+        globalThis.curve_bls12381 = curve;
+    }
+
     return curve;
 }
 
