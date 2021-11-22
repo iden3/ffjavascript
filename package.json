@@ -33,7 +33,8 @@
   "homepage": "https://github.com/iden3/ffjs#readme",
   "dependencies": {
     "big-integer": "^1.6.48",
-    "wasmcurves": "0.0.14",
+    "wasmbuilder": "^0.0.11",
+    "wasmcurves": "0.1.0",
     "web-worker": "^1.2.0"
   },
   "devDependencies": {

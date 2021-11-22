@@ -7,6 +7,7 @@ var crypto = require('crypto');
 var wasmcurves = require('wasmcurves');
 var os = require('os');
 var Worker = require('web-worker');
+var wasmbuilder = require('wasmbuilder');
 
 function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
 
@@ -15,6 +16,7 @@ var crypto__default = /*#__PURE__*/_interopDefaultLegacy(crypto);
 var wasmcurves__default = /*#__PURE__*/_interopDefaultLegacy(wasmcurves);
 var os__default = /*#__PURE__*/_interopDefaultLegacy(os);
 var Worker__default = /*#__PURE__*/_interopDefaultLegacy(Worker);
+var wasmbuilder__default = /*#__PURE__*/_interopDefaultLegacy(wasmbuilder);
 
 /* global BigInt */
 const hexLen = [ 0, 1, 2, 2, 3, 3, 3, 3, 4 ,4 ,4 ,4 ,4 ,4 ,4 ,4];
@@ -6327,14 +6329,42 @@ async function buildEngine(params) {
     return curve;
 }
 
+const buildBn128wasm = wasmcurves__default['default'].buildBn128;
+const ModuleBuilder$1 = wasmbuilder__default['default'].ModuleBuilder;
+
 globalThis.curve_bn128 = null;
 
-async function buildBn128(singleThread) {
+async function buildBn128(singleThread, plugins) {
+
+    const moduleBuilder = new ModuleBuilder$1();
+    moduleBuilder.setMemory(25);
+    buildBn128wasm(moduleBuilder);
+
+    if (plugins) plugins(moduleBuilder);
+
+    const bn128wasm  = {};
+
+    bn128wasm.code= moduleBuilder.build();
+    bn128wasm.pq = moduleBuilder.modules.f1m.pq;
+    bn128wasm.pr = moduleBuilder.modules.frm.pq;
+    bn128wasm.pG1gen = moduleBuilder.modules.bn128.pG1gen;
+    bn128wasm.pG1zero = moduleBuilder.modules.bn128.pG1zero;
+    bn128wasm.pG1b = moduleBuilder.modules.bn128.pG1b;
+    bn128wasm.pG2gen = moduleBuilder.modules.bn128.pG2gen;
+    bn128wasm.pG2zero = moduleBuilder.modules.bn128.pG2zero;
+    bn128wasm.pG2b = moduleBuilder.modules.bn128.pG2b;
+    bn128wasm.pOneT = moduleBuilder.modules.bn128.pOneT;
+    bn128wasm.prePSize = moduleBuilder.modules.bn128.prePSize;
+    bn128wasm.preQSize = moduleBuilder.modules.bn128.preQSize;
+    bn128wasm.n8q = 32;
+    bn128wasm.n8r = 32;
+    bn128wasm.q = moduleBuilder.modules.bn128.q;
+    bn128wasm.r = moduleBuilder.modules.bn128.r;
 
     if ((!singleThread)&&(globalThis.curve_bn128)) return globalThis.curve_bn128;
     const params = {
         name: "bn128",
-        wasm: wasmcurves__default['default'].bn128_wasm,
+        wasm: bn128wasm,
         q: e$2("21888242871839275222246405745257275088696311157297823662689037894645226208583"),
         r: e$2("21888242871839275222246405745257275088548364400416034343698204186575808495617"),
         n8q: 32,
@@ -6360,12 +6390,38 @@ async function buildBn128(singleThread) {
 
 globalThis.curve_bls12381 = null;
 
-async function buildBls12381(singleThread) {
+async function buildBls12381(singleThread, plugins) {
+
+    const moduleBuilder = new ModuleBuilder();
+    moduleBuilder.setMemory(25);
+    wasmcurves.buildBls12381(moduleBuilder);
+
+    if (plugins) plugins(moduleBuilder);
+
+    const bls12381wasm  = {};
+
+    bls12381wasm.code= moduleBuilder.build();
+    bls12381wasm.pq = moduleBuilder.modules.f1m.pq;
+    bls12381wasm.pr = moduleBuilder.modules.frm.pq;
+    bls12381wasm.pG1gen = moduleBuilder.modules.bls12381.pG1gen;
+    bls12381wasm.pG1zero = moduleBuilder.modules.bls12381.pG1zero;
+    bls12381wasm.pG1b = moduleBuilder.modules.bls12381.pG1b;
+    bls12381wasm.pG2gen = moduleBuilder.modules.bls12381.pG2gen;
+    bls12381wasm.pG2zero = moduleBuilder.modules.bls12381.pG2zero;
+    bls12381wasm.pG2b = moduleBuilder.modules.bls12381.pG2b;
+    bls12381wasm.pOneT = moduleBuilder.modules.bls12381.pOneT;
+    bls12381wasm.prePSize = moduleBuilder.modules.bls12381.prePSize;
+    bls12381wasm.preQSize = moduleBuilder.modules.bls12381.preQSize;
+    bls12381wasm.n8q = 48;
+    bls12381wasm.n8r = 32;
+    bls12381wasm.q = moduleBuilder.modules.bn128.q;
+    bls12381wasm.r = moduleBuilder.modules.bn128.r;
+
 
     if ((!singleThread)&&(globalThis.curve_bls12381)) return globalThis.curve_bls12381;
     const params = {
         name: "bls12381",
-        wasm: wasmcurves__default['default'].bls12381_wasm,
+        wasm: bls12381wasm,
         q: e$2("1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab", 16),
         r: e$2("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001", 16),
         n8q: 48,
