@@ -54,7 +54,9 @@ export default async function buildBls12381(singleThread, plugins) {
         }
     };
 
-    globalThis.curve_bls12381 = curve;
+    if (!singleThread) {
+        globalThis.curve_bls12381 = curve;
+    }
 
     return curve;
 }

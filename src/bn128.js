@@ -54,7 +54,9 @@ export default async function buildBn128(singleThread, plugins) {
         }
     };
 
-    globalThis.curve_bn128 = curve;
+    if (!singleThread) {
+        globalThis.curve_bn128 = curve;
+    }
 
     return curve;
 }
