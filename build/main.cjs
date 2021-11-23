@@ -6381,9 +6381,7 @@ async function buildBn128(singleThread, plugins) {
         }
     };
 
-    if (!singleThread) {
-        globalThis.curve_bn128 = curve;
-    }
+    globalThis.curve_bn128 = curve;
 
     return curve;
 }
@@ -6439,9 +6437,7 @@ async function buildBls12381(singleThread, plugins) {
         }
     };
 
-    if (!singleThread) {
-        globalThis.curve_bls12381 = curve;
-    }
+    globalThis.curve_bls12381 = curve;
 
     return curve;
 }
@@ -6452,37 +6448,37 @@ const bn128r = e$2("218882428718392752222464057452572750885483644004160343436982
 const bls12381q = e$2("1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab", 16);
 const bn128q = e$2("21888242871839275222246405745257275088696311157297823662689037894645226208583");
 
-async function getCurveFromR(r, singleThread) {
+async function getCurveFromR(r, singleThread, plugins) {
     let curve;
     if (eq$2(r, bn128r)) {
-        curve = await buildBn128(singleThread);
+        curve = await buildBn128(singleThread, plugins);
     } else if (eq$2(r, bls12381r)) {
-        curve = await buildBls12381(singleThread);
+        curve = await buildBls12381(singleThread, plugins);
     } else {
         throw new Error(`Curve not supported: ${toString(r)}`);
     }
     return curve;
 }
 
-async function getCurveFromQ(q, singleThread) {
+async function getCurveFromQ(q, singleThread, plugins) {
     let curve;
     if (eq$2(q, bn128q)) {
-        curve = await buildBn128(singleThread);
+        curve = await buildBn128(singleThread, plugins);
     } else if (eq$2(q, bls12381q)) {
-        curve = await buildBls12381(singleThread);
+        curve = await buildBls12381(singleThread, plugins);
     } else {
         throw new Error(`Curve not supported: ${toString(q)}`);
     }
     return curve;
 }
 
-async function getCurveFromName(name, singleThread) {
+async function getCurveFromName(name, singleThread, plugins) {
     let curve;
     const normName = normalizeName(name);
     if (["BN128", "BN254", "ALTBN128"].indexOf(normName) >= 0) {
-        curve = await buildBn128(singleThread);
+        curve = await buildBn128(singleThread, plugins);
     } else if (["BLS12381"].indexOf(normName) >= 0) {
-        curve = await buildBls12381(singleThread);
+        curve = await buildBls12381(singleThread, plugins);
     } else {
         throw new Error(`Curve not supported: ${name}`);
     }
