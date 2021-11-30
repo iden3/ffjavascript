@@ -116,6 +116,11 @@ export default async function buildThreadManager(wasm, singleThread) {
         } else {
             concurrency = os.cpus().length;
         }
+
+        if(concurrency == 0){
+            concurrency = 2;
+        }
+
         // Limit to 64 threads for memory reasons.
         if (concurrency>64) concurrency=64;
         tm.concurrency = concurrency;
