@@ -138,3 +138,44 @@ export function leInt2Buff(n, len) {
     }
     return buff;
 }
+
+
+export function stringifyFElements(F, o) {
+    if ((typeof(o) == "bigint") || o.eq !== undefined)  {
+        return o.toString(10);
+    } else if (o instanceof Uint8Array) {
+        return F.toString(F.e(o));
+    } else if (Array.isArray(o)) {
+        return o.map(stringifyFElements.bind(this,F));
+    } else if (typeof o == "object") {
+        const res = {};
+        const keys = Object.keys(o);
+        keys.forEach( (k) => {
+            res[k] = stringifyFElements(F, o[k]);
+        });
+        return res;
+    } else {
+        return o;
+    }
+}
+
+
+export function unstringifyFElements(F, o) {
+    if ((typeof(o) == "string") && (/^[0-9]+$/.test(o) ))  {
+        return F.e(o);
+    } else if ((typeof(o) == "string") && (/^0x[0-9a-fA-F]+$/.test(o) ))  {
+        return F.e(o);
+    } else if (Array.isArray(o)) {
+        return o.map(unstringifyFElements.bind(this,F));
+    } else if (typeof o == "object") {
+        if (o===null) return null;
+        const res = {};
+        const keys = Object.keys(o);
+        keys.forEach( (k) => {
+            res[k] = unstringifyFElements(F, o[k]);
+        });
+        return res;
+    } else {
+        return o;
+    }
+}

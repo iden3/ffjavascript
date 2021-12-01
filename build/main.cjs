@@ -3350,6 +3350,47 @@ function leInt2Buff(n, len) {
     return buff;
 }
 
+
+function stringifyFElements(F, o) {
+    if ((typeof(o) == "bigint") || o.eq !== undefined)  {
+        return o.toString(10);
+    } else if (o instanceof Uint8Array) {
+        return F.toString(F.e(o));
+    } else if (Array.isArray(o)) {
+        return o.map(stringifyFElements.bind(this,F));
+    } else if (typeof o == "object") {
+        const res = {};
+        const keys = Object.keys(o);
+        keys.forEach( (k) => {
+            res[k] = stringifyFElements(F, o[k]);
+        });
+        return res;
+    } else {
+        return o;
+    }
+}
+
+
+function unstringifyFElements(F, o) {
+    if ((typeof(o) == "string") && (/^[0-9]+$/.test(o) ))  {
+        return F.e(o);
+    } else if ((typeof(o) == "string") && (/^0x[0-9a-fA-F]+$/.test(o) ))  {
+        return F.e(o);
+    } else if (Array.isArray(o)) {
+        return o.map(unstringifyFElements.bind(this,F));
+    } else if (typeof o == "object") {
+        if (o===null) return null;
+        const res = {};
+        const keys = Object.keys(o);
+        keys.forEach( (k) => {
+            res[k] = unstringifyFElements(F, o[k]);
+        });
+        return res;
+    } else {
+        return o;
+    }
+}
+
 var utils_native = /*#__PURE__*/Object.freeze({
     __proto__: null,
     stringifyBigInts: stringifyBigInts,
@@ -3357,7 +3398,9 @@ var utils_native = /*#__PURE__*/Object.freeze({
     beBuff2int: beBuff2int,
     beInt2Buff: beInt2Buff,
     leBuff2int: leBuff2int,
-    leInt2Buff: leInt2Buff
+    leInt2Buff: leInt2Buff,
+    stringifyFElements: stringifyFElements,
+    unstringifyFElements: unstringifyFElements
 });
 
 function stringifyBigInts$1(o) {
@@ -3514,6 +3557,26 @@ utils.buffReverseBits = function buffReverseBits(buff, eSize) {
     }
 };
 
+
+utils.array2buffer = function(arr, sG) {
+    const buff = new Uint8Array(sG*arr.length);
+
+    for (let i=0; i<arr.length; i++) {
+        buff.set(arr[i], i*sG);
+    }
+
+    return buff;
+};
+
+utils.buffer2array = function(buff , sG) {
+    const n= buff.byteLength / sG;
+    const arr = new Array(n);
+    for (let i=0; i<n; i++) {
+        arr[i] = buff.slice(i*sG, i*sG+sG);
+    }
+    return arr;
+};
+
 let {
     bitReverse,
     log2: log2$1,
@@ -3524,6 +3587,10 @@ let {
     beInt2Buff: beInt2Buff$2,
     leBuff2int: leBuff2int$2,
     leInt2Buff: leInt2Buff$2,
+    array2buffer,
+    buffer2array,
+    stringifyFElements: stringifyFElements$1,
+    unstringifyFElements: unstringifyFElements$1
 } = utils;
 
 var _utils = /*#__PURE__*/Object.freeze({
@@ -3536,7 +3603,11 @@ var _utils = /*#__PURE__*/Object.freeze({
     beBuff2int: beBuff2int$2,
     beInt2Buff: beInt2Buff$2,
     leBuff2int: leBuff2int$2,
-    leInt2Buff: leInt2Buff$2
+    leInt2Buff: leInt2Buff$2,
+    array2buffer: array2buffer,
+    buffer2array: buffer2array,
+    stringifyFElements: stringifyFElements$1,
+    unstringifyFElements: unstringifyFElements$1
 });
 
 const PAGE_SIZE = 1<<30;
@@ -3916,8 +3987,17 @@ class WasmField1 {
     }
 
     async batchInverse(buffIn) {
+        let returnArray = false;
         const sIn = this.n8;
         const sOut = this.n8;
+
+        if (Array.isArray(buffIn)) {
+            buffIn = array2buffer(buffIn, sIn );
+            returnArray = true;
+        } else {
+            buffIn = buffIn.slice(0, buffIn.byteLength);
+        }
+
         const nPoints = Math.floor(buffIn.byteLength / sIn);
         if ( nPoints * sIn !== buffIn.byteLength) {
             throw new Error("Invalid buffer size");
@@ -3966,8 +4046,13 @@ class WasmField1 {
             p+=result[i][0].byteLength;
         }
 
-        return fullBuffOut;
-    };
+        if (returnArray) {
+            return buffer2array(fullBuffOut, sOut);
+        } else {
+            return fullBuffOut;
+        }
+
+    }
 
 }
 
@@ -5574,7 +5659,7 @@ function buildFFT(curve, groupName) {
 
         let returnArray = false;
         if (Array.isArray(buff)) {
-            buff = curve.array2buffer(buff, sIn);
+            buff = array2buffer(buff, sIn);
             returnArray = true;
         } else {
             buff = buff.slice(0, buff.byteLength);
@@ -5597,7 +5682,7 @@ function buildFFT(curve, groupName) {
             }
 
             if (returnArray) {
-                return curve.buffer2array(buffOut, sOut);
+                return buffer2array(buffOut, sOut);
             } else {
                 return buffOut;
             }
@@ -5752,7 +5837,7 @@ function buildFFT(curve, groupName) {
         }
 
         if (returnArray) {
-            return curve.buffer2array(buffOut, sOut);
+            return buffer2array(buffOut, sOut);
         } else {
             return buffOut;
         }
@@ -6381,7 +6466,9 @@ async function buildBn128(singleThread, plugins) {
         }
     };
 
-    globalThis.curve_bn128 = curve;
+    if (!singleThread) {
+        globalThis.curve_bn128 = curve;
+    }
 
     return curve;
 }
@@ -6437,7 +6524,9 @@ async function buildBls12381(singleThread, plugins) {
         }
     };
 
-    globalThis.curve_bls12381 = curve;
+    if (!singleThread) {
+        globalThis.curve_bls12381 = curve;
+    }
 
     return curve;
 }

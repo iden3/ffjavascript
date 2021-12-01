@@ -58,6 +58,26 @@ utils.buffReverseBits = function buffReverseBits(buff, eSize) {
     }
 };
 
+
+utils.array2buffer = function(arr, sG) {
+    const buff = new Uint8Array(sG*arr.length);
+
+    for (let i=0; i<arr.length; i++) {
+        buff.set(arr[i], i*sG);
+    }
+
+    return buff;
+};
+
+utils.buffer2array = function(buff , sG) {
+    const n= buff.byteLength / sG;
+    const arr = new Array(n);
+    for (let i=0; i<n; i++) {
+        arr[i] = buff.slice(i*sG, i*sG+sG);
+    }
+    return arr;
+};
+
 export let {
     bitReverse,
     log2,
@@ -68,5 +88,9 @@ export let {
     beInt2Buff,
     leBuff2int,
     leInt2Buff,
+    array2buffer,
+    buffer2array,
+    stringifyFElements,
+    unstringifyFElements
 } = utils;
 

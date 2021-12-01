@@ -1,5 +1,6 @@
-import {log2, buffReverseBits} from "./utils.js";
+import {log2, buffReverseBits, array2buffer, buffer2array} from "./utils.js";
 import BigBuffer from "./bigbuffer.js";
+
 
 export default function buildFFT(curve, groupName) {
     const G = curve[groupName];
@@ -66,7 +67,7 @@ export default function buildFFT(curve, groupName) {
 
         let returnArray = false;
         if (Array.isArray(buff)) {
-            buff = curve.array2buffer(buff, sIn);
+            buff = array2buffer(buff, sIn);
             returnArray = true;
         } else {
             buff = buff.slice(0, buff.byteLength);
@@ -89,7 +90,7 @@ export default function buildFFT(curve, groupName) {
             }
 
             if (returnArray) {
-                return curve.buffer2array(buffOut, sOut);
+                return buffer2array(buffOut, sOut);
             } else {
                 return buffOut;
             }
@@ -244,7 +245,7 @@ export default function buildFFT(curve, groupName) {
         }
 
         if (returnArray) {
-            return curve.buffer2array(buffOut, sOut);
+            return buffer2array(buffOut, sOut);
         } else {
             return buffOut;
         }

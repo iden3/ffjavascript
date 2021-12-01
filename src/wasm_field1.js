@@ -242,8 +242,17 @@ export default class WasmField1 {
     }
 
     async batchInverse(buffIn) {
+        let returnArray = false;
         const sIn = this.n8;
         const sOut = this.n8;
+
+        if (Array.isArray(buffIn)) {
+            buffIn = utils.array2buffer(buffIn, sIn );
+            returnArray = true;
+        } else {
+            buffIn = buffIn.slice(0, buffIn.byteLength);
+        }
+
         const nPoints = Math.floor(buffIn.byteLength / sIn);
         if ( nPoints * sIn !== buffIn.byteLength) {
             throw new Error("Invalid buffer size");
@@ -292,8 +301,13 @@ export default class WasmField1 {
             p+=result[i][0].byteLength;
         }
 
-        return fullBuffOut;
-    };
+        if (returnArray) {
+            return utils.buffer2array(fullBuffOut, sOut);
+        } else {
+            return fullBuffOut;
+        }
+
+    }
 
 }
 
