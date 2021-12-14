@@ -166,7 +166,7 @@ export default async function buildThreadManager(wasm, singleThread) {
 
 }
 
-class ThreadManager {
+export class ThreadManager {
     constructor() {
         this.actionQueue = [];
         this.oldPFree = 0;
