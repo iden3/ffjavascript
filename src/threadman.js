@@ -39,20 +39,6 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function base64ToArrayBuffer(base64) {
-    if (process.browser) {
-        var binary_string = globalThis.atob(base64);
-        var len = binary_string.length;
-        var bytes = new Uint8Array(len);
-        for (var i = 0; i < len; i++) {
-            bytes[i] = binary_string.charCodeAt(i);
-        }
-        return bytes;
-    } else {
-        return new Uint8Array(Buffer.from(base64, "base64"));
-    }
-}
-
 function stringToBase64(str) {
     if (process.browser) {
         return globalThis.btoa(str);
@@ -73,7 +59,7 @@ export default async function buildThreadManager(wasm, singleThread) {
     tm.u8 = new Uint8Array(tm.memory.buffer);
     tm.u32 = new Uint32Array(tm.memory.buffer);
 
-    const wasmModule = await WebAssembly.compile(base64ToArrayBuffer(wasm.code));
+    const wasmModule = await WebAssembly.compile(wasm.code);
 
     tm.instance = await WebAssembly.instantiate(wasmModule, {
         env: {
@@ -96,7 +82,7 @@ export default async function buildThreadManager(wasm, singleThread) {
 
 
     if (singleThread) {
-        tm.code = base64ToArrayBuffer(wasm.code);
+        tm.code = wasm.code;
         tm.taskManager = thread();
         await tm.taskManager([{
             cmd: "INIT",
@@ -136,7 +122,7 @@ export default async function buildThreadManager(wasm, singleThread) {
 
         const initPromises = [];
         for (let i=0; i<tm.workers.length;i++) {
-            const copyCode = base64ToArrayBuffer(wasm.code).slice();
+            const copyCode = wasm.code.slice();
             initPromises.push(tm.postAction(i, [{
                 cmd: "INIT",
                 init: MEM_SIZE,

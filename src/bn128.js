@@ -1,9 +1,7 @@
-import wasmcurves from "wasmcurves";
-const buildBn128wasm = wasmcurves.buildBn128;
+import { buildBn128 as buildBn128wasm } from "wasmcurves";
 import buildEngine from "./engine.js";
 import * as Scalar from "./scalar.js";
-import wasmbuilder from "wasmbuilder";
-const ModuleBuilder = wasmbuilder.ModuleBuilder;
+import { ModuleBuilder } from "wasmbuilder";
 
 globalThis.curve_bn128 = null;
 
@@ -15,9 +13,9 @@ export default async function buildBn128(singleThread, plugins) {
 
     if (plugins) plugins(moduleBuilder);
 
-    const bn128wasm  = {};
+    const bn128wasm = {};
 
-    bn128wasm.code= moduleBuilder.build();
+    bn128wasm.code = moduleBuilder.build();
     bn128wasm.pq = moduleBuilder.modules.f1m.pq;
     bn128wasm.pr = moduleBuilder.modules.frm.pq;
     bn128wasm.pG1gen = moduleBuilder.modules.bn128.pG1gen;
@@ -34,7 +32,7 @@ export default async function buildBn128(singleThread, plugins) {
     bn128wasm.q = moduleBuilder.modules.bn128.q;
     bn128wasm.r = moduleBuilder.modules.bn128.r;
 
-    if ((!singleThread)&&(globalThis.curve_bn128)) return globalThis.curve_bn128;
+    if ((!singleThread) && (globalThis.curve_bn128)) return globalThis.curve_bn128;
     const params = {
         name: "bn128",
         wasm: bn128wasm,
@@ -47,7 +45,7 @@ export default async function buildBn128(singleThread, plugins) {
     };
 
     const curve = await buildEngine(params);
-    curve.terminate = async function() {
+    curve.terminate = async function () {
         if (!params.singleThread) {
             globalThis.curve_bn128 = null;
             await this.tm.terminate();
