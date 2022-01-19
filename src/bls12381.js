@@ -1,7 +1,7 @@
-import {buildBls12381 as buildBls12381wasm} from "wasmcurves";
-import wasmcurves from "wasmcurves";
+import { buildBls12381 as buildBls12381wasm } from "wasmcurves";
 import buildEngine from "./engine.js";
 import * as Scalar from "./scalar.js";
+import { ModuleBuilder } from "wasmbuilder";
 
 globalThis.curve_bls12381 = null;
 
@@ -13,9 +13,9 @@ export default async function buildBls12381(singleThread, plugins) {
 
     if (plugins) plugins(moduleBuilder);
 
-    const bls12381wasm  = {};
+    const bls12381wasm = {};
 
-    bls12381wasm.code= moduleBuilder.build();
+    bls12381wasm.code = moduleBuilder.build();
     bls12381wasm.pq = moduleBuilder.modules.f1m.pq;
     bls12381wasm.pr = moduleBuilder.modules.frm.pq;
     bls12381wasm.pG1gen = moduleBuilder.modules.bls12381.pG1gen;
@@ -33,7 +33,7 @@ export default async function buildBls12381(singleThread, plugins) {
     bls12381wasm.r = moduleBuilder.modules.bn128.r;
 
 
-    if ((!singleThread)&&(globalThis.curve_bls12381)) return globalThis.curve_bls12381;
+    if ((!singleThread) && (globalThis.curve_bls12381)) return globalThis.curve_bls12381;
     const params = {
         name: "bls12381",
         wasm: bls12381wasm,
@@ -47,7 +47,7 @@ export default async function buildBls12381(singleThread, plugins) {
     };
 
     const curve = await buildEngine(params);
-    curve.terminate = async function() {
+    curve.terminate = async function () {
         if (!params.singleThread) {
             globalThis.curve_bls12381 = null;
             await this.tm.terminate();
