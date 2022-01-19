@@ -13,10 +13,8 @@ function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'defau
 
 var bigInt__default = /*#__PURE__*/_interopDefaultLegacy(bigInt);
 var crypto__default = /*#__PURE__*/_interopDefaultLegacy(crypto);
-var wasmcurves__default = /*#__PURE__*/_interopDefaultLegacy(wasmcurves);
 var os__default = /*#__PURE__*/_interopDefaultLegacy(os);
 var Worker__default = /*#__PURE__*/_interopDefaultLegacy(Worker);
-var wasmbuilder__default = /*#__PURE__*/_interopDefaultLegacy(wasmbuilder);
 
 /* global BigInt */
 const hexLen = [ 0, 1, 2, 2, 3, 3, 3, 3, 4 ,4 ,4 ,4 ,4 ,4 ,4 ,4];
@@ -4981,20 +4979,6 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function base64ToArrayBuffer(base64) {
-    if (process.browser) {
-        var binary_string = globalThis.atob(base64);
-        var len = binary_string.length;
-        var bytes = new Uint8Array(len);
-        for (var i = 0; i < len; i++) {
-            bytes[i] = binary_string.charCodeAt(i);
-        }
-        return bytes;
-    } else {
-        return new Uint8Array(Buffer.from(base64, "base64"));
-    }
-}
-
 function stringToBase64(str) {
     if (process.browser) {
         return globalThis.btoa(str);
@@ -5015,7 +4999,7 @@ async function buildThreadManager(wasm, singleThread) {
     tm.u8 = new Uint8Array(tm.memory.buffer);
     tm.u32 = new Uint32Array(tm.memory.buffer);
 
-    const wasmModule = await WebAssembly.compile(base64ToArrayBuffer(wasm.code));
+    const wasmModule = await WebAssembly.compile(wasm.code);
 
     tm.instance = await WebAssembly.instantiate(wasmModule, {
         env: {
@@ -5038,7 +5022,7 @@ async function buildThreadManager(wasm, singleThread) {
 
 
     if (singleThread) {
-        tm.code = base64ToArrayBuffer(wasm.code);
+        tm.code = wasm.code;
         tm.taskManager = thread();
         await tm.taskManager([{
             cmd: "INIT",
@@ -5058,6 +5042,11 @@ async function buildThreadManager(wasm, singleThread) {
         } else {
             concurrency = os__default['default'].cpus().length;
         }
+
+        if(concurrency == 0){
+            concurrency = 2;
+        }
+
         // Limit to 64 threads for memory reasons.
         if (concurrency>64) concurrency=64;
         tm.concurrency = concurrency;
@@ -5073,7 +5062,7 @@ async function buildThreadManager(wasm, singleThread) {
 
         const initPromises = [];
         for (let i=0; i<tm.workers.length;i++) {
-            const copyCode = base64ToArrayBuffer(wasm.code).slice();
+            const copyCode = wasm.code.slice();
             initPromises.push(tm.postAction(i, [{
                 cmd: "INIT",
                 init: MEM_SIZE,
@@ -6414,22 +6403,19 @@ async function buildEngine(params) {
     return curve;
 }
 
-const buildBn128wasm = wasmcurves__default['default'].buildBn128;
-const ModuleBuilder$1 = wasmbuilder__default['default'].ModuleBuilder;
-
 globalThis.curve_bn128 = null;
 
 async function buildBn128(singleThread, plugins) {
 
-    const moduleBuilder = new ModuleBuilder$1();
+    const moduleBuilder = new wasmbuilder.ModuleBuilder();
     moduleBuilder.setMemory(25);
-    buildBn128wasm(moduleBuilder);
+    wasmcurves.buildBn128(moduleBuilder);
 
     if (plugins) plugins(moduleBuilder);
 
-    const bn128wasm  = {};
+    const bn128wasm = {};
 
-    bn128wasm.code= moduleBuilder.build();
+    bn128wasm.code = moduleBuilder.build();
     bn128wasm.pq = moduleBuilder.modules.f1m.pq;
     bn128wasm.pr = moduleBuilder.modules.frm.pq;
     bn128wasm.pG1gen = moduleBuilder.modules.bn128.pG1gen;
@@ -6446,7 +6432,7 @@ async function buildBn128(singleThread, plugins) {
     bn128wasm.q = moduleBuilder.modules.bn128.q;
     bn128wasm.r = moduleBuilder.modules.bn128.r;
 
-    if ((!singleThread)&&(globalThis.curve_bn128)) return globalThis.curve_bn128;
+    if ((!singleThread) && (globalThis.curve_bn128)) return globalThis.curve_bn128;
     const params = {
         name: "bn128",
         wasm: bn128wasm,
@@ -6459,7 +6445,7 @@ async function buildBn128(singleThread, plugins) {
     };
 
     const curve = await buildEngine(params);
-    curve.terminate = async function() {
+    curve.terminate = async function () {
         if (!params.singleThread) {
             globalThis.curve_bn128 = null;
             await this.tm.terminate();
@@ -6477,15 +6463,15 @@ globalThis.curve_bls12381 = null;
 
 async function buildBls12381(singleThread, plugins) {
 
-    const moduleBuilder = new ModuleBuilder();
+    const moduleBuilder = new wasmbuilder.ModuleBuilder();
     moduleBuilder.setMemory(25);
     wasmcurves.buildBls12381(moduleBuilder);
 
     if (plugins) plugins(moduleBuilder);
 
-    const bls12381wasm  = {};
+    const bls12381wasm = {};
 
-    bls12381wasm.code= moduleBuilder.build();
+    bls12381wasm.code = moduleBuilder.build();
     bls12381wasm.pq = moduleBuilder.modules.f1m.pq;
     bls12381wasm.pr = moduleBuilder.modules.frm.pq;
     bls12381wasm.pG1gen = moduleBuilder.modules.bls12381.pG1gen;
@@ -6503,7 +6489,7 @@ async function buildBls12381(singleThread, plugins) {
     bls12381wasm.r = moduleBuilder.modules.bn128.r;
 
 
-    if ((!singleThread)&&(globalThis.curve_bls12381)) return globalThis.curve_bls12381;
+    if ((!singleThread) && (globalThis.curve_bls12381)) return globalThis.curve_bls12381;
     const params = {
         name: "bls12381",
         wasm: bls12381wasm,
@@ -6517,7 +6503,7 @@ async function buildBls12381(singleThread, plugins) {
     };
 
     const curve = await buildEngine(params);
-    curve.terminate = async function() {
+    curve.terminate = async function () {
         if (!params.singleThread) {
             globalThis.curve_bls12381 = null;
             await this.tm.terminate();
