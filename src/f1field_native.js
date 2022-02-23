@@ -3,6 +3,7 @@ import * as Scalar from "./scalar.js";
 import * as futils from "./futils.js";
 import buildSqrt from "./fsqrt.js";
 import {getRandomBytes} from "./random.js";
+import FFFT from "./fft.js";
 
 export default class ZqField {
     constructor(p) {
@@ -43,6 +44,8 @@ export default class ZqField {
         this.nqr_to_t = this.pow(this.nqr, this.t);
 
         buildSqrt(this);
+
+        this.FFT = new FFFT(this, this, this.mul.bind(this));
     }
 
     e(a,b) {
@@ -300,6 +303,14 @@ export default class ZqField {
         } while (v >= this.p);
         v = (v * this.Ri) % this.p;   // Convert from montgomery
         return v;
+    }
+
+    fft(a) {
+        return this.FFT.fft(a);
+    }
+
+    ifft(a) {
+        return this.FFT.ifft(a);
     }
 
 }

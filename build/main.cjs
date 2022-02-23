@@ -750,7 +750,7 @@ class PolField {
             [b, a] = [a, b];
         }
 
-        if ((b.length <= 2) || (b.length < log2$1(a.length))) {
+        if ((b.length <= 2) || (b.length < log2$2(a.length))) {
             return this.mulNormal(a,b);
         } else {
             return this.mulFFT(a,b);
@@ -767,15 +767,15 @@ class PolField {
 
     mulFFT(a,b) {
         const longestN = Math.max(a.length, b.length);
-        const bitsResult = log2$1(longestN-1)+2;
+        const bitsResult = log2$2(longestN-1)+2;
         this._setRoots(bitsResult);
 
         const m = 1 << bitsResult;
         const ea = this.extend(a,m);
         const eb = this.extend(b,m);
 
-        const ta = __fft(this, ea, bitsResult, 0, 1);
-        const tb = __fft(this, eb, bitsResult, 0, 1);
+        const ta = __fft$1(this, ea, bitsResult, 0, 1);
+        const tb = __fft$1(this, eb, bitsResult, 0, 1);
 
         const tres = new Array(m);
 
@@ -783,7 +783,7 @@ class PolField {
             tres[i] = this.F.mul(ta[i], tb[i]);
         }
 
-        const res = __fft(this, tres, bitsResult, 0, 1);
+        const res = __fft$1(this, tres, bitsResult, 0, 1);
 
         const twoinvm = this.F.inv( this.F.mulScalar(this.F.one, m) );
         const resn = new Array(m);
@@ -864,18 +864,18 @@ class PolField {
 
     fft(p) {
         if (p.length <= 1) return p;
-        const bits = log2$1(p.length-1)+1;
+        const bits = log2$2(p.length-1)+1;
         this._setRoots(bits);
 
         const m = 1 << bits;
         const ep = this.extend(p, m);
-        const res = __fft(this, ep, bits, 0, 1);
+        const res = __fft$1(this, ep, bits, 0, 1);
         return res;
     }
 
     fft2(p) {
         if (p.length <= 1) return p;
-        const bits = log2$1(p.length-1)+1;
+        const bits = log2$2(p.length-1)+1;
         this._setRoots(bits);
 
         const m = 1 << bits;
@@ -889,11 +889,11 @@ class PolField {
     ifft(p) {
 
         if (p.length <= 1) return p;
-        const bits = log2$1(p.length-1)+1;
+        const bits = log2$2(p.length-1)+1;
         this._setRoots(bits);
         const m = 1 << bits;
         const ep = this.extend(p, m);
-        const res =  __fft(this, ep, bits, 0, 1);
+        const res =  __fft$1(this, ep, bits, 0, 1);
 
         const twoinvm = this.F.inv( this.F.mulScalar(this.F.one, m) );
         const resn = new Array(m);
@@ -909,7 +909,7 @@ class PolField {
     ifft2(p) {
 
         if (p.length <= 1) return p;
-        const bits = log2$1(p.length-1)+1;
+        const bits = log2$2(p.length-1)+1;
         this._setRoots(bits);
         const m = 1 << bits;
         const ep = this.extend(p, m);
@@ -1038,7 +1038,7 @@ class PolField {
 
     // divides x^m / v
     _div2(m, v) {
-        const kbits = log2$1(v.length-1)+1;
+        const kbits = log2$2(v.length-1)+1;
         const k = 1 << kbits;
 
         const scaleV = k - v.length;
@@ -1058,7 +1058,7 @@ class PolField {
 
     div(_u, _v) {
         if (_u.length < _v.length) return [];
-        const kbits = log2$1(_v.length-1)+1;
+        const kbits = log2$2(_v.length-1)+1;
         const k = 1 << kbits;
 
         const u = this.scaleX(_u, k-_v.length);
@@ -1097,7 +1097,7 @@ class PolField {
 
     // returns the ith nth-root of one
     oneRoot(n, i) {
-        let nbits = log2$1(n-1)+1;
+        let nbits = log2$2(n-1)+1;
         let res = this.F.one;
         let r = i;
 
@@ -1151,17 +1151,17 @@ class PolField {
     }
 
     log2(V) {
-        return log2$1(V);
+        return log2$2(V);
     }
 }
 
-function log2$1( V )
+function log2$2( V )
 {
     return( ( ( V & 0xFFFF0000 ) !== 0 ? ( V &= 0xFFFF0000, 16 ) : 0 ) | ( ( V & 0xFF00FF00 ) !== 0 ? ( V &= 0xFF00FF00, 8 ) : 0 ) | ( ( V & 0xF0F0F0F0 ) !== 0 ? ( V &= 0xF0F0F0F0, 4 ) : 0 ) | ( ( V & 0xCCCCCCCC ) !== 0 ? ( V &= 0xCCCCCCCC, 2 ) : 0 ) | ( ( V & 0xAAAAAAAA ) !== 0 ) );
 }
 
 
-function __fft(PF, pall, bits, offset, step) {
+function __fft$1(PF, pall, bits, offset, step) {
 
     const n = 1 << bits;
     if (n==1) {
@@ -1173,8 +1173,8 @@ function __fft(PF, pall, bits, offset, step) {
     }
 
     const ndiv2 = n >> 1;
-    const p1 = __fft(PF, pall, bits-1, offset, step*2);
-    const p2 = __fft(PF, pall, bits-1, offset+step, step*2);
+    const p1 = __fft$1(PF, pall, bits-1, offset, step*2);
+    const p2 = __fft$1(PF, pall, bits-1, offset+step, step*2);
 
     const out = new Array(n);
 
@@ -1629,6 +1629,159 @@ function getThreadRng() {
     return threadRng;
 }
 
+/*
+    Copyright 2018 0kims association.
+
+    This file is part of snarkjs.
+
+    snarkjs is a free software: you can redistribute it and/or
+    modify it under the terms of the GNU General Public License as published by the
+    Free Software Foundation, either version 3 of the License, or (at your option)
+    any later version.
+
+    snarkjs is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+    more details.
+
+    You should have received a copy of the GNU General Public License along with
+    snarkjs. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+/*
+    This library does operations on polynomials with coefficients in a field F.
+
+    A polynomial P(x) = p0 + p1 * x + p2 * x^2 + ... + pn * x^n  is represented
+    by the array [ p0, p1, p2, ... , pn ].
+ */
+
+class FFT {
+    constructor (G, F, opMulGF) {
+        this.F = F;
+        this.G = G;
+        this.opMulGF = opMulGF;
+
+        let rem = F.sqrt_t;
+        let s = F.sqrt_s;
+
+        let nqr = F.one;
+        while (F.eq(F.pow(nqr, F.half), F.one)) nqr = F.add(nqr, F.one);
+
+        this.w = new Array(s+1);
+        this.wi = new Array(s+1);
+        this.w[s] = this.F.pow(nqr, rem);
+        this.wi[s] = this.F.inv(this.w[s]);
+
+        let n=s-1;
+        while (n>=0) {
+            this.w[n] = this.F.square(this.w[n+1]);
+            this.wi[n] = this.F.square(this.wi[n+1]);
+            n--;
+        }
+
+
+        this.roots = [];
+        /*
+        for (let i=0; i<16; i++) {
+            let r = this.F.one;
+            n = 1 << i;
+            const rootsi = new Array(n);
+            for (let j=0; j<n; j++) {
+                rootsi[j] = r;
+                r = this.F.mul(r, this.w[i]);
+            }
+
+            this.roots.push(rootsi);
+        }
+        */
+        this._setRoots(15);
+    }
+
+    _setRoots(n) {
+        for (let i=n; (i>=0) && (!this.roots[i]); i--) {
+            let r = this.F.one;
+            const nroots = 1 << i;
+            const rootsi = new Array(nroots);
+            for (let j=0; j<nroots; j++) {
+                rootsi[j] = r;
+                r = this.F.mul(r, this.w[i]);
+            }
+
+            this.roots[i] = rootsi;
+        }
+    }
+
+    fft(p) {
+        if (p.length <= 1) return p;
+        const bits = log2$1(p.length-1)+1;
+        this._setRoots(bits);
+
+        const m = 1 << bits;
+        if (p.length != m) {
+            throw new Error("Size must be multiple of 2");
+        }
+        const res = __fft(this, p, bits, 0, 1);
+        return res;
+    }
+
+    ifft(p) {
+
+        if (p.length <= 1) return p;
+        const bits = log2$1(p.length-1)+1;
+        this._setRoots(bits);
+        const m = 1 << bits;
+        if (p.length != m) {
+            throw new Error("Size must be multiple of 2");
+        }
+        const res =  __fft(this, p, bits, 0, 1);
+        const twoinvm = this.F.inv( this.F.mulScalar(this.F.one, m) );
+        const resn = new Array(m);
+        for (let i=0; i<m; i++) {
+            resn[i] = this.opMulGF(res[(m-i)%m], twoinvm);
+        }
+
+        return resn;
+    }
+
+
+}
+
+function log2$1( V )
+{
+    return( ( ( V & 0xFFFF0000 ) !== 0 ? ( V &= 0xFFFF0000, 16 ) : 0 ) | ( ( V & 0xFF00FF00 ) !== 0 ? ( V &= 0xFF00FF00, 8 ) : 0 ) | ( ( V & 0xF0F0F0F0 ) !== 0 ? ( V &= 0xF0F0F0F0, 4 ) : 0 ) | ( ( V & 0xCCCCCCCC ) !== 0 ? ( V &= 0xCCCCCCCC, 2 ) : 0 ) | ( ( V & 0xAAAAAAAA ) !== 0 ) );
+}
+
+
+function __fft(PF, pall, bits, offset, step) {
+
+    const n = 1 << bits;
+    if (n==1) {
+        return [ pall[offset] ];
+    } else if (n==2) {
+        return [
+            PF.G.add(pall[offset], pall[offset + step]),
+            PF.G.sub(pall[offset], pall[offset + step])];
+    }
+
+    const ndiv2 = n >> 1;
+    const p1 = __fft(PF, pall, bits-1, offset, step*2);
+    const p2 = __fft(PF, pall, bits-1, offset+step, step*2);
+
+    const out = new Array(n);
+
+    for (let i=0; i<ndiv2; i++) {
+        out[i] = PF.G.add(p1[i], PF.opMulGF(p2[i], PF.roots[bits][i]));
+        out[i+ndiv2] = PF.G.sub(p1[i], PF.opMulGF(p2[i], PF.roots[bits][i]));
+    }
+
+    return out;
+}
+
+var FFFT = /*#__PURE__*/Object.freeze({
+    __proto__: null,
+    'default': FFT
+});
+
 /* global BigInt */
 
 class ZqField$1 {
@@ -1670,6 +1823,8 @@ class ZqField$1 {
         this.nqr_to_t = this.pow(this.nqr, this.t);
 
         buildSqrt(this);
+
+        this.FFT = new FFT(this, this, this.mul.bind(this));
     }
 
     e(a,b) {
@@ -1929,6 +2084,14 @@ class ZqField$1 {
         return v;
     }
 
+    fft(a) {
+        return this.FFT.fft(a);
+    }
+
+    ifft(a) {
+        return this.FFT.ifft(a);
+    }
+
 }
 
 class ZqField {
@@ -1969,6 +2132,8 @@ class ZqField {
         this.nqr_to_t = this.pow(this.nqr, this.t);
 
         buildSqrt(this);
+
+        this.FFT = new FFFT(this, this, this.mul.bind(this));
     }
 
     e(a,b) {
@@ -2211,6 +2376,13 @@ class ZqField {
         return v;
     }
 
+    fft(a) {
+        return this.FFT.fft(a);
+    }
+
+    ifft(a) {
+        return this.FFT.ifft(a);
+    }
 
 }
 
