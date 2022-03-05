@@ -51,5 +51,9 @@ export default  class F1Field extends _F1Field {
         return this.mul(this.fromRprBE(buff, o), this.Ri);
     }
 
+    toObject(a) {
+        return a;
+    }
+
 }
 

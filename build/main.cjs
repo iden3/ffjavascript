@@ -1825,6 +1825,7 @@ class ZqField$1 {
         buildSqrt(this);
 
         this.FFT = new FFT(this, this, this.mul.bind(this));
+        this.shift = this.square(this.nqr);
     }
 
     e(a,b) {
@@ -2057,8 +2058,9 @@ class ZqField$1 {
     }
 
     toString(a, base) {
+        base = base || 10;
         let vs;
-        if (a > this.half) {
+        if ((a > this.half)&&(base == 10)) {
             const v = this.p-a;
             vs = "-"+v.toString(base);
         } else {
@@ -2134,6 +2136,8 @@ class ZqField {
         buildSqrt(this);
 
         this.FFT = new FFFT(this, this, this.mul.bind(this));
+
+        this.shift = this.square(this.nqr);
     }
 
     e(a,b) {
@@ -2348,8 +2352,9 @@ class ZqField {
     }
 
     toString(a, base) {
+        base = base || 10;
         let vs;
-        if (!a.lesserOrEquals(this.p.shiftRight(bigInt__default["default"](1)))) {
+        if ((!a.lesserOrEquals(this.p.shiftRight(bigInt__default["default"](1))))&&(base==10)) {
             const v = this.p.minus(a);
             vs = "-"+v.toString(base);
         } else {
@@ -2432,6 +2437,10 @@ class F1Field extends _F1Field {
 
     fromRprBEM(buff, o) {
         return this.mul(this.fromRprBE(buff, o), this.Ri);
+    }
+
+    toObject(a) {
+        return a;
     }
 
 }
@@ -2665,6 +2674,10 @@ class F2Field {
         const c1 = this.F.fromRprBEM(buff, o);
         const c0 = this.F.fromRprBEM(buff, o+this.F.n8);
         return [c0, c1];
+    }
+
+    toObject(a) {
+        return a;
     }
 
 }
@@ -2947,6 +2960,9 @@ class F3Field {
         return [c0, c1, c2];
     }
 
+    toObject(a) {
+        return a;
+    }
 }
 
 /*

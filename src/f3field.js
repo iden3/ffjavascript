@@ -278,4 +278,7 @@ export default class F3Field {
         return [c0, c1, c2];
     }
 
+    toObject(a) {
+        return a;
+    }
 }

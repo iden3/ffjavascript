@@ -46,6 +46,7 @@ export default class ZqField {
         buildSqrt(this);
 
         this.FFT = new FFFT(this, this, this.mul.bind(this));
+        this.shift = this.square(this.nqr);
     }
 
     e(a,b) {
@@ -278,8 +279,9 @@ export default class ZqField {
     }
 
     toString(a, base) {
+        base = base || 10;
         let vs;
-        if (a > this.half) {
+        if ((a > this.half)&&(base == 10)) {
             const v = this.p-a;
             vs = "-"+v.toString(base);
         } else {

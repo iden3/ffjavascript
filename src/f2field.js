@@ -232,5 +232,9 @@ export default class F2Field {
         return [c0, c1];
     }
 
+    toObject(a) {
+        return a;
+    }
+
 }
 
