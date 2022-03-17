@@ -29,8 +29,8 @@ export default async function buildBls12381(singleThread, plugins) {
     bls12381wasm.preQSize = moduleBuilder.modules.bls12381.preQSize;
     bls12381wasm.n8q = 48;
     bls12381wasm.n8r = 32;
-    bls12381wasm.q = moduleBuilder.modules.bn128.q;
-    bls12381wasm.r = moduleBuilder.modules.bn128.r;
+    bls12381wasm.q = moduleBuilder.modules.bls12381.q;
+    bls12381wasm.r = moduleBuilder.modules.bls12381.r;
 
 
     if ((!singleThread) && (globalThis.curve_bls12381)) return globalThis.curve_bls12381;
