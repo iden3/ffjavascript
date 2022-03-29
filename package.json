@@ -9,9 +9,11 @@
     "import": "./main.js",
     "require": "./build/main.cjs"
   },
+  "browser": "./build/main.ses.cjs",
   "scripts": {
     "test": "mocha",
-    "build": "rollup -c rollup.cjs.config.js"
+    "build": "rollup -c rollup.cjs.config.js",
+    "buildses": "SES=true rollup -c rollup.ses.config.js"
   },
   "repository": {
     "type": "git",
