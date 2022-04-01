@@ -1661,8 +1661,8 @@ class FFT {
         this.G = G;
         this.opMulGF = opMulGF;
 
-        let rem = F.sqrt_t;
-        let s = F.sqrt_s;
+        let rem = F.sqrt_t || F.t;
+        let s = F.sqrt_s || F.s;
 
         let nqr = F.one;
         while (F.eq(F.pow(nqr, F.half), F.one)) nqr = F.add(nqr, F.one);
@@ -1694,7 +1694,7 @@ class FFT {
             this.roots.push(rootsi);
         }
         */
-        this._setRoots(15);
+        this._setRoots(Math.min(s, 15));
     }
 
     _setRoots(n) {

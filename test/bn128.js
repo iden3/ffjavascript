@@ -16,6 +16,7 @@ describe("bn128", async function () {
     let bn128;
     before( async() => {
         bn128 = await buildBn128();
+        console.log(bn128.Fr.toString(bn128.Fr.w[28]));
     });
     after( async() => {
         bn128.terminate();
