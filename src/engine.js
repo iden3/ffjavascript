@@ -16,8 +16,8 @@ export default async function buildEngine(params) {
 
     const curve = {};
 
-    curve.q = Scalar.e(params.wasm.q);
-    curve.r = Scalar.e(params.wasm.r);
+    curve.q = Scalar.e(params.wasm.q.toString());
+    curve.r = Scalar.e(params.wasm.r.toString());
     curve.name = params.name;
     curve.tm = tm;
     curve.prePSize = params.wasm.prePSize;

@@ -27,7 +27,7 @@ export async function getCurveFromQ(q, singleThread, plugins) {
     } else if (Scalar.eq(q, bls12381q)) {
         curve = await buildBls12381(singleThread, plugins);
     } else {
-        throw new Error(`Curve not supported: ${Scalar.toString(q)}`);
+        throw new Error(`Curve not supported: ${Scalar.toString(q, 16)}`);
     }
     return curve;
 }

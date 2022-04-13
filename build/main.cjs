@@ -6540,8 +6540,8 @@ async function buildEngine(params) {
 
     const curve = {};
 
-    curve.q = e(params.wasm.q);
-    curve.r = e(params.wasm.r);
+    curve.q = e(params.wasm.q.toString());
+    curve.r = e(params.wasm.r.toString());
     curve.name = params.name;
     curve.tm = tm;
     curve.prePSize = params.wasm.prePSize;
@@ -6673,8 +6673,8 @@ async function buildBls12381(singleThread, plugins) {
     bls12381wasm.preQSize = moduleBuilder.modules.bls12381.preQSize;
     bls12381wasm.n8q = 48;
     bls12381wasm.n8r = 32;
-    bls12381wasm.q = moduleBuilder.modules.bn128.q;
-    bls12381wasm.r = moduleBuilder.modules.bn128.r;
+    bls12381wasm.q = moduleBuilder.modules.bls12381.q;
+    bls12381wasm.r = moduleBuilder.modules.bls12381.r;
 
 
     if ((!singleThread) && (globalThis.curve_bls12381)) return globalThis.curve_bls12381;
@@ -6730,7 +6730,7 @@ async function getCurveFromQ(q, singleThread, plugins) {
     } else if (eq(q, bls12381q)) {
         curve = await buildBls12381(singleThread, plugins);
     } else {
-        throw new Error(`Curve not supported: ${toString(q)}`);
+        throw new Error(`Curve not supported: ${toString(q, 16)}`);
     }
     return curve;
 }
