@@ -75,7 +75,7 @@ export function exp(F, base, e) {
 
     const n = Scalar.bits(e);
 
-    if (n.legth==0) return F.one;
+    if (n.length==0) return F.one;
 
     let res = base;
 
