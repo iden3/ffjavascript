@@ -44,7 +44,13 @@ export default class ZqField {
 
         this.FFT = new FFFT(this, this, this.mul.bind(this));
 
+        this.fft = this.FFT.fft.bind(this.FFT);
+        this.ifft = this.FFT.ifft.bind(this.FFT);
+        this.w = this.FFT.w;
+        this.wi = this.FFT.wi; 
+    
         this.shift = this.square(this.nqr);
+        this.k = this.exp(this.nqr, 2**this.s);
     }
 
     e(a,b) {
