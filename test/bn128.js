@@ -4,7 +4,7 @@ import {log2} from "../src/utils.js";
 import BigBuffer from "../src/bigbuffer.js";
 
 describe("bn128", async function () {
-    this.timeout(10000000);
+    this.timeout(0);
 
     const logger = {
         error: (msg) => { console.log("ERROR: "+msg); },

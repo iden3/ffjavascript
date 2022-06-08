@@ -35,14 +35,14 @@ describe("Sqrt testing", () => {
         bn128.terminate();
     });
 
-/*
+    /*
     it("Should compute sqrts", () => {
         const F = new F1Field(bn128.r);
         const a = F.e(2);
         const b = F.sqrt_v(a);
         console.log(F.toString(b));
     });
-*/
+    */
     it("Should compute basic sqrts", () => {
         const F = new F1Field(bn128.r);
         assert(F.eq(F.e(0), F.sqrt(F.e("0"))));

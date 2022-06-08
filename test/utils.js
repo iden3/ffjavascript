@@ -7,7 +7,7 @@ import * as utilsN from "../src/utils_native.js";
 import * as utilsB from "../src/utils_bigint.js";
 
 describe("Utils native", () => {
-    const num = ScalarN.e(21888242871839275222246405745257275088614511777268538073601725287587578984328);
+    const num = ScalarN.e("21888242871839275222246405745257275088614511777268538073601725287587578984328");
 
     it("Should convert integer to buffer little-endian", () => {
         const buff = utilsN.leInt2Buff(num, 32);
@@ -32,7 +32,7 @@ describe("Utils native", () => {
 });
 
 describe("Utils bigInt", () => {
-    const num = ScalarB.e(21888242871839275222246405745257275088614511777268538073601725287587578984328);
+    const num = ScalarB.e("21888242871839275222246405745257275088614511777268538073601725287587578984328");
 
     it("Should convert integer to buffer little-endian", () => {
         const buff = utilsB.leInt2Buff(num, 32);

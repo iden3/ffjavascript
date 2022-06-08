@@ -26,7 +26,9 @@ import F1Field from "../src/f1field.js";
 const assert = chai.assert;
 
 
-describe("F1 testing", () => {
+describe("F1 testing", function() {
+    this.timeout(0);
+
     let bn128;
     before( async() => {
         bn128 = await buildBn128();
@@ -72,7 +74,9 @@ describe("F1 testing", () => {
     });
 });
 
-describe("Curve G1 Test", () => {
+describe("Curve G1 Test", function() {
+    this.timeout(0);
+
     let bn128;
     before( async() => {
         bn128 = await buildBn128();
@@ -103,7 +107,9 @@ describe("Curve G1 Test", () => {
     });
 });
 
-describe("Curve G2 Test", () => {
+describe("Curve G2 Test", function() {
+    this.timeout(0);
+
     let bn128;
     before( async() => {
         bn128 = await buildBn128();
@@ -138,7 +144,9 @@ describe("Curve G2 Test", () => {
     });
 });
 
-describe("F6 testing", () => {
+describe("F6 testing", function() {
+    this.timeout(0);
+
     let bn128;
     before( async() => {
         bn128 = await buildBn128();
@@ -166,7 +174,9 @@ describe("F6 testing", () => {
     });
 });
 
-describe("F12 testing", () => {
+describe("F12 testing", function() {
+    this.timeout(0);
+
     let bn128;
     before( async() => {
         bn128 = await buildBn128();
@@ -207,7 +217,9 @@ describe("F12 testing", () => {
     });
 });
 
-describe("Pairing", () => {
+describe("Pairing", function() {
+    this.timeout(0);
+
     let bn128;
     before( async() => {
         bn128 = await buildBn128();
@@ -241,7 +253,7 @@ describe("Pairing", () => {
 
             assert(bn128.F12.eq(res, bn128.F12.one));
         }
-    }).timeout(10000);
+    })
     */
     it("Should generate another pairing pairing", () => {
         for (let i=0; i<1; i++) {
@@ -283,10 +295,12 @@ describe("Pairing", () => {
             assert(bn128.F12.eq(res, bn128.F12.one));
             */
         }
-    }).timeout(10000);
+    });
 });
 
-describe("Compressed Form", () => {
+describe("Compressed Form", function() {
+    this.timeout(0);
+
     let bn128;
     before( async() => {
         bn128 = await buildBn128();
@@ -321,5 +335,5 @@ describe("Compressed Form", () => {
         */
 
         assert(bn128.G2.eq(P1,P2));
-    }).timeout(10000);
+    });
 });
