@@ -24,7 +24,11 @@ const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
 
 import thread from "./threadman_thread.js";
 import os from "os";
+
+/*#if _SES
+//#else */
 import Worker from "web-worker";
+//#endif
 
 class Deferred {
     constructor() {
@@ -40,7 +44,7 @@ function sleep(ms) {
 }
 
 function stringToBase64(str) {
-    if (process.browser) {
+    if (process.browser && typeof globalThis.btoa === "function") {
         return globalThis.btoa(str);
     } else {
         return Buffer.from(str).toString("base64");
@@ -81,7 +85,10 @@ export default async function buildThreadManager(wasm, singleThread) {
     //    tm.pTmp1 = tm.alloc(curve.G2.F.n8*3);
 
 
+/*#if _SES
+//#else */
     if (singleThread) {
+//#endif
         tm.code = wasm.code;
         tm.taskManager = thread();
         await tm.taskManager([{
@@ -90,6 +97,8 @@ export default async function buildThreadManager(wasm, singleThread) {
             code: tm.code.slice()
         }]);
         tm.concurrency  = 1;
+/*#if _SES
+//#else */
     } else {
         tm.workers = [];
         tm.pendingDeferreds = [];
@@ -133,6 +142,8 @@ export default async function buildThreadManager(wasm, singleThread) {
         await Promise.all(initPromises);
 
     }
+//#endif
+
     return tm;
 
     function getOnMsg(i) {
