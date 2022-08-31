@@ -2,7 +2,6 @@
 
 Object.defineProperty(exports, '__esModule', { value: true });
 
-var bigInt = require('big-integer');
 var crypto = require('crypto');
 var wasmcurves = require('wasmcurves');
 var os = require('os');
@@ -11,7 +10,6 @@ var wasmbuilder = require('wasmbuilder');
 
 function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
 
-var bigInt__default = /*#__PURE__*/_interopDefaultLegacy(bigInt);
 var crypto__default = /*#__PURE__*/_interopDefaultLegacy(crypto);
 var os__default = /*#__PURE__*/_interopDefaultLegacy(os);
 var Worker__default = /*#__PURE__*/_interopDefaultLegacy(Worker);
@@ -19,7 +17,7 @@ var Worker__default = /*#__PURE__*/_interopDefaultLegacy(Worker);
 /* global BigInt */
 const hexLen = [ 0, 1, 2, 2, 3, 3, 3, 3, 4 ,4 ,4 ,4 ,4 ,4 ,4 ,4];
 
-function fromString$2(s, radix) {
+function fromString(s, radix) {
     if ((!radix)||(radix==10)) {
         return BigInt(s);
     } else if (radix==16) {
@@ -31,9 +29,9 @@ function fromString$2(s, radix) {
     }
 }
 
-const e$2 = fromString$2;
+const e = fromString;
 
-function fromArray$2(a, radix) {
+function fromArray(a, radix) {
     let acc =BigInt(0);
     radix = BigInt(radix);
     for (let i=0; i<a.length; i++) {
@@ -42,36 +40,36 @@ function fromArray$2(a, radix) {
     return acc;
 }
 
-function bitLength$2(a) {
+function bitLength(a) {
     const aS =a.toString(16);
     return (aS.length-1)*4 +hexLen[parseInt(aS[0], 16)];
 }
 
-function isNegative$2(a) {
+function isNegative(a) {
     return BigInt(a) < BigInt(0);
 }
 
-function isZero$2(a) {
+function isZero(a) {
     return !a;
 }
 
-function shiftLeft$2(a, n) {
+function shiftLeft(a, n) {
     return BigInt(a) << BigInt(n);
 }
 
-function shiftRight$2(a, n) {
+function shiftRight(a, n) {
     return BigInt(a) >> BigInt(n);
 }
 
-const shl$2 = shiftLeft$2;
-const shr$2 = shiftRight$2;
+const shl = shiftLeft;
+const shr = shiftRight;
 
-function isOdd$2(a) {
+function isOdd(a) {
     return (BigInt(a) & BigInt(1)) == BigInt(1);
 }
 
 
-function naf$2(n) {
+function naf(n) {
     let E = BigInt(n);
     const res = [];
     while (E) {
@@ -88,7 +86,7 @@ function naf$2(n) {
 }
 
 
-function bits$2(n) {
+function bits(n) {
     let E = BigInt(n);
     const res = [];
     while (E) {
@@ -102,14 +100,14 @@ function bits$2(n) {
     return res;
 }
 
-function toNumber$2(s) {
+function toNumber(s) {
     if (s>BigInt(Number.MAX_SAFE_INTEGER )) {
         throw new Error("Number too big");
     }
     return Number(s);
 }
 
-function toArray$2(s, radix) {
+function toArray(s, radix) {
     const res = [];
     let rem = BigInt(s);
     radix = BigInt(radix);
@@ -121,392 +119,125 @@ function toArray$2(s, radix) {
 }
 
 
-function add$2(a, b) {
+function add(a, b) {
     return BigInt(a) + BigInt(b);
 }
 
-function sub$2(a, b) {
+function sub(a, b) {
     return BigInt(a) - BigInt(b);
 }
 
-function neg$2(a) {
+function neg(a) {
     return -BigInt(a);
 }
 
-function mul$2(a, b) {
+function mul(a, b) {
     return BigInt(a) * BigInt(b);
 }
 
-function square$2(a) {
+function square(a) {
     return BigInt(a) * BigInt(a);
 }
 
-function pow$2(a, b) {
+function pow(a, b) {
     return BigInt(a) ** BigInt(b);
 }
 
-function exp$3(a, b) {
+function exp$1(a, b) {
     return BigInt(a) ** BigInt(b);
 }
 
-function abs$2(a) {
+function abs(a) {
     return BigInt(a) >= 0 ? BigInt(a) : -BigInt(a);
 }
 
-function div$2(a, b) {
+function div(a, b) {
     return BigInt(a) / BigInt(b);
 }
 
-function mod$2(a, b) {
+function mod(a, b) {
     return BigInt(a) % BigInt(b);
 }
 
-function eq$2(a, b) {
+function eq(a, b) {
     return BigInt(a) == BigInt(b);
 }
 
-function neq$2(a, b) {
+function neq(a, b) {
     return BigInt(a) != BigInt(b);
 }
 
-function lt$2(a, b) {
+function lt(a, b) {
     return BigInt(a) < BigInt(b);
 }
 
-function gt$2(a, b) {
+function gt(a, b) {
     return BigInt(a) > BigInt(b);
 }
 
-function leq$2(a, b) {
+function leq(a, b) {
     return BigInt(a) <= BigInt(b);
 }
 
-function geq$2(a, b) {
+function geq(a, b) {
     return BigInt(a) >= BigInt(b);
 }
 
-function band$2(a, b) {
+function band(a, b) {
     return BigInt(a) & BigInt(b);
 }
 
-function bor$2(a, b) {
+function bor(a, b) {
     return BigInt(a) | BigInt(b);
 }
 
-function bxor$2(a, b) {
+function bxor(a, b) {
     return BigInt(a) ^ BigInt(b);
 }
 
-function land$2(a, b) {
+function land(a, b) {
     return BigInt(a) && BigInt(b);
 }
 
-function lor$2(a, b) {
+function lor(a, b) {
     return BigInt(a) || BigInt(b);
 }
 
-function lnot$2(a) {
+function lnot(a) {
     return !BigInt(a);
 }
 
-var Scalar_native = /*#__PURE__*/Object.freeze({
-    __proto__: null,
-    fromString: fromString$2,
-    e: e$2,
-    fromArray: fromArray$2,
-    bitLength: bitLength$2,
-    isNegative: isNegative$2,
-    isZero: isZero$2,
-    shiftLeft: shiftLeft$2,
-    shiftRight: shiftRight$2,
-    shl: shl$2,
-    shr: shr$2,
-    isOdd: isOdd$2,
-    naf: naf$2,
-    bits: bits$2,
-    toNumber: toNumber$2,
-    toArray: toArray$2,
-    add: add$2,
-    sub: sub$2,
-    neg: neg$2,
-    mul: mul$2,
-    square: square$2,
-    pow: pow$2,
-    exp: exp$3,
-    abs: abs$2,
-    div: div$2,
-    mod: mod$2,
-    eq: eq$2,
-    neq: neq$2,
-    lt: lt$2,
-    gt: gt$2,
-    leq: leq$2,
-    geq: geq$2,
-    band: band$2,
-    bor: bor$2,
-    bxor: bxor$2,
-    land: land$2,
-    lor: lor$2,
-    lnot: lnot$2
-});
-
-function fromString$1(s, radix) {
-    if (typeof s == "string") {
-        if (s.slice(0,2) == "0x") {
-            return bigInt__default["default"](s.slice(2), 16);
-        } else {
-            return bigInt__default["default"](s,radix);
-        }
-    } else {
-        return bigInt__default["default"](s, radix);
-    }
-}
-
-const e$1 = fromString$1;
-
-function fromArray$1(a, radix) {
-    return bigInt__default["default"].fromArray(a, radix);
-}
-
-function bitLength$1(a) {
-    return bigInt__default["default"](a).bitLength();
-}
-
-function isNegative$1(a) {
-    return bigInt__default["default"](a).isNegative();
-}
-
-function isZero$1(a) {
-    return bigInt__default["default"](a).isZero();
-}
-
-function shiftLeft$1(a, n) {
-    return bigInt__default["default"](a).shiftLeft(n);
-}
-
-function shiftRight$1(a, n) {
-    return bigInt__default["default"](a).shiftRight(n);
-}
-
-const shl$1 = shiftLeft$1;
-const shr$1 = shiftRight$1;
-
-function isOdd$1(a) {
-    return bigInt__default["default"](a).isOdd();
-}
-
-
-function naf$1(n) {
-    let E = bigInt__default["default"](n);
-    const res = [];
-    while (E.gt(bigInt__default["default"].zero)) {
-        if (E.isOdd()) {
-            const z = 2 - E.mod(4).toJSNumber();
-            res.push( z );
-            E = E.minus(z);
-        } else {
-            res.push( 0 );
-        }
-        E = E.shiftRight(1);
-    }
-    return res;
-}
-
-function bits$1(n) {
-    let E = bigInt__default["default"](n);
-    const res = [];
-    while (E.gt(bigInt__default["default"].zero)) {
-        if (E.isOdd()) {
-            res.push(1);
-        } else {
-            res.push( 0 );
-        }
-        E = E.shiftRight(1);
-    }
-    return res;
-}
-
-function toNumber$1(s) {
-    if (!s.lt(bigInt__default["default"]("9007199254740992", 10))) {
-        throw new Error("Number too big");
-    }
-    return s.toJSNumber();
-}
-
-function toArray$1(s, radix) {
-    return bigInt__default["default"](s).toArray(radix);
-}
-
-function add$1(a, b) {
-    return bigInt__default["default"](a).add(bigInt__default["default"](b));
-}
-
-function sub$1(a, b) {
-    return bigInt__default["default"](a).minus(bigInt__default["default"](b));
-}
-
-function neg$1(a) {
-    return bigInt__default["default"].zero.minus(bigInt__default["default"](a));
-}
-
-function mul$1(a, b) {
-    return bigInt__default["default"](a).times(bigInt__default["default"](b));
-}
-
-function square$1(a) {
-    return bigInt__default["default"](a).square();
-}
-
-function pow$1(a, b) {
-    return bigInt__default["default"](a).pow(bigInt__default["default"](b));
-}
-
-function exp$2(a, b) {
-    return bigInt__default["default"](a).pow(bigInt__default["default"](b));
-}
-
-function abs$1(a) {
-    return bigInt__default["default"](a).abs();
-}
-
-function div$1(a, b) {
-    return bigInt__default["default"](a).divide(bigInt__default["default"](b));
-}
-
-function mod$1(a, b) {
-    return bigInt__default["default"](a).mod(bigInt__default["default"](b));
-}
-
-function eq$1(a, b) {
-    return bigInt__default["default"](a).eq(bigInt__default["default"](b));
-}
-
-function neq$1(a, b) {
-    return bigInt__default["default"](a).neq(bigInt__default["default"](b));
-}
-
-function lt$1(a, b) {
-    return bigInt__default["default"](a).lt(bigInt__default["default"](b));
-}
-
-function gt$1(a, b) {
-    return bigInt__default["default"](a).gt(bigInt__default["default"](b));
-}
-
-function leq$1(a, b) {
-    return bigInt__default["default"](a).leq(bigInt__default["default"](b));
-}
-
-function geq$1(a, b) {
-    return bigInt__default["default"](a).geq(bigInt__default["default"](b));
-}
-
-function band$1(a, b) {
-    return bigInt__default["default"](a).and(bigInt__default["default"](b));
-}
-
-function bor$1(a, b) {
-    return bigInt__default["default"](a).or(bigInt__default["default"](b));
-}
-
-function bxor$1(a, b) {
-    return bigInt__default["default"](a).xor(bigInt__default["default"](b));
-}
-
-function land$1(a, b) {
-    return (!bigInt__default["default"](a).isZero()) && (!bigInt__default["default"](b).isZero());
-}
-
-function lor$1(a, b) {
-    return (!bigInt__default["default"](a).isZero()) || (!bigInt__default["default"](b).isZero());
-}
-
-function lnot$1(a) {
-    return bigInt__default["default"](a).isZero();
-}
-
-var Scalar_bigint = /*#__PURE__*/Object.freeze({
-    __proto__: null,
-    fromString: fromString$1,
-    e: e$1,
-    fromArray: fromArray$1,
-    bitLength: bitLength$1,
-    isNegative: isNegative$1,
-    isZero: isZero$1,
-    shiftLeft: shiftLeft$1,
-    shiftRight: shiftRight$1,
-    shl: shl$1,
-    shr: shr$1,
-    isOdd: isOdd$1,
-    naf: naf$1,
-    bits: bits$1,
-    toNumber: toNumber$1,
-    toArray: toArray$1,
-    add: add$1,
-    sub: sub$1,
-    neg: neg$1,
-    mul: mul$1,
-    square: square$1,
-    pow: pow$1,
-    exp: exp$2,
-    abs: abs$1,
-    div: div$1,
-    mod: mod$1,
-    eq: eq$1,
-    neq: neq$1,
-    lt: lt$1,
-    gt: gt$1,
-    leq: leq$1,
-    geq: geq$1,
-    band: band$1,
-    bor: bor$1,
-    bxor: bxor$1,
-    land: land$1,
-    lor: lor$1,
-    lnot: lnot$1
-});
-
-const supportsNativeBigInt$2 = typeof BigInt === "function";
-
-let Scalar$1 = {};
-if (supportsNativeBigInt$2) {
-    Object.assign(Scalar$1, Scalar_native);
-} else {
-    Object.assign(Scalar$1, Scalar_bigint);
-}
-
-
 // Returns a buffer with Little Endian Representation
-Scalar$1.toRprLE = function rprBE(buff, o, e, n8) {
+function toRprLE(buff, o, e, n8) {
     const s = "0000000" + e.toString(16);
     const v = new Uint32Array(buff.buffer, o, n8/4);
     const l = (((s.length-7)*4 - 1) >> 5)+1;    // Number of 32bit words;
     for (let i=0; i<l; i++) v[i] = parseInt(s.substring(s.length-8*i-8, s.length-8*i), 16);
     for (let i=l; i<v.length; i++) v[i] = 0;
-    for (let i=v.length*4; i<n8; i++) buff[i] = Scalar$1.toNumber(Scalar$1.band(Scalar$1.shiftRight(e, i*8), 0xFF));
-};
+    for (let i=v.length*4; i<n8; i++) buff[i] = toNumber(band(shiftRight(e, i*8), 0xFF));
+}
 
 // Returns a buffer with Big Endian Representation
-Scalar$1.toRprBE = function rprLEM(buff, o, e, n8) {
+function toRprBE(buff, o, e, n8) {
     const s = "0000000" + e.toString(16);
     const v = new DataView(buff.buffer, buff.byteOffset + o, n8);
     const l = (((s.length-7)*4 - 1) >> 5)+1;    // Number of 32bit words;
     for (let i=0; i<l; i++) v.setUint32(n8-i*4 -4, parseInt(s.substring(s.length-8*i-8, s.length-8*i), 16), false);
     for (let i=0; i<n8/4-l; i++) v[i] = 0;
-};
+}
 
 // Pases a buffer with Little Endian Representation
-Scalar$1.fromRprLE = function rprLEM(buff, o, n8) {
+function fromRprLE(buff, o, n8) {
     n8 = n8 || buff.byteLength;
     o = o || 0;
     const v = new Uint32Array(buff.buffer, o, n8/4);
     const a = new Array(n8/4);
     v.forEach( (ch,i) => a[a.length-i-1] = ch.toString(16).padStart(8,"0") );
-    return Scalar$1.fromString(a.join(""), 16);
-};
+    return fromString(a.join(""), 16);
+}
 
 // Pases a buffer with Big Endian Representation
-Scalar$1.fromRprBE = function rprLEM(buff, o, n8) {
+function fromRprBE(buff, o, n8) {
     n8 = n8 || buff.byteLength;
     o = o || 0;
     const v = new DataView(buff.buffer, buff.byteOffset + o, n8);
@@ -514,81 +245,24 @@ Scalar$1.fromRprBE = function rprLEM(buff, o, n8) {
     for (let i=0; i<n8/4; i++) {
         a[i] = v.getUint32(i*4, false).toString(16).padStart(8, "0");
     }
-    return Scalar$1.fromString(a.join(""), 16);
-};
+    return fromString(a.join(""), 16);
+}
 
-Scalar$1.toString = function toString(a, radix) {
+function toString(a, radix) {
     return a.toString(radix);
-};
+}
 
-Scalar$1.toLEBuff = function toLEBuff(a) {
-    const buff = new Uint8Array(Math.floor((Scalar$1.bitLength(a) - 1) / 8) +1);
-    Scalar$1.toRprLE(buff, 0, a, buff.byteLength);
+function toLEBuff(a) {
+    const buff = new Uint8Array(Math.floor((bitLength(a) - 1) / 8) +1);
+    toRprLE(buff, 0, a, buff.byteLength);
     return buff;
-};
+}
 
-
-Scalar$1.zero = Scalar$1.e(0);
-Scalar$1.one = Scalar$1.e(1);
-
-let {
-    toRprLE,
-    toRprBE,
-    fromRprLE,
-    fromRprBE,
-    toString,
-    toLEBuff,
-    zero,
-    one,
-    fromString,
-    e,
-    fromArray,
-    bitLength,
-    isNegative,
-    isZero,
-    shiftLeft,
-    shiftRight,
-    shl,
-    shr,
-    isOdd,
-    naf,
-    bits,
-    toNumber,
-    toArray,
-    add,
-    sub,
-    neg,
-    mul,
-    square,
-    pow,
-    exp: exp$1,
-    abs,
-    div,
-    mod,
-    eq,
-    neq,
-    lt,
-    gt,
-    leq,
-    geq,
-    band,
-    bor,
-    bxor,
-    land,
-    lor,
-    lnot,
-} = Scalar$1;
+const zero = e(0);
+const one = e(1);
 
 var _Scalar = /*#__PURE__*/Object.freeze({
     __proto__: null,
-    toRprLE: toRprLE,
-    toRprBE: toRprBE,
-    fromRprLE: fromRprLE,
-    fromRprBE: fromRprBE,
-    toString: toString,
-    toLEBuff: toLEBuff,
-    zero: zero,
-    one: one,
     fromString: fromString,
     e: e,
     fromArray: fromArray,
@@ -625,7 +299,15 @@ var _Scalar = /*#__PURE__*/Object.freeze({
     bxor: bxor,
     land: land,
     lor: lor,
-    lnot: lnot
+    lnot: lnot,
+    toRprLE: toRprLE,
+    toRprBE: toRprBE,
+    fromRprLE: fromRprLE,
+    fromRprBE: fromRprBE,
+    toString: toString,
+    toLEBuff: toLEBuff,
+    zero: zero,
+    one: one
 });
 
 /*
@@ -1777,14 +1459,9 @@ function __fft(PF, pall, bits, offset, step) {
     return out;
 }
 
-var FFFT = /*#__PURE__*/Object.freeze({
-    __proto__: null,
-    'default': FFT
-});
-
 /* global BigInt */
 
-class ZqField$1 {
+class ZqField {
     constructor(p) {
         this.type="F1";
         this.one = BigInt(1);
@@ -2101,319 +1778,6 @@ class ZqField$1 {
         return this.FFT.ifft(a);
     }
 
-}
-
-class ZqField {
-    constructor(p) {
-        this.type="F1";
-        this.one = bigInt__default["default"].one;
-        this.zero = bigInt__default["default"].zero;
-        this.p = bigInt__default["default"](p);
-        this.m = 1;
-        this.negone = this.p.minus(bigInt__default["default"].one);
-        this.two = bigInt__default["default"](2);
-        this.half = this.p.shiftRight(1);
-        this.bitLength = this.p.bitLength();
-        this.mask = bigInt__default["default"].one.shiftLeft(this.bitLength).minus(bigInt__default["default"].one);
-
-        this.n64 = Math.floor((this.bitLength - 1) / 64)+1;
-        this.n32 = this.n64*2;
-        this.n8 = this.n64*8;
-        this.R = bigInt__default["default"].one.shiftLeft(this.n64*64);
-        this.Ri = this.inv(this.R);
-
-        const e = this.negone.shiftRight(this.one);
-        this.nqr = this.two;
-        let r = this.pow(this.nqr, e);
-        while (!r.equals(this.negone)) {
-            this.nqr = this.nqr.add(this.one);
-            r = this.pow(this.nqr, e);
-        }
-
-        this.s = this.zero;
-        this.t = this.negone;
-
-        while (!this.t.isOdd()) {
-            this.s = this.s.add(this.one);
-            this.t = this.t.shiftRight(this.one);
-        }
-
-        this.nqr_to_t = this.pow(this.nqr, this.t);
-
-        buildSqrt(this);
-
-        this.FFT = new FFFT(this, this, this.mul.bind(this));
-
-        this.fft = this.FFT.fft.bind(this.FFT);
-        this.ifft = this.FFT.ifft.bind(this.FFT);
-        this.w = this.FFT.w;
-        this.wi = this.FFT.wi; 
-    
-        this.shift = this.square(this.nqr);
-        this.k = this.exp(this.nqr, 2**this.s);
-    }
-
-    e(a,b) {
-
-        const res = bigInt__default["default"](a,b);
-
-        return this.normalize(res);
-
-    }
-
-    add(a, b) {
-        let res = a.add(b);
-        if (res.geq(this.p)) {
-            res = res.minus(this.p);
-        }
-        return res;
-    }
-
-    sub(a, b) {
-        if (a.geq(b)) {
-            return a.minus(b);
-        } else {
-            return this.p.minus(b.minus(a));
-        }
-    }
-
-    neg(a) {
-        if (a.isZero()) return a;
-        return this.p.minus(a);
-    }
-
-    mul(a, b) {
-        return a.times(b).mod(this.p);
-    }
-
-    mulScalar(base, s) {
-        return base.times(bigInt__default["default"](s)).mod(this.p);
-    }
-
-    square(a) {
-        return a.square().mod(this.p);
-    }
-
-    eq(a, b) {
-        return a.eq(b);
-    }
-
-    neq(a, b) {
-        return a.neq(b);
-    }
-
-    lt(a, b) {
-        const aa = a.gt(this.half) ? a.minus(this.p) : a;
-        const bb = b.gt(this.half) ? b.minus(this.p) : b;
-        return aa.lt(bb);
-    }
-
-    gt(a, b) {
-        const aa = a.gt(this.half) ? a.minus(this.p) : a;
-        const bb = b.gt(this.half) ? b.minus(this.p) : b;
-        return aa.gt(bb);
-    }
-
-    leq(a, b) {
-        const aa = a.gt(this.half) ? a.minus(this.p) : a;
-        const bb = b.gt(this.half) ? b.minus(this.p) : b;
-        return aa.leq(bb);
-    }
-
-    geq(a, b) {
-        const aa = a.gt(this.half) ? a.minus(this.p) : a;
-        const bb = b.gt(this.half) ? b.minus(this.p) : b;
-        return aa.geq(bb);
-    }
-
-    div(a, b) {
-        if (b.isZero()) throw new Error("Division by zero");
-        return a.times(b.modInv(this.p)).mod(this.p);
-    }
-
-    idiv(a, b) {
-        if (b.isZero()) throw new Error("Division by zero");
-        return a.divide(b);
-    }
-
-    inv(a) {
-        if (a.isZero()) throw new Error("Division by zero");
-        return a.modInv(this.p);
-    }
-
-    mod(a, b) {
-        return a.mod(b);
-    }
-
-    pow(a, b) {
-        return a.modPow(b, this.p);
-    }
-
-    exp(a, b) {
-        return a.modPow(b, this.p);
-    }
-
-    band(a, b) {
-        return a.and(b).and(this.mask).mod(this.p);
-    }
-
-    bor(a, b) {
-        return a.or(b).and(this.mask).mod(this.p);
-    }
-
-    bxor(a, b) {
-        return a.xor(b).and(this.mask).mod(this.p);
-    }
-
-    bnot(a) {
-        return a.xor(this.mask).mod(this.p);
-    }
-
-    shl(a, b) {
-        if (b.lt(this.bitLength)) {
-            return a.shiftLeft(b).and(this.mask).mod(this.p);
-        } else {
-            const nb = this.p.minus(b);
-            if (nb.lt(this.bitLength)) {
-                return this.shr(a, nb);
-            } else {
-                return bigInt__default["default"].zero;
-            }
-        }
-    }
-
-    shr(a, b) {
-        if (b.lt(this.bitLength)) {
-            return a.shiftRight(b);
-        } else {
-            const nb = this.p.minus(b);
-            if (nb.lt(this.bitLength)) {
-                return this.shl(a, nb);
-            } else {
-                return bigInt__default["default"].zero;
-            }
-        }
-    }
-
-    land(a, b) {
-        return (a.isZero() || b.isZero()) ? bigInt__default["default"].zero : bigInt__default["default"].one;
-    }
-
-    lor(a, b) {
-        return (a.isZero() && b.isZero()) ? bigInt__default["default"].zero : bigInt__default["default"].one;
-    }
-
-    lnot(a) {
-        return a.isZero() ? bigInt__default["default"].one : bigInt__default["default"].zero;
-    }
-
-    sqrt_old(n) {
-
-        if (n.equals(this.zero)) return this.zero;
-
-        // Test that have solution
-        const res = this.pow(n, this.negone.shiftRight(this.one));
-        if (!res.equals(this.one)) return null;
-
-        let m = parseInt(this.s);
-        let c = this.nqr_to_t;
-        let t = this.pow(n, this.t);
-        let r = this.pow(n, this.add(this.t, this.one).shiftRight(this.one) );
-
-        while (!t.equals(this.one)) {
-            let sq = this.square(t);
-            let i = 1;
-            while (!sq.equals(this.one)) {
-                i++;
-                sq = this.square(sq);
-            }
-
-            // b = c ^ m-i-1
-            let b = c;
-            for (let j=0; j< m-i-1; j ++) b = this.square(b);
-
-            m = i;
-            c = this.square(b);
-            t = this.mul(t, c);
-            r = this.mul(r, b);
-        }
-
-        if (r.greater(this.p.shiftRight(this.one))) {
-            r = this.neg(r);
-        }
-
-        return r;
-    }
-
-    normalize(a) {
-        a = bigInt__default["default"](a);
-        if (a.isNegative()) {
-            return this.p.minus(a.abs().mod(this.p));
-        } else {
-            return a.mod(this.p);
-        }
-    }
-
-    random() {
-        let res = bigInt__default["default"](0);
-        let n = bigInt__default["default"](this.p.square());
-        while (!n.isZero()) {
-            res = res.shiftLeft(8).add(bigInt__default["default"](getRandomBytes(1)[0]));
-            n = n.shiftRight(8);
-        }
-        return res.mod(this.p);
-    }
-
-    toString(a, base) {
-        base = base || 10;
-        let vs;
-        if ((!a.lesserOrEquals(this.p.shiftRight(bigInt__default["default"](1))))&&(base==10)) {
-            const v = this.p.minus(a);
-            vs = "-"+v.toString(base);
-        } else {
-            vs = a.toString(base);
-        }
-
-        return vs;
-    }
-
-    isZero(a) {
-        return a.isZero();
-    }
-
-    fromRng(rng) {
-        let v;
-        do {
-            v = bigInt__default["default"](0);
-            for (let i=0; i<this.n64; i++) {
-                v = v.add(v, rng.nextU64().shiftLeft(64*i));
-            }
-            v = v.and(this.mask);
-        } while (v.geq(this.p));
-        v = v.times(this.Ri).mod(this.q);
-        return v;
-    }
-
-    fft(a) {
-        return this.FFT.fft(a);
-    }
-
-    ifft(a) {
-        return this.FFT.ifft(a);
-    }
-
-}
-
-const supportsNativeBigInt$1 = typeof BigInt === "function";
-let _F1Field;
-if (supportsNativeBigInt$1) {
-    _F1Field = ZqField$1;
-} else {
-    _F1Field = ZqField;
-}
-
-class F1Field extends _F1Field {
-
     // Returns a buffer with Little Endian Representation
     toRprLE(buff, o, e) {
         toRprLE(buff, o, e, this.n64*8);
@@ -2455,7 +1819,6 @@ class F1Field extends _F1Field {
     toObject(a) {
         return a;
     }
-
 }
 
 /*
@@ -3411,18 +2774,18 @@ class EC {
 
 /* global BigInt */
 
-function stringifyBigInts$2(o) {
-    if ((typeof(o) == "bigint") || o.eq !== undefined)  {
+function stringifyBigInts(o) {
+    if (typeof o == "bigint" || o.eq !== undefined) {
         return o.toString(10);
     } else if (o instanceof Uint8Array) {
         return fromRprLE(o, 0);
     } else if (Array.isArray(o)) {
-        return o.map(stringifyBigInts$2);
+        return o.map(stringifyBigInts);
     } else if (typeof o == "object") {
         const res = {};
         const keys = Object.keys(o);
-        keys.forEach( (k) => {
-            res[k] = stringifyBigInts$2(o[k]);
+        keys.forEach((k) => {
+            res[k] = stringifyBigInts(o[k]);
         });
         return res;
     } else {
@@ -3430,19 +2793,19 @@ function stringifyBigInts$2(o) {
     }
 }
 
-function unstringifyBigInts$2(o) {
-    if ((typeof(o) == "string") && (/^[0-9]+$/.test(o) ))  {
+function unstringifyBigInts(o) {
+    if (typeof o == "string" && /^[0-9]+$/.test(o)) {
         return BigInt(o);
-    } else if ((typeof(o) == "string") && (/^0x[0-9a-fA-F]+$/.test(o) ))  {
+    } else if (typeof o == "string" && /^0x[0-9a-fA-F]+$/.test(o)) {
         return BigInt(o);
     } else if (Array.isArray(o)) {
-        return o.map(unstringifyBigInts$2);
+        return o.map(unstringifyBigInts);
     } else if (typeof o == "object") {
-        if (o===null) return null;
+        if (o === null) return null;
         const res = {};
         const keys = Object.keys(o);
-        keys.forEach( (k) => {
-            res[k] = unstringifyBigInts$2(o[k]);
+        keys.forEach((k) => {
+            res[k] = unstringifyBigInts(o[k]);
         });
         return res;
     } else {
@@ -3450,46 +2813,46 @@ function unstringifyBigInts$2(o) {
     }
 }
 
-function beBuff2int$2(buff) {
+function beBuff2int(buff) {
     let res = BigInt(0);
     let i = buff.length;
     let offset = 0;
     const buffV = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
-    while (i>0) {
+    while (i > 0) {
         if (i >= 4) {
             i -= 4;
-            res += BigInt(buffV.getUint32(i)) << BigInt(offset*8);
+            res += BigInt(buffV.getUint32(i)) << BigInt(offset * 8);
             offset += 4;
         } else if (i >= 2) {
             i -= 2;
-            res += BigInt(buffV.getUint16(i)) << BigInt(offset*8);
+            res += BigInt(buffV.getUint16(i)) << BigInt(offset * 8);
             offset += 2;
         } else {
             i -= 1;
-            res += BigInt(buffV.getUint8(i)) << BigInt(offset*8);
+            res += BigInt(buffV.getUint8(i)) << BigInt(offset * 8);
             offset += 1;
         }
     }
     return res;
 }
 
-function beInt2Buff$2(n, len) {
+function beInt2Buff(n, len) {
     let r = n;
     const buff = new Uint8Array(len);
     const buffV = new DataView(buff.buffer);
     let o = len;
     while (o > 0) {
-        if (o-4 >= 0) {
+        if (o - 4 >= 0) {
             o -= 4;
-            buffV.setUint32(o, Number(r & BigInt(0xFFFFFFFF)));
+            buffV.setUint32(o, Number(r & BigInt(0xffffffff)));
             r = r >> BigInt(32);
-        } else if (o-2 >= 0) {
+        } else if (o - 2 >= 0) {
             o -= 2;
-            buffV.setUint16(o, Number(r & BigInt(0xFFFF)));
+            buffV.setUint16(o, Number(r & BigInt(0xffff)));
             r = r >> BigInt(16);
         } else {
             o -= 1;
-            buffV.setUint8(o, Number(r & BigInt(0xFF)));
+            buffV.setUint8(o, Number(r & BigInt(0xff)));
             r = r >> BigInt(8);
         }
     }
@@ -3499,46 +2862,45 @@ function beInt2Buff$2(n, len) {
     return buff;
 }
 
-
-function leBuff2int$2(buff) {
+function leBuff2int(buff) {
     let res = BigInt(0);
     let i = 0;
     const buffV = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
-    while (i<buff.length) {
+    while (i < buff.length) {
         if (i + 4 <= buff.length) {
-            res += BigInt(buffV.getUint32(i, true)) << BigInt( i*8);
+            res += BigInt(buffV.getUint32(i, true)) << BigInt(i * 8);
             i += 4;
         } else if (i + 4 <= buff.length) {
-            res += BigInt(buffV.getUint16(i, true)) << BigInt( i*8);
+            res += BigInt(buffV.getUint16(i, true)) << BigInt(i * 8);
             i += 2;
         } else {
-            res += BigInt(buffV.getUint8(i, true)) << BigInt( i*8);
+            res += BigInt(buffV.getUint8(i, true)) << BigInt(i * 8);
             i += 1;
         }
     }
     return res;
 }
 
-function leInt2Buff$2(n, len) {
+function leInt2Buff(n, len) {
     let r = n;
     if (typeof len === "undefined") {
-        len = Math.floor((bitLength(n) - 1) / 8) +1;
-        if (len==0) len = 1;
+        len = Math.floor((bitLength(n) - 1) / 8) + 1;
+        if (len == 0) len = 1;
     }
     const buff = new Uint8Array(len);
     const buffV = new DataView(buff.buffer);
     let o = 0;
     while (o < len) {
-        if (o+4 <= len) {
-            buffV.setUint32(o, Number(r & BigInt(0xFFFFFFFF)), true );
+        if (o + 4 <= len) {
+            buffV.setUint32(o, Number(r & BigInt(0xffffffff)), true);
             o += 4;
             r = r >> BigInt(32);
-        } else if (o+2 <= len) {
-            buffV.setUint16(Number(o, r & BigInt(0xFFFF)), true );
+        } else if (o + 2 <= len) {
+            buffV.setUint16(Number(o, r & BigInt(0xffff)), true);
             o += 2;
             r = r >> BigInt(16);
         } else {
-            buffV.setUint8(Number(o, r & BigInt(0xFF)), true );
+            buffV.setUint8(Number(o, r & BigInt(0xff)), true);
             o += 1;
             r = r >> BigInt(8);
         }
@@ -3549,19 +2911,18 @@ function leInt2Buff$2(n, len) {
     return buff;
 }
 
-
-function stringifyFElements$1(F, o) {
-    if ((typeof(o) == "bigint") || o.eq !== undefined)  {
+function stringifyFElements(F, o) {
+    if (typeof o == "bigint" || o.eq !== undefined) {
         return o.toString(10);
     } else if (o instanceof Uint8Array) {
         return F.toString(F.e(o));
     } else if (Array.isArray(o)) {
-        return o.map(stringifyFElements$1.bind(this,F));
+        return o.map(stringifyFElements.bind(this, F));
     } else if (typeof o == "object") {
         const res = {};
         const keys = Object.keys(o);
-        keys.forEach( (k) => {
-            res[k] = stringifyFElements$1(F, o[k]);
+        keys.forEach((k) => {
+            res[k] = stringifyFElements(F, o[k]);
         });
         return res;
     } else {
@@ -3569,244 +2930,112 @@ function stringifyFElements$1(F, o) {
     }
 }
 
-
-function unstringifyFElements$1(F, o) {
-    if ((typeof(o) == "string") && (/^[0-9]+$/.test(o) ))  {
+function unstringifyFElements(F, o) {
+    if (typeof o == "string" && /^[0-9]+$/.test(o)) {
         return F.e(o);
-    } else if ((typeof(o) == "string") && (/^0x[0-9a-fA-F]+$/.test(o) ))  {
+    } else if (typeof o == "string" && /^0x[0-9a-fA-F]+$/.test(o)) {
         return F.e(o);
     } else if (Array.isArray(o)) {
-        return o.map(unstringifyFElements$1.bind(this,F));
+        return o.map(unstringifyFElements.bind(this, F));
     } else if (typeof o == "object") {
-        if (o===null) return null;
+        if (o === null) return null;
         const res = {};
         const keys = Object.keys(o);
-        keys.forEach( (k) => {
-            res[k] = unstringifyFElements$1(F, o[k]);
+        keys.forEach((k) => {
+            res[k] = unstringifyFElements(F, o[k]);
         });
         return res;
     } else {
         return o;
     }
 }
-
-var utils_native = /*#__PURE__*/Object.freeze({
-    __proto__: null,
-    stringifyBigInts: stringifyBigInts$2,
-    unstringifyBigInts: unstringifyBigInts$2,
-    beBuff2int: beBuff2int$2,
-    beInt2Buff: beInt2Buff$2,
-    leBuff2int: leBuff2int$2,
-    leInt2Buff: leInt2Buff$2,
-    stringifyFElements: stringifyFElements$1,
-    unstringifyFElements: unstringifyFElements$1
-});
-
-function stringifyBigInts$1(o) {
-    if ((typeof(o) == "bigint") || o.eq !== undefined)  {
-        return o.toString(10);
-    } else if (Array.isArray(o)) {
-        return o.map(stringifyBigInts$1);
-    } else if (typeof o == "object") {
-        const res = {};
-        const keys = Object.keys(o);
-        keys.forEach( (k) => {
-            res[k] = stringifyBigInts$1(o[k]);
-        });
-        return res;
-    } else {
-        return o;
-    }
-}
-
-function unstringifyBigInts$1(o) {
-    if ((typeof(o) == "string") && (/^[0-9]+$/.test(o) ))  {
-        return bigInt__default["default"](o);
-    } else if ((typeof(o) == "string") && (/^0x[0-9a-fA-F]+$/.test(o) ))  {
-        return bigInt__default["default"](o);
-    } else if (Array.isArray(o)) {
-        return o.map(unstringifyBigInts$1);
-    } else if (typeof o == "object") {
-        const res = {};
-        const keys = Object.keys(o);
-        keys.forEach( (k) => {
-            res[k] = unstringifyBigInts$1(o[k]);
-        });
-        return res;
-    } else {
-        return o;
-    }
-}
-
-function beBuff2int$1(buff) {
-    let res = bigInt__default["default"].zero;
-    for (let i=0; i<buff.length; i++) {
-        const n = bigInt__default["default"](buff[buff.length - i - 1]);
-        res = res.add(n.shiftLeft(i*8));
-    }
-    return res;
-}
-
-function beInt2Buff$1(n, len) {
-    let r = n;
-    let o =len-1;
-    const buff = new Uint8Array(len);
-    while ((r.gt(bigInt__default["default"].zero))&&(o>=0)) {
-        let c = Number(r.and(bigInt__default["default"]("255")));
-        buff[o] = c;
-        o--;
-        r = r.shiftRight(8);
-    }
-    if (!r.eq(bigInt__default["default"].zero)) {
-        throw new Error("Number does not fit in this length");
-    }
-    return buff;
-}
-
-
-function leBuff2int$1 (buff) {
-    let res = bigInt__default["default"].zero;
-    for (let i=0; i<buff.length; i++) {
-        const n = bigInt__default["default"](buff[i]);
-        res = res.add(n.shiftLeft(i*8));
-    }
-    return res;
-}
-
-function leInt2Buff$1(n, len) {
-    let r = n;
-    let o =0;
-    const buff = new Uint8Array(len);
-    while ((r.gt(bigInt__default["default"].zero))&&(o<buff.length)) {
-        let c = Number(r.and(bigInt__default["default"](255)));
-        buff[o] = c;
-        o++;
-        r = r.shiftRight(8);
-    }
-    if (!r.eq(bigInt__default["default"].zero)) {
-        throw new Error("Number does not fit in this length");
-    }
-    return buff;
-}
-
-var utils_bigint = /*#__PURE__*/Object.freeze({
-    __proto__: null,
-    stringifyBigInts: stringifyBigInts$1,
-    unstringifyBigInts: unstringifyBigInts$1,
-    beBuff2int: beBuff2int$1,
-    beInt2Buff: beInt2Buff$1,
-    leBuff2int: leBuff2int$1,
-    leInt2Buff: leInt2Buff$1
-});
-
-let utils$1 = {};
-
-const supportsNativeBigInt = typeof BigInt === "function";
-if (supportsNativeBigInt) {
-    Object.assign(utils$1, utils_native);
-} else {
-    Object.assign(utils$1, utils_bigint);
-}
-
 
 const _revTable = [];
-for (let i=0; i<256; i++) {
+for (let i = 0; i < 256; i++) {
     _revTable[i] = _revSlow(i, 8);
 }
 
 function _revSlow(idx, bits) {
-    let res =0;
+    let res = 0;
     let a = idx;
-    for (let i=0; i<bits; i++) {
+    for (let i = 0; i < bits; i++) {
         res <<= 1;
-        res = res | (a &1);
-        a >>=1;
+        res = res | (a & 1);
+        a >>= 1;
     }
     return res;
 }
 
-utils$1.bitReverse = function bitReverse(idx, bits) {
+function bitReverse(idx, bits) {
     return (
-        _revTable[idx >>> 24] |
-        (_revTable[(idx >>> 16) & 0xFF] << 8) |
-        (_revTable[(idx >>> 8) & 0xFF] << 16) |
-        (_revTable[idx & 0xFF] << 24)
-    ) >>> (32-bits);
-};
+        (_revTable[idx >>> 24] |
+        (_revTable[(idx >>> 16) & 0xff] << 8) |
+        (_revTable[(idx >>> 8) & 0xff] << 16) |
+        (_revTable[idx & 0xff] << 24)) >>>
+        (32 - bits)
+    );
+}
 
+function log2(V) {
+    return (
+        ((V & 0xffff0000) !== 0 ? ((V &= 0xffff0000), 16) : 0) |
+        ((V & 0xff00ff00) !== 0 ? ((V &= 0xff00ff00), 8) : 0) |
+        ((V & 0xf0f0f0f0) !== 0 ? ((V &= 0xf0f0f0f0), 4) : 0) |
+        ((V & 0xcccccccc) !== 0 ? ((V &= 0xcccccccc), 2) : 0) |
+        ((V & 0xaaaaaaaa) !== 0)
+    );
+}
 
-utils$1.log2 = function log2( V )
-{
-    return( ( ( V & 0xFFFF0000 ) !== 0 ? ( V &= 0xFFFF0000, 16 ) : 0 ) | ( ( V & 0xFF00FF00 ) !== 0 ? ( V &= 0xFF00FF00, 8 ) : 0 ) | ( ( V & 0xF0F0F0F0 ) !== 0 ? ( V &= 0xF0F0F0F0, 4 ) : 0 ) | ( ( V & 0xCCCCCCCC ) !== 0 ? ( V &= 0xCCCCCCCC, 2 ) : 0 ) | ( ( V & 0xAAAAAAAA ) !== 0 ) );
-};
-
-utils$1.buffReverseBits = function buffReverseBits(buff, eSize) {
-    const n = buff.byteLength /eSize;
-    const bits = utils$1.log2(n);
-    if (n != (1 << bits)) {
+function buffReverseBits(buff, eSize) {
+    const n = buff.byteLength / eSize;
+    const bits = log2(n);
+    if (n != 1 << bits) {
         throw new Error("Invalid number of pointers");
     }
-    for (let i=0; i<n; i++) {
-        const r = utils$1.bitReverse(i,bits);
-        if (i>r) {
-            const tmp = buff.slice(i*eSize, (i+1)*eSize);
-            buff.set( buff.slice(r*eSize, (r+1)*eSize), i*eSize);
-            buff.set(tmp, r*eSize);
+    for (let i = 0; i < n; i++) {
+        const r = bitReverse(i, bits);
+        if (i > r) {
+            const tmp = buff.slice(i * eSize, (i + 1) * eSize);
+            buff.set(buff.slice(r * eSize, (r + 1) * eSize), i * eSize);
+            buff.set(tmp, r * eSize);
         }
     }
-};
+}
 
+function array2buffer(arr, sG) {
+    const buff = new Uint8Array(sG * arr.length);
 
-utils$1.array2buffer = function(arr, sG) {
-    const buff = new Uint8Array(sG*arr.length);
-
-    for (let i=0; i<arr.length; i++) {
-        buff.set(arr[i], i*sG);
+    for (let i = 0; i < arr.length; i++) {
+        buff.set(arr[i], i * sG);
     }
 
     return buff;
-};
+}
 
-utils$1.buffer2array = function(buff , sG) {
-    const n= buff.byteLength / sG;
+function buffer2array(buff, sG) {
+    const n = buff.byteLength / sG;
     const arr = new Array(n);
-    for (let i=0; i<n; i++) {
-        arr[i] = buff.slice(i*sG, i*sG+sG);
+    for (let i = 0; i < n; i++) {
+        arr[i] = buff.slice(i * sG, i * sG + sG);
     }
     return arr;
-};
-
-let {
-    bitReverse,
-    log2,
-    buffReverseBits,
-    stringifyBigInts,
-    unstringifyBigInts,
-    beBuff2int,
-    beInt2Buff,
-    leBuff2int,
-    leInt2Buff,
-    array2buffer,
-    buffer2array,
-    stringifyFElements,
-    unstringifyFElements
-} = utils$1;
+}
 
 var _utils = /*#__PURE__*/Object.freeze({
     __proto__: null,
-    bitReverse: bitReverse,
-    log2: log2,
-    buffReverseBits: buffReverseBits,
     stringifyBigInts: stringifyBigInts,
     unstringifyBigInts: unstringifyBigInts,
     beBuff2int: beBuff2int,
     beInt2Buff: beInt2Buff,
     leBuff2int: leBuff2int,
     leInt2Buff: leInt2Buff,
-    array2buffer: array2buffer,
-    buffer2array: buffer2array,
     stringifyFElements: stringifyFElements,
-    unstringifyFElements: unstringifyFElements
+    unstringifyFElements: unstringifyFElements,
+    bitReverse: bitReverse,
+    log2: log2,
+    buffReverseBits: buffReverseBits,
+    array2buffer: array2buffer,
+    buffer2array: buffer2array
 });
 
 const PAGE_SIZE = 1<<30;
@@ -6772,12 +6001,12 @@ const utils = _utils;
 exports.BigBuffer = BigBuffer;
 exports.ChaCha = ChaCha;
 exports.EC = EC;
-exports.F1Field = F1Field;
+exports.F1Field = ZqField;
 exports.F2Field = F2Field;
 exports.F3Field = F3Field;
 exports.PolField = PolField;
 exports.Scalar = Scalar;
-exports.ZqField = F1Field;
+exports.ZqField = ZqField;
 exports.buildBls12381 = buildBls12381;
 exports.buildBn128 = buildBn128;
 exports.getCurveFromName = getCurveFromName;
