@@ -97,7 +97,7 @@ export function leBuff2int(buff) {
         if (i + 4 <= buff.length) {
             res += BigInt(buffV.getUint32(i, true)) << BigInt(i * 8);
             i += 4;
-        } else if (i + 4 <= buff.length) {
+        } else if (i + 2 <= buff.length) {
             res += BigInt(buffV.getUint16(i, true)) << BigInt(i * 8);
             i += 2;
         } else {
