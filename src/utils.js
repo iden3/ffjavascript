@@ -97,7 +97,7 @@ export function leBuff2int(buff) {
         if (i + 4 <= buff.length) {
             res += BigInt(buffV.getUint32(i, true)) << BigInt(i * 8);
             i += 4;
-        } else if (i + 4 <= buff.length) {
+        } else if (i + 2 <= buff.length) {
             res += BigInt(buffV.getUint16(i, true)) << BigInt(i * 8);
             i += 2;
         } else {
@@ -123,11 +123,11 @@ export function leInt2Buff(n, len) {
             o += 4;
             r = r >> BigInt(32);
         } else if (o + 2 <= len) {
-            buffV.setUint16(Number(o, r & BigInt(0xffff)), true);
+            buffV.setUint16(o, Number(r & BigInt(0xffff)), true);
             o += 2;
             r = r >> BigInt(16);
         } else {
-            buffV.setUint8(Number(o, r & BigInt(0xff)), true);
+            buffV.setUint8(o, Number(r & BigInt(0xff)), true);
             o += 1;
             r = r >> BigInt(8);
         }
