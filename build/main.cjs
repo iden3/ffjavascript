@@ -4279,19 +4279,23 @@ function thread(self) {
         };
     }
 
-    async function init(data) {
+    function init(data){
         const code = new Uint8Array(data.code);
-        const wasmModule = await WebAssembly.compile(code);
-        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
-
-        instance = await WebAssembly.instantiate(wasmModule, {
-            env: {
-                "memory": memory
-            }
+        const initPromise = new Promise((resolve, reject) => {
+            WebAssembly.compile(code).then(wasmModule => {
+                memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
+                WebAssembly.instantiate(wasmModule, {
+                    env: {
+                        "memory": memory
+                    },
+                }).then( inst => {
+                    instance = inst;
+                    resolve(inst);
+                });
+            }).catch(err => reject(err));
         });
+        return initPromise;
     }
-
-
 
     function alloc(length) {
         const u32 = new Uint32Array(memory.buffer, 0, 1);
