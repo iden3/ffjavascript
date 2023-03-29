@@ -40,12 +40,21 @@ function sleep(ms) {
 }
 
 function stringToBase64(str) {
-    if (typeof window === 'undefined') {
-        return globalThis.btoa(str);
-    } else {
-        return Buffer.from(str).toString("base64");
-    }
+    var conv = Base64.encode(str);
+
+    return conv;
+    // window.Buffer = Buffer;
+    // console.log("In here so close ")
+    // if (typeof window==="undefined") {
+
+    //     return globalThis.btoa(str);
+    //     //buf.toString('base64')
+    // } else {
+    //     var buf = Buffer.from(str);
+    //     return buf.toString("base64");
+    // }
 }
+
 
 const threadSource = stringToBase64("(" + thread.toString() + ")(self)");
 const workerSource = "data:application/javascript;base64," + threadSource;
