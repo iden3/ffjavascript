@@ -41,7 +41,7 @@ function sleep(ms) {
 
 function stringToBase64(str) {
     var conv = Base64.encode(str);
-
+    console.log(conv);
     return conv;
     // window.Buffer = Buffer;
     // console.log("In here so close ")
