@@ -210,7 +210,7 @@ function lnot(a) {
 // Returns a buffer with Little Endian Representation
 function toRprLE(buff, o, e, n8) {
     const s = "0000000" + e.toString(16);
-    const v = new Uint32Array(buff.buffer, o, n8/4);
+    const v = new Uint32Array(buff.buffer, buff.byteOffset + o, n8/4);
     const l = (((s.length-7)*4 - 1) >> 5)+1;    // Number of 32bit words;
     for (let i=0; i<l; i++) v[i] = parseInt(s.substring(s.length-8*i-8, s.length-8*i), 16);
     for (let i=l; i<v.length; i++) v[i] = 0;
@@ -230,7 +230,7 @@ function toRprBE(buff, o, e, n8) {
 function fromRprLE(buff, o, n8) {
     n8 = n8 || buff.byteLength;
     o = o || 0;
-    const v = new Uint32Array(buff.buffer, o, n8/4);
+    const v = new Uint32Array(buff.buffer, buff.byteOffset + o, n8/4);
     const a = new Array(n8/4);
     v.forEach( (ch,i) => a[a.length-i-1] = ch.toString(16).padStart(8,"0") );
     return fromString(a.join(""), 16);
