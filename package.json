@@ -16,10 +16,9 @@
   },
   "scripts": {
     "test": "mocha",
-    "prepare": "npm run build:browser",
     "build:node": "rollup -c rollup.cjs.config.js",
-    "build:browser": "rollup -c rollup.browser.esm.config.js",
-    "build": "npm run build:node && npm run build:browser"
+    "build:browser:esm": "rollup -c rollup.browser.esm.config.js",
+    "build": "npm run build:node && npm run build:browser:esm"
   },
   "repository": {
     "type": "git",
