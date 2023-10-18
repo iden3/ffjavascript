@@ -6,6 +6,7 @@ import { ModuleBuilder } from "wasmbuilder";
 globalThis.curve_bls12381 = null;
 
 export default async function buildBls12381(singleThread, plugins) {
+    if ((!singleThread) && (globalThis.curve_bls12381)) return globalThis.curve_bls12381;
 
     const moduleBuilder = new ModuleBuilder();
     moduleBuilder.setMemory(25);
@@ -33,7 +34,6 @@ export default async function buildBls12381(singleThread, plugins) {
     bls12381wasm.r = moduleBuilder.modules.bls12381.r;
 
 
-    if ((!singleThread) && (globalThis.curve_bls12381)) return globalThis.curve_bls12381;
     const params = {
         name: "bls12381",
         wasm: bls12381wasm,
