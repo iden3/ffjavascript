@@ -1,18 +1,10 @@
 'use strict';
 
-Object.defineProperty(exports, '__esModule', { value: true });
-
 var crypto = require('crypto');
 var wasmcurves = require('wasmcurves');
 var os = require('os');
 var Worker = require('web-worker');
 var wasmbuilder = require('wasmbuilder');
-
-function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
-
-var crypto__default = /*#__PURE__*/_interopDefaultLegacy(crypto);
-var os__default = /*#__PURE__*/_interopDefaultLegacy(os);
-var Worker__default = /*#__PURE__*/_interopDefaultLegacy(Worker);
 
 /* global BigInt */
 const hexLen = [ 0, 1, 2, 2, 3, 3, 3, 3, 4 ,4 ,4 ,4 ,4 ,4 ,4 ,4];
@@ -263,51 +255,51 @@ const one = e(1);
 
 var _Scalar = /*#__PURE__*/Object.freeze({
     __proto__: null,
-    fromString: fromString,
-    e: e,
-    fromArray: fromArray,
+    abs: abs,
+    add: add,
+    band: band,
     bitLength: bitLength,
+    bits: bits,
+    bor: bor,
+    bxor: bxor,
+    div: div,
+    e: e,
+    eq: eq,
+    exp: exp$1,
+    fromArray: fromArray,
+    fromRprBE: fromRprBE,
+    fromRprLE: fromRprLE,
+    fromString: fromString,
+    geq: geq,
+    gt: gt,
     isNegative: isNegative,
+    isOdd: isOdd,
     isZero: isZero,
+    land: land,
+    leq: leq,
+    lnot: lnot,
+    lor: lor,
+    lt: lt,
+    mod: mod,
+    mul: mul,
+    naf: naf,
+    neg: neg,
+    neq: neq,
+    one: one,
+    pow: pow,
     shiftLeft: shiftLeft,
     shiftRight: shiftRight,
     shl: shl,
     shr: shr,
-    isOdd: isOdd,
-    naf: naf,
-    bits: bits,
-    toNumber: toNumber,
-    toArray: toArray,
-    add: add,
-    sub: sub,
-    neg: neg,
-    mul: mul,
     square: square,
-    pow: pow,
-    exp: exp$1,
-    abs: abs,
-    div: div,
-    mod: mod,
-    eq: eq,
-    neq: neq,
-    lt: lt,
-    gt: gt,
-    leq: leq,
-    geq: geq,
-    band: band,
-    bor: bor,
-    bxor: bxor,
-    land: land,
-    lor: lor,
-    lnot: lnot,
-    toRprLE: toRprLE,
-    toRprBE: toRprBE,
-    fromRprLE: fromRprLE,
-    fromRprBE: fromRprBE,
-    toString: toString,
+    sub: sub,
+    toArray: toArray,
     toLEBuff: toLEBuff,
-    zero: zero,
-    one: one
+    toNumber: toNumber,
+    toRprBE: toRprBE,
+    toRprLE: toRprLE,
+    toString: toString,
+    zero: zero
 });
 
 /*
@@ -947,6 +939,7 @@ function __bitReverse(p, bits) {
 */
 
 
+
 function mulScalar(F, base, e) {
     let res;
 
@@ -1288,7 +1281,7 @@ function getRandomBytes(n) {
         }
     }
     else { // NodeJS
-        crypto__default["default"].randomFillSync(array);
+        crypto.randomFillSync(array);
     }
     return array;
 }
@@ -1840,6 +1833,7 @@ class ZqField {
     snarkjs. If not, see <https://www.gnu.org/licenses/>.
 */
 
+
 class F2Field {
     constructor(F, nonResidue) {
         this.type="F2";
@@ -2076,6 +2070,7 @@ class F2Field {
     You should have received a copy of the GNU General Public License along with
     snarkjs. If not, see <https://www.gnu.org/licenses/>.
 */
+
 
 class F3Field {
     constructor(F, nonResidue) {
@@ -2359,6 +2354,7 @@ class F3Field {
     You should have received a copy of the GNU General Public License along with
     snarkjs. If not, see <https://www.gnu.org/licenses/>.
 */
+
 
 
 function isGreatest(F, a) {
@@ -3023,19 +3019,19 @@ function buffer2array(buff, sG) {
 
 var _utils = /*#__PURE__*/Object.freeze({
     __proto__: null,
-    stringifyBigInts: stringifyBigInts,
-    unstringifyBigInts: unstringifyBigInts,
+    array2buffer: array2buffer,
     beBuff2int: beBuff2int,
     beInt2Buff: beInt2Buff,
+    bitReverse: bitReverse,
+    buffReverseBits: buffReverseBits,
+    buffer2array: buffer2array,
     leBuff2int: leBuff2int,
     leInt2Buff: leInt2Buff,
-    stringifyFElements: stringifyFElements,
-    unstringifyFElements: unstringifyFElements,
-    bitReverse: bitReverse,
     log2: log2,
-    buffReverseBits: buffReverseBits,
-    array2buffer: array2buffer,
-    buffer2array: buffer2array
+    stringifyBigInts: stringifyBigInts,
+    stringifyFElements: stringifyFElements,
+    unstringifyBigInts: unstringifyBigInts,
+    unstringifyFElements: unstringifyFElements
 });
 
 const PAGE_SIZE = 1<<30;
@@ -4373,7 +4369,6 @@ function thread(self) {
     return runTask;
 }
 
-/* global navigator, WebAssembly */
 /*
     Copyright 2019 0KIMS association.
 
@@ -4465,12 +4460,13 @@ async function buildThreadManager(wasm, singleThread) {
         tm.pendingDeferreds = [];
         tm.working = [];
 
-        let concurrency;
-
-        if ((typeof(navigator) === "object") && navigator.hardwareConcurrency) {
+        let concurrency = 2;
+        if (process.browser) {
+          if (typeof navigator === "object" && navigator.hardwareConcurrency) {
             concurrency = navigator.hardwareConcurrency;
+          }
         } else {
-            concurrency = os__default["default"].cpus().length;
+          concurrency = os.cpus().length;
         }
 
         if(concurrency == 0){
@@ -4483,7 +4479,7 @@ async function buildThreadManager(wasm, singleThread) {
 
         for (let i = 0; i<concurrency; i++) {
 
-            tm.workers[i] = new Worker__default["default"](workerSource);
+            tm.workers[i] = new Worker(workerSource);
 
             tm.workers[i].addEventListener("message", getOnMsg(i));
 

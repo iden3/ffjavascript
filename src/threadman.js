@@ -1,4 +1,3 @@
-/* global navigator, WebAssembly */
 /*
     Copyright 2019 0KIMS association.
 
@@ -95,12 +94,13 @@ export default async function buildThreadManager(wasm, singleThread) {
         tm.pendingDeferreds = [];
         tm.working = [];
 
-        let concurrency;
-
-        if ((typeof(navigator) === "object") && navigator.hardwareConcurrency) {
+        let concurrency = 2;
+        if (process.browser) {
+          if (typeof navigator === "object" && navigator.hardwareConcurrency) {
             concurrency = navigator.hardwareConcurrency;
+          }
         } else {
-            concurrency = os.cpus().length;
+          concurrency = os.cpus().length;
         }
 
         if(concurrency == 0){
