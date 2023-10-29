@@ -6,6 +6,7 @@ import { ModuleBuilder } from "wasmbuilder";
 globalThis.curve_bn128 = null;
 
 export default async function buildBn128(singleThread, plugins) {
+    if ((!singleThread) && (globalThis.curve_bn128)) return globalThis.curve_bn128;
 
     const moduleBuilder = new ModuleBuilder();
     moduleBuilder.setMemory(25);
@@ -32,7 +33,6 @@ export default async function buildBn128(singleThread, plugins) {
     bn128wasm.q = moduleBuilder.modules.bn128.q;
     bn128wasm.r = moduleBuilder.modules.bn128.r;
 
-    if ((!singleThread) && (globalThis.curve_bn128)) return globalThis.curve_bn128;
     const params = {
         name: "bn128",
         wasm: bn128wasm,
