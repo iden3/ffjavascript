@@ -2,6 +2,8 @@
 import * as Scalar from "./scalar.js";
 
 export function stringifyBigInts(o) {
+    if (o === null) return null;
+
     if (typeof o == "bigint" || o.eq !== undefined) {
         return o.toString(10);
     } else if (o instanceof Uint8Array) {

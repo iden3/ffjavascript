@@ -28,6 +28,18 @@ describe("Utils native", () => {
         assert(ScalarN.eq(num, numFromStr), true);
     });
 
+    it("Should stringify bigInt & null", () => {
+       const obj = {
+            num: num,
+            other: null
+       };
+ 
+        const strObj = utilsN.stringifyBigInts(obj);
+        const objFromStr = utilsN.unstringifyBigInts(strObj);
+
+        assert.deepStrictEqual(obj, objFromStr);
+    });
+
     it("Should generate buffer little-endian without trailing non-zero element", () => {
         for (let i = 1; i < 33; i++) {
             var buff = utilsN.leInt2Buff(BigInt(42), i);
