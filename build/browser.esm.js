@@ -18045,6 +18045,7 @@ class ModuleBuilder {
 globalThis.curve_bn128 = null;
 
 async function buildBn128(singleThread, plugins) {
+    if ((!singleThread) && (globalThis.curve_bn128)) return globalThis.curve_bn128;
 
     const moduleBuilder = new ModuleBuilder();
     moduleBuilder.setMemory(25);
@@ -18071,7 +18072,6 @@ async function buildBn128(singleThread, plugins) {
     bn128wasm.q = moduleBuilder.modules.bn128.q;
     bn128wasm.r = moduleBuilder.modules.bn128.r;
 
-    if ((!singleThread) && (globalThis.curve_bn128)) return globalThis.curve_bn128;
     const params = {
         name: "bn128",
         wasm: bn128wasm,
@@ -18101,6 +18101,7 @@ async function buildBn128(singleThread, plugins) {
 globalThis.curve_bls12381 = null;
 
 async function buildBls12381(singleThread, plugins) {
+    if ((!singleThread) && (globalThis.curve_bls12381)) return globalThis.curve_bls12381;
 
     const moduleBuilder = new ModuleBuilder();
     moduleBuilder.setMemory(25);
@@ -18128,7 +18129,6 @@ async function buildBls12381(singleThread, plugins) {
     bls12381wasm.r = moduleBuilder.modules.bls12381.r;
 
 
-    if ((!singleThread) && (globalThis.curve_bls12381)) return globalThis.curve_bls12381;
     const params = {
         name: "bls12381",
         wasm: bls12381wasm,
