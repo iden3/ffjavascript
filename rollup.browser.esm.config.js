@@ -22,6 +22,7 @@ export default [
                 * https://github.com/iden3/snarkjs/blob/ef9042451f98f254b520b8ce9b9544a849e90a5d/config/rollup.iife.config.js
                 */
                 "process.browser": true,
+                "import Worker from \"web-worker\"": "",
                 /* 
             Because of some frontend frameworks uses monkey patching to track UI changes or other purposes (including Angular, AngularJS, Ember.js, JQuery...), it's important to make sure that the thread function is not modified by the framework and passing in the web worker as it is.
         */
