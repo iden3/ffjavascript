@@ -192,7 +192,7 @@ export default class PolField {
         return v;
     }
 
-    eval(p,x) {
+    evaluate(p,x) {
         const F = this.F;
         if (p.length == 0) return F.zero;
         const m = this._next2Power(p.length);
@@ -223,7 +223,7 @@ export default class PolField {
             let mpol = this.ruffini(roots, points[i][0]);
             const factor =
                 this.F.mul(
-                    this.F.inv(this.eval(mpol, points[i][0])),
+                    this.F.inv(this.evaluate(mpol, points[i][0])),
                     points[i][1]);
             mpol = this.mulScalar(mpol, factor);
             sum = this.add(sum, mpol);
