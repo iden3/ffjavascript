@@ -4404,16 +4404,20 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function stringToBase64(str) {
-    if (process.browser) {
-        return globalThis.btoa(str);
-    } else {
-        return Buffer.from(str).toString("base64");
-    }
-}
+let workerSource;
 
-const threadSource = stringToBase64("(" + thread.toString() + ")(self)");
-const workerSource = "data:application/javascript;base64," + threadSource;
+const threadStr = `(${thread.toString()})(self)`;
+if(process.browser) {
+    if(globalThis?.Blob) {
+        const threadBytes= new TextEncoder().encode(threadStr);
+        const workerBlob = new Blob([threadBytes], { type: "application/javascript" }) ;
+        workerSource = URL.createObjectURL(workerBlob);
+    } else {
+        workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
+    }
+} else {  
+    workerSource = "data:application/javascript;base64," + Buffer.from(threadStr).toString("base64");
+}
 
 
 
@@ -4431,7 +4435,11 @@ async function buildThreadManager(wasm, singleThread) {
             "memory": tm.memory
         }
     });
-
+    
+    if(process.browser && !globalThis?.Worker) {
+        singleThread = true;
+    }
+    
     tm.singleThread = singleThread;
     tm.initalPFree = tm.u32[0];   // Save the Pointer to free space.
     tm.pq = wasm.pq;
@@ -4444,7 +4452,6 @@ async function buildThreadManager(wasm, singleThread) {
 
     //    tm.pTmp0 = tm.alloc(curve.G2.F.n8*3);
     //    tm.pTmp1 = tm.alloc(curve.G2.F.n8*3);
-
 
     if (singleThread) {
         tm.code = wasm.code;
@@ -4462,11 +4469,11 @@ async function buildThreadManager(wasm, singleThread) {
 
         let concurrency = 2;
         if (process.browser) {
-          if (typeof navigator === "object" && navigator.hardwareConcurrency) {
-            concurrency = navigator.hardwareConcurrency;
-          }
+            if (typeof navigator === "object" && navigator.hardwareConcurrency) {
+                concurrency = navigator.hardwareConcurrency;
+            }
         } else {
-          concurrency = os.cpus().length;
+            concurrency = os.cpus().length;
         }
 
         if(concurrency == 0){
