@@ -1,7 +1,7 @@
 {
   "name": "ffjavascript",
   "type": "module",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Finite Field Library in Javascript",
   "main": "./build/main.cjs",
   "module": "./main.js",
@@ -37,7 +37,7 @@
   "bugs": {
     "url": "https://github.com/iden3/ffjavascript/issues"
   },
-  "homepage": "https://github.com/iden3/ffjs#readme",
+  "homepage": "https://github.com/iden3/ffjavascript",
   "dependencies": {
     "wasmbuilder": "0.0.16",
     "wasmcurves": "0.2.2",
@@ -49,8 +49,8 @@
     "@rollup/plugin-replace": "^5.0.3",
     "blake2b": "^2.1.3",
     "chai": "^4.2.0",
-    "eslint": "^8.0.1",
-    "mocha": "^10.0.0",
+    "eslint": "^9.12.0",
+    "mocha": "^10.7.3",
     "rollup": "^3.29.4"
   }
 }
