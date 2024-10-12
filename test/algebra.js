@@ -17,7 +17,7 @@
     zksnark JavaScript library. If not, see <https://www.gnu.org/licenses/>.
 */
 
-import chai from "chai";
+import * as chai from "chai";
 
 import * as Scalar from "../src/scalar.js";
 import buildBn128 from "../src/bn128.js";

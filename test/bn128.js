@@ -1,7 +1,9 @@
-import assert from "assert";
+import * as chai from "chai";
 import buildBn128 from "../src/bn128.js";
 import {log2} from "../src/utils.js";
 import BigBuffer from "../src/bigbuffer.js";
+
+const assert = chai.assert;
 
 describe("bn128", async function () {
     this.timeout(0);
