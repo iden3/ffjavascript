@@ -1,6 +1,7 @@
-import assert from "assert";
-
+import * as chai from "chai";
 import * as Scalar from "../src/scalar.js";
+
+const assert = chai.assert;
 
 describe("Basic scalar convertions", () => {
     it("Should convertion Native", () => {
