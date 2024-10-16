@@ -44,7 +44,7 @@
     "web-worker": "1.2.0"
   },
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^25.0.4",
+    "@rollup/plugin-commonjs": "^28.0.1",
     "@rollup/plugin-node-resolve": "^15.2.1",
     "@rollup/plugin-replace": "^5.0.3",
     "blake2b": "^2.1.3",
