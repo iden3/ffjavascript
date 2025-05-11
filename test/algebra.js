@@ -34,7 +34,7 @@ describe("F1 testing", function() {
         bn128 = await buildBn128();
     });
     after( async() => {
-        bn128.terminate();
+        await bn128.terminate();
     });
 
     it("Should compute euclidean", () => {
@@ -82,7 +82,7 @@ describe("Curve G1 Test", function() {
         bn128 = await buildBn128();
     });
     after( async() => {
-        bn128.terminate();
+        await bn128.terminate();
     });
 
     it("r*one == 0", () => {
@@ -152,7 +152,7 @@ describe("F6 testing", function() {
         bn128 = await buildBn128();
     });
     after( async() => {
-        bn128.terminate();
+        await bn128.terminate();
     });
 
     it("Should multiply and divide in F6", () => {
@@ -182,7 +182,7 @@ describe("F12 testing", function() {
         bn128 = await buildBn128();
     });
     after( async() => {
-        bn128.terminate();
+        await bn128.terminate();
     });
 
     it("Should multiply and divide in F12", () => {
@@ -225,7 +225,7 @@ describe("Pairing", function() {
         bn128 = await buildBn128();
     });
     after( async() => {
-        bn128.terminate();
+        await bn128.terminate();
     });
 
     /*
@@ -306,7 +306,7 @@ describe("Compressed Form", function() {
         bn128 = await buildBn128();
     });
     after( async() => {
-        bn128.terminate();
+        await bn128.terminate();
     });
 
     it("Should test rpr of G2", () => {

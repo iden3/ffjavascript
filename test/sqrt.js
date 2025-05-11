@@ -32,7 +32,7 @@ describe("Sqrt testing", () => {
         bn128 = await buildBn128();
     });
     after( async() => {
-        bn128.terminate();
+        await bn128.terminate();
     });
 
     /*

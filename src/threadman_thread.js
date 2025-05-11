@@ -28,8 +28,14 @@ export default function thread(self) {
     }
 
     async function init(data) {
-        const code = new Uint8Array(data.code);
-        const wasmModule = await WebAssembly.compile(code);
+        let wasmModule;
+        if (data.code instanceof WebAssembly.Module) {
+            wasmModule = data.code;
+        } else
+        {
+            const code = new Uint8Array(data.code);
+            wasmModule = await WebAssembly.compile(code);
+        }
         memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
 
         instance = await WebAssembly.instantiate(wasmModule, {

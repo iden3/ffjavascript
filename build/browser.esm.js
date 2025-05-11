@@ -15549,8 +15549,14 @@ function thread(self) {
     }
 
     async function init(data) {
-        const code = new Uint8Array(data.code);
-        const wasmModule = await WebAssembly.compile(code);
+        let wasmModule;
+        if (data.code instanceof WebAssembly.Module) {
+            wasmModule = data.code;
+        } else
+        {
+            const code = new Uint8Array(data.code);
+            wasmModule = await WebAssembly.compile(code);
+        }
         memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
 
         instance = await WebAssembly.instantiate(wasmModule, {
@@ -15679,7 +15685,7 @@ function sleep(ms) {
 
 let workerSource;
 
-const threadStr = `(${"function thread(self) {\n    const MAXMEM = 32767;\n    let instance;\n    let memory;\n\n    if (self) {\n        self.onmessage = function(e) {\n            let data;\n            if (e.data) {\n                data = e.data;\n            } else {\n                data = e;\n            }\n\n            if (data[0].cmd == \"INIT\") {\n                init(data[0]).then(function() {\n                    self.postMessage(data.result);\n                });\n            } else if (data[0].cmd == \"TERMINATE\") {\n                self.close();\n            } else {\n                const res = runTask(data);\n                self.postMessage(res);\n            }\n        };\n    }\n\n    async function init(data) {\n        const code = new Uint8Array(data.code);\n        const wasmModule = await WebAssembly.compile(code);\n        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});\n\n        instance = await WebAssembly.instantiate(wasmModule, {\n            env: {\n                \"memory\": memory\n            }\n        });\n    }\n\n\n\n    function alloc(length) {\n        const u32 = new Uint32Array(memory.buffer, 0, 1);\n        while (u32[0] & 3) u32[0]++;  // Return always aligned pointers\n        const res = u32[0];\n        u32[0] += length;\n        if (u32[0] + length > memory.buffer.byteLength) {\n            const currentPages = memory.buffer.byteLength / 0x10000;\n            let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;\n            if (requiredPages>MAXMEM) requiredPages=MAXMEM;\n            memory.grow(requiredPages-currentPages);\n        }\n        return res;\n    }\n\n    function allocBuffer(buffer) {\n        const p = alloc(buffer.byteLength);\n        setBuffer(p, buffer);\n        return p;\n    }\n\n    function getBuffer(pointer, length) {\n        const u8 = new Uint8Array(memory.buffer);\n        return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);\n    }\n\n    function setBuffer(pointer, buffer) {\n        const u8 = new Uint8Array(memory.buffer);\n        u8.set(new Uint8Array(buffer), pointer);\n    }\n\n    function runTask(task) {\n        if (task[0].cmd == \"INIT\") {\n            return init(task[0]);\n        }\n        const ctx = {\n            vars: [],\n            out: []\n        };\n        const u32a = new Uint32Array(memory.buffer, 0, 1);\n        const oldAlloc = u32a[0];\n        for (let i=0; i<task.length; i++) {\n            switch (task[i].cmd) {\n            case \"ALLOCSET\":\n                ctx.vars[task[i].var] = allocBuffer(task[i].buff);\n                break;\n            case \"ALLOC\":\n                ctx.vars[task[i].var] = alloc(task[i].len);\n                break;\n            case \"SET\":\n                setBuffer(ctx.vars[task[i].var], task[i].buff);\n                break;\n            case \"CALL\": {\n                const params = [];\n                for (let j=0; j<task[i].params.length; j++) {\n                    const p = task[i].params[j];\n                    if (typeof p.var !== \"undefined\") {\n                        params.push(ctx.vars[p.var] + (p.offset || 0));\n                    } else if (typeof p.val != \"undefined\") {\n                        params.push(p.val);\n                    }\n                }\n                instance.exports[task[i].fnName](...params);\n                break;\n            }\n            case \"GET\":\n                ctx.out[task[i].out] = getBuffer(ctx.vars[task[i].var], task[i].len).slice();\n                break;\n            default:\n                throw new Error(\"Invalid cmd\");\n            }\n        }\n        const u32b = new Uint32Array(memory.buffer, 0, 1);\n        u32b[0] = oldAlloc;\n        return ctx.out;\n    }\n\n\n    return runTask;\n}"})(self)`;
+const threadStr = `(${"function thread(self) {\n    const MAXMEM = 32767;\n    let instance;\n    let memory;\n\n    if (self) {\n        self.onmessage = function(e) {\n            let data;\n            if (e.data) {\n                data = e.data;\n            } else {\n                data = e;\n            }\n\n            if (data[0].cmd == \"INIT\") {\n                init(data[0]).then(function() {\n                    self.postMessage(data.result);\n                });\n            } else if (data[0].cmd == \"TERMINATE\") {\n                self.close();\n            } else {\n                const res = runTask(data);\n                self.postMessage(res);\n            }\n        };\n    }\n\n    async function init(data) {\n        let wasmModule;\n        if (data.code instanceof WebAssembly.Module) {\n            wasmModule = data.code;\n        } else\n        {\n            const code = new Uint8Array(data.code);\n            wasmModule = await WebAssembly.compile(code);\n        }\n        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});\n\n        instance = await WebAssembly.instantiate(wasmModule, {\n            env: {\n                \"memory\": memory\n            }\n        });\n    }\n\n\n\n    function alloc(length) {\n        const u32 = new Uint32Array(memory.buffer, 0, 1);\n        while (u32[0] & 3) u32[0]++;  // Return always aligned pointers\n        const res = u32[0];\n        u32[0] += length;\n        if (u32[0] + length > memory.buffer.byteLength) {\n            const currentPages = memory.buffer.byteLength / 0x10000;\n            let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;\n            if (requiredPages>MAXMEM) requiredPages=MAXMEM;\n            memory.grow(requiredPages-currentPages);\n        }\n        return res;\n    }\n\n    function allocBuffer(buffer) {\n        const p = alloc(buffer.byteLength);\n        setBuffer(p, buffer);\n        return p;\n    }\n\n    function getBuffer(pointer, length) {\n        const u8 = new Uint8Array(memory.buffer);\n        return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);\n    }\n\n    function setBuffer(pointer, buffer) {\n        const u8 = new Uint8Array(memory.buffer);\n        u8.set(new Uint8Array(buffer), pointer);\n    }\n\n    function runTask(task) {\n        if (task[0].cmd == \"INIT\") {\n            return init(task[0]);\n        }\n        const ctx = {\n            vars: [],\n            out: []\n        };\n        const u32a = new Uint32Array(memory.buffer, 0, 1);\n        const oldAlloc = u32a[0];\n        for (let i=0; i<task.length; i++) {\n            switch (task[i].cmd) {\n            case \"ALLOCSET\":\n                ctx.vars[task[i].var] = allocBuffer(task[i].buff);\n                break;\n            case \"ALLOC\":\n                ctx.vars[task[i].var] = alloc(task[i].len);\n                break;\n            case \"SET\":\n                setBuffer(ctx.vars[task[i].var], task[i].buff);\n                break;\n            case \"CALL\": {\n                const params = [];\n                for (let j=0; j<task[i].params.length; j++) {\n                    const p = task[i].params[j];\n                    if (typeof p.var !== \"undefined\") {\n                        params.push(ctx.vars[p.var] + (p.offset || 0));\n                    } else if (typeof p.val != \"undefined\") {\n                        params.push(p.val);\n                    }\n                }\n                instance.exports[task[i].fnName](...params);\n                break;\n            }\n            case \"GET\":\n                ctx.out[task[i].out] = getBuffer(ctx.vars[task[i].var], task[i].len).slice();\n                break;\n            default:\n                throw new Error(\"Invalid cmd\");\n            }\n        }\n        const u32b = new Uint32Array(memory.buffer, 0, 1);\n        u32b[0] = oldAlloc;\n        return ctx.out;\n    }\n\n\n    return runTask;\n}"})(self)`;
 {
     if(globalThis?.Blob) {
         const threadBytes= new TextEncoder().encode(threadStr);
@@ -15737,83 +15743,96 @@ async function buildThreadManager(wasm, singleThread) {
         tm.workers = [];
         tm.pendingDeferreds = [];
         tm.working = [];
+        tm.initialized = [];
 
-        let concurrency = 2;
+        let concurrency = 4;
         {
             if (typeof navigator === "object" && navigator.hardwareConcurrency) {
                 concurrency = navigator.hardwareConcurrency;
             }
         }
 
-        if(concurrency == 0){
-            concurrency = 2;
+        if(concurrency === 0){
+            concurrency = 4;
         }
 
         // Limit to 64 threads for memory reasons.
         if (concurrency>64) concurrency=64;
         tm.concurrency = concurrency;
 
-        for (let i = 0; i<concurrency; i++) {
+        // for (let i = 0; i<concurrency; i++) {
+        //
+        //     tm.workers[i] = new Worker(workerSource);
+        //
+        //     tm.workers[i].addEventListener("message", getOnMsg(i));
+        //
+        //     tm.working[i]=false;
+        // }
+        //
+        // const initPromises = [];
+        // for (let i=0; i<tm.workers.length;i++) {
+        //     const copyCode = wasm.code.slice();
+        //     initPromises.push(tm.postAction(i, [{
+        //         cmd: "INIT",
+        //         init: MEM_SIZE,
+        //         code: copyCode
+        //     }], [copyCode.buffer]));
+        // }
+        //
+        // await Promise.all(initPromises);
 
-            tm.workers[i] = new Worker(workerSource);
-
-            tm.workers[i].addEventListener("message", getOnMsg(i));
-
-            tm.working[i]=false;
-        }
-
-        const initPromises = [];
-        for (let i=0; i<tm.workers.length;i++) {
-            const copyCode = wasm.code.slice();
-            initPromises.push(tm.postAction(i, [{
+        tm.workerInitFunction = async function (i) {
+            //const copyCode = wasm.code.slice();
+            return tm.postAction(i, [{
                 cmd: "INIT",
                 init: MEM_SIZE,
-                code: copyCode
-            }], [copyCode.buffer]));
-        }
-
-        await Promise.all(initPromises);
-
-    }
-    return tm;
-
-    function getOnMsg(i) {
-        return function(e) {
-            let data;
-            if ((e)&&(e.data)) {
-                data = e.data;
-            } else {
-                data = e;
-            }
-
-            tm.working[i]=false;
-            tm.pendingDeferreds[i].resolve(data);
-            tm.processWorks();
+                code: wasmModule
+            }], []);
         };
     }
-
+    return tm;
 }
 
 class ThreadManager {
     constructor() {
         this.actionQueue = [];
         this.oldPFree = 0;
+        this.workerInitFunction = null;
+    }
+
+    startWorker() {
+        let i = this.workers.length;
+        let worker = new Worker(workerSource);
+        worker.addEventListener("message", this.getOnMsg(i));
+        this.workers[i] = worker;
+        this.working[i] = false;
+        this.initialized[i] = false;
+        if (this.workerInitFunction) {
+            this.workerInitFunction(i).then(() => {
+                this.initialized[i] = true;
+                this.processWorks();
+            }).catch((e) => {
+                console.error("Error initializing worker", i, e);
+                this.initialized[i] = false;
+                this.working[i] = false;
+            });
+        }
     }
 
     startSyncOp() {
-        if (this.oldPFree != 0) throw new Error("Sync operation in progress");
+        if (this.oldPFree !== 0) throw new Error("Sync operation in progress");
         this.oldPFree = this.u32[0];
     }
 
     endSyncOp() {
-        if (this.oldPFree == 0) throw new Error("No sync operation in progress");
+        if (this.oldPFree === 0) throw new Error("No sync operation in progress");
         this.u32[0] = this.oldPFree;
         this.oldPFree = 0;
     }
 
     postAction(workerId, e, transfers, _deferred) {
         if (this.working[workerId]) {
-            throw new Error("Posting a job t a working worker");
+            throw new Error("Posting a job to a working worker");
         }
         this.working[workerId] = true;
 
@@ -15824,12 +15843,41 @@ class ThreadManager {
     }
 
     processWorks() {
+        //console.log("Processing work");
+        //console.log("Workers length: ", this.workers.length);
         for (let i=0; (i<this.workers.length)&&(this.actionQueue.length > 0); i++) {
-            if (this.working[i] == false) {
+            if (this.initialized[i] && !this.working[i]) {
                 const work = this.actionQueue.shift();
                 this.postAction(i, work.data, work.transfers, work.deferred);
             }
         }
+        if (this.actionQueue.length > 0 && this.workers.length < this.concurrency) {
+            const startNum = Math.min(this.actionQueue.length, this.concurrency - this.workers.length);
+            for (let i=0; i<startNum; i++) {
+                this.startWorker();
+            }
+        }
+
+        // if (this.actionQueue.length === 0 && this.workers.length > 0) {
+        //     for (let i=0; i<this.workers.length; i++) {
+        //         if (this.working[i] || !this.initialized[i]) {
+        //             return;
+        //         }
+        //     }
+        //     let tm = this;
+        //     console.log("### Scheduling termination ###");
+        //     sleep(100).then(() => {
+        //         if (tm.actionQueue.length === 0 && this.workers.length > 0) {
+        //             for (let i=0; i<tm.workers.length; i++) {
+        //                 if (tm.working[i] || !this.initialized[i]) {
+        //                     return;
+        //                 }
+        //             }
+        //             console.log("### Running scheduled termination ###");
+        //             tm.terminate();
+        //         }
+        //     });
+        // }
     }
 
     queueAction(actionData, transfers) {
@@ -15874,11 +15922,42 @@ class ThreadManager {
         return res;
     }
 
+    getOnMsg(i) {
+        let tm = this;
+        return function(e) {
+            let data;
+            if ((e)&&(e.data)) {
+                data = e.data;
+            } else {
+                data = e;
+            }
+
+            tm.working[i]=false;
+            tm.pendingDeferreds[i].resolve(data);
+            tm.processWorks();
+        };
+    }
+
+
     async terminate() {
+        //console.log("Terminating workers in thread manager");
+        //console.log("Workers", this.workers);
         for (let i=0; i<this.workers.length; i++) {
             this.workers[i].postMessage([{cmd: "TERMINATE"}]);
         }
         await sleep(200);
+        // console.log("Termination messages sent");
+        // for (let i=0; i<this.workers.length; i++) {
+        //     this.workers[i].terminate();
+        // }
+        // this.workers = [];
+        // this.working = [];
+        // console.log("Pending deferreds", this.pendingDeferreds);
+        // for (let i=0; i<this.pendingDeferreds.length; i++) {
+        //     this.pendingDeferreds[i].reject("Worker terminated");
+        // }
+        // this.pendingDeferreds = [];
+        // this.initialized = [];
     }
 
 }

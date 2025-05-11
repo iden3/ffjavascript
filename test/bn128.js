@@ -21,7 +21,7 @@ describe("bn128", async function () {
         console.log(bn128.Fr.toString(bn128.Fr.w[28]));
     });
     after( async() => {
-        bn128.terminate();
+        await bn128.terminate();
     });
 
     it("It shoud do an inverse FFT in G1", async () => {

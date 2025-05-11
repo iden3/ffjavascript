@@ -100,8 +100,9 @@ export default async function buildThreadManager(wasm, singleThread) {
         tm.workers = [];
         tm.pendingDeferreds = [];
         tm.working = [];
+        tm.initialized = [];
 
-        let concurrency = 2;
+        let concurrency = 4;
         if (process.browser) {
             if (typeof navigator === "object" && navigator.hardwareConcurrency) {
                 concurrency = navigator.hardwareConcurrency;
@@ -110,75 +111,87 @@ export default async function buildThreadManager(wasm, singleThread) {
             concurrency = os.cpus().length;
         }
 
-        if(concurrency == 0){
-            concurrency = 2;
+        if(concurrency === 0){
+            concurrency = 4;
         }
 
         // Limit to 64 threads for memory reasons.
         if (concurrency>64) concurrency=64;
         tm.concurrency = concurrency;
 
-        for (let i = 0; i<concurrency; i++) {
+        // for (let i = 0; i<concurrency; i++) {
+        //
+        //     tm.workers[i] = new Worker(workerSource);
+        //
+        //     tm.workers[i].addEventListener("message", getOnMsg(i));
+        //
+        //     tm.working[i]=false;
+        // }
+        //
+        // const initPromises = [];
+        // for (let i=0; i<tm.workers.length;i++) {
+        //     const copyCode = wasm.code.slice();
+        //     initPromises.push(tm.postAction(i, [{
+        //         cmd: "INIT",
+        //         init: MEM_SIZE,
+        //         code: copyCode
+        //     }], [copyCode.buffer]));
+        // }
+        //
+        // await Promise.all(initPromises);
 
-            tm.workers[i] = new Worker(workerSource);
-
-            tm.workers[i].addEventListener("message", getOnMsg(i));
-
-            tm.working[i]=false;
-        }
-
-        const initPromises = [];
-        for (let i=0; i<tm.workers.length;i++) {
-            const copyCode = wasm.code.slice();
-            initPromises.push(tm.postAction(i, [{
+        tm.workerInitFunction = async function (i) {
+            //const copyCode = wasm.code.slice();
+            return tm.postAction(i, [{
                 cmd: "INIT",
                 init: MEM_SIZE,
-                code: copyCode
-            }], [copyCode.buffer]));
-        }
-
-        await Promise.all(initPromises);
-
-    }
-    return tm;
-
-    function getOnMsg(i) {
-        return function(e) {
-            let data;
-            if ((e)&&(e.data)) {
-                data = e.data;
-            } else {
-                data = e;
-            }
-
-            tm.working[i]=false;
-            tm.pendingDeferreds[i].resolve(data);
-            tm.processWorks();
+                code: wasmModule
+            }], []);
         };
     }
-
+    return tm;
 }
 
 export class ThreadManager {
     constructor() {
         this.actionQueue = [];
         this.oldPFree = 0;
+        this.workerInitFunction = null;
+    }
+
+    startWorker() {
+        let i = this.workers.length;
+        let worker = new Worker(workerSource);
+        worker.addEventListener("message", this.getOnMsg(i));
+        this.workers[i] = worker;
+        this.working[i] = false;
+        this.initialized[i] = false;
+        if (this.workerInitFunction) {
+            this.workerInitFunction(i).then(() => {
+                this.initialized[i] = true;
+                this.processWorks();
+            }).catch((e) => {
+                console.error("Error initializing worker", i, e);
+                this.initialized[i] = false;
+                this.working[i] = false;
+            });
+        }
     }
 
     startSyncOp() {
-        if (this.oldPFree != 0) throw new Error("Sync operation in progress");
+        if (this.oldPFree !== 0) throw new Error("Sync operation in progress");
         this.oldPFree = this.u32[0];
     }
 
     endSyncOp() {
-        if (this.oldPFree == 0) throw new Error("No sync operation in progress");
+        if (this.oldPFree === 0) throw new Error("No sync operation in progress");
         this.u32[0] = this.oldPFree;
         this.oldPFree = 0;
     }
 
     postAction(workerId, e, transfers, _deferred) {
         if (this.working[workerId]) {
-            throw new Error("Posting a job t a working worker");
+            throw new Error("Posting a job to a working worker");
         }
         this.working[workerId] = true;
 
@@ -189,12 +202,41 @@ export class ThreadManager {
     }
 
     processWorks() {
+        //console.log("Processing work");
+        //console.log("Workers length: ", this.workers.length);
         for (let i=0; (i<this.workers.length)&&(this.actionQueue.length > 0); i++) {
-            if (this.working[i] == false) {
+            if (this.initialized[i] && !this.working[i]) {
                 const work = this.actionQueue.shift();
                 this.postAction(i, work.data, work.transfers, work.deferred);
             }
         }
+        if (this.actionQueue.length > 0 && this.workers.length < this.concurrency) {
+            const startNum = Math.min(this.actionQueue.length, this.concurrency - this.workers.length);
+            for (let i=0; i<startNum; i++) {
+                this.startWorker();
+            }
+        }
+
+        // if (this.actionQueue.length === 0 && this.workers.length > 0) {
+        //     for (let i=0; i<this.workers.length; i++) {
+        //         if (this.working[i] || !this.initialized[i]) {
+        //             return;
+        //         }
+        //     }
+        //     let tm = this;
+        //     console.log("### Scheduling termination ###");
+        //     sleep(100).then(() => {
+        //         if (tm.actionQueue.length === 0 && this.workers.length > 0) {
+        //             for (let i=0; i<tm.workers.length; i++) {
+        //                 if (tm.working[i] || !this.initialized[i]) {
+        //                     return;
+        //                 }
+        //             }
+        //             console.log("### Running scheduled termination ###");
+        //             tm.terminate();
+        //         }
+        //     });
+        // }
     }
 
     queueAction(actionData, transfers) {
@@ -239,11 +281,42 @@ export class ThreadManager {
         return res;
     }
 
+    getOnMsg(i) {
+        let tm = this;
+        return function(e) {
+            let data;
+            if ((e)&&(e.data)) {
+                data = e.data;
+            } else {
+                data = e;
+            }
+
+            tm.working[i]=false;
+            tm.pendingDeferreds[i].resolve(data);
+            tm.processWorks();
+        };
+    }
+
+
     async terminate() {
+        //console.log("Terminating workers in thread manager");
+        //console.log("Workers", this.workers);
         for (let i=0; i<this.workers.length; i++) {
             this.workers[i].postMessage([{cmd: "TERMINATE"}]);
         }
         await sleep(200);
+        // console.log("Termination messages sent");
+        // for (let i=0; i<this.workers.length; i++) {
+        //     this.workers[i].terminate();
+        // }
+        // this.workers = [];
+        // this.working = [];
+        // console.log("Pending deferreds", this.pendingDeferreds);
+        // for (let i=0; i<this.pendingDeferreds.length; i++) {
+        //     this.pendingDeferreds[i].reject("Worker terminated");
+        // }
+        // this.pendingDeferreds = [];
+        // this.initialized = [];
     }
 
 }
