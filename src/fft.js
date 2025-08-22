@@ -50,19 +50,6 @@ export default class FFT {
 
 
         this.roots = [];
-        /*
-        for (let i=0; i<16; i++) {
-            let r = this.F.one;
-            n = 1 << i;
-            const rootsi = new Array(n);
-            for (let j=0; j<n; j++) {
-                rootsi[j] = r;
-                r = this.F.mul(r, this.w[i]);
-            }
-
-            this.roots.push(rootsi);
-        }
-        */
         this._setRoots(Math.min(s, 15));
     }
 
@@ -87,7 +74,7 @@ export default class FFT {
 
         const m = 1 << bits;
         if (p.length != m) {
-            throw new Error("Size must be multiple of 2");
+            throw new Error("Size must be power of 2");
         }
         const res = __fft(this, p, bits, 0, 1);
         return res;
@@ -100,7 +87,7 @@ export default class FFT {
         this._setRoots(bits);
         const m = 1 << bits;
         if (p.length != m) {
-            throw new Error("Size must be multiple of 2");
+            throw new Error("Size must be power of 2");
         }
         const res =  __fft(this, p, bits, 0, 1);
         const twoinvm = this.F.inv( this.F.mulScalar(this.F.one, m) );
