@@ -120,31 +120,42 @@ export default function buildMultiexp(curve, groupName) {
             throw new Error("Scalar size does not match");
         }
 
-        // const bitChunkSize = pTSizes[log2(nPoints)];
-        // const nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) +1;
-        //
-        // let chunkSize;
-        // chunkSize = Math.floor(nPoints / (tm.concurrency /nChunks));
-        // if (chunkSize>MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
-        // if (chunkSize<MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
-        //
-        // const opPromises = [];
-        // for (let i=0; i<nPoints; i += chunkSize) {
-        //     if (logger) logger.debug(`Multiexp start: ${logText}: ${i}/${nPoints}`);
-        //     const n= Math.min(nPoints - i, chunkSize);
-        //     const buffBasesChunk = buffBases.slice(i*sGIn, (i+n)*sGIn);
-        //     const buffScalarsChunk = buffScalars.slice(i*sScalar, (i+n)*sScalar);
-        //     opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType, logger, logText).then( (r) => {
-        //         if (logger) logger.debug(`Multiexp end: ${logText}: ${i}/${nPoints}`);
-        //         return r;
-        //     }));
-        // }
+        console.log("buffBases.buffer instanceof SharedArrayBuffer", buffBases.buffer instanceof SharedArrayBuffer);
+        console.log("buffScalars.buffer instanceof SharedArrayBuffer", buffScalars.buffer instanceof SharedArrayBuffer);
 
         const opPromises = [];
-        opPromises.push(_multiExpChunk(buffBases, buffScalars, inType, logger, logText).then( (r) => {
-            if (logger) logger.debug(`Multiexp end: ${logText}: ${nPoints}`);
-            return r;
-        }));
+        if (buffBases.buffer
+            && (buffBases.buffer instanceof SharedArrayBuffer)
+            && buffScalars.buffer
+            && (buffScalars.buffer instanceof SharedArrayBuffer)
+        )
+        {
+            // If we are working with SharedArrayBuffers, we can do it in one chunk because memory is shared between threads
+            if (logger) logger.debug(`Multiexp start: ${logText}: ${nPoints}`);
+            opPromises.push(_multiExpChunk(buffBases, buffScalars, inType, logger, logText).then( (r) => {
+                if (logger) logger.debug(`Multiexp end: ${logText}: ${nPoints}`);
+                return r;
+            }));
+        } else {
+            const bitChunkSize = pTSizes[log2(nPoints)];
+            const nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) +1;
+
+            let chunkSize;
+            chunkSize = Math.floor(nPoints / (tm.concurrency /nChunks));
+            if (chunkSize>MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
+            if (chunkSize<MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
+
+            for (let i=0; i<nPoints; i += chunkSize) {
+                if (logger) logger.debug(`Multiexp start: ${logText}: ${i}/${nPoints}`);
+                const n = Math.min(nPoints - i, chunkSize);
+                const buffBasesChunk = buffBases.slice(i*sGIn, (i+n)*sGIn);
+                const buffScalarsChunk = buffScalars.slice(i*sScalar, (i+n)*sScalar);
+                opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType, logger, logText).then( (r) => {
+                    if (logger) logger.debug(`Multiexp end: ${logText}: ${i}/${nPoints}`);
+                    return r;
+                }));
+            }
+        }
 
         const result = await Promise.all(opPromises);
 
