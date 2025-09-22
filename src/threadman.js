@@ -110,7 +110,7 @@ export default async function buildThreadManager(wasm, singleThread) {
             concurrency = os.cpus().length;
         }
 
-        if(concurrency == 0){
+        if(concurrency === 0){
             concurrency = 2;
         }
 
@@ -151,6 +151,15 @@ export default async function buildThreadManager(wasm, singleThread) {
                 data = e;
             }
 
+            // handle errors
+            if (data.error) {
+                console.log("Worker error", data.error);
+
+                tm.working[i]=false;
+                tm.pendingDeferreds[i].reject(data.error);
+                throw new Error(data.error);
+            }
+
             tm.working[i]=false;
             tm.pendingDeferreds[i].resolve(data);
             tm.processWorks();
@@ -166,19 +175,19 @@ export class ThreadManager {
     }
 
     startSyncOp() {
-        if (this.oldPFree != 0) throw new Error("Sync operation in progress");
+        if (this.oldPFree !== 0) throw new Error("Sync operation in progress");
         this.oldPFree = this.u32[0];
     }
 
     endSyncOp() {
-        if (this.oldPFree == 0) throw new Error("No sync operation in progress");
+        if (this.oldPFree === 0) throw new Error("No sync operation in progress");
         this.u32[0] = this.oldPFree;
         this.oldPFree = 0;
     }
 
     postAction(workerId, e, transfers, _deferred) {
         if (this.working[workerId]) {
-            throw new Error("Posting a job t a working worker");
+            throw new Error("Posting a job to a working worker");
         }
         this.working[workerId] = true;
 
@@ -190,7 +199,7 @@ export class ThreadManager {
 
     processWorks() {
         for (let i=0; (i<this.workers.length)&&(this.actionQueue.length > 0); i++) {
-            if (this.working[i] == false) {
+            if (this.working[i] === false) {
                 const work = this.actionQueue.shift();
                 this.postAction(i, work.data, work.transfers, work.deferred);
             }

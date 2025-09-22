@@ -14,15 +14,20 @@ export default function thread(self) {
                 data = e;
             }
 
-            if (data[0].cmd == "INIT") {
-                init(data[0]).then(function() {
-                    self.postMessage(data.result);
-                });
-            } else if (data[0].cmd == "TERMINATE") {
-                self.close();
-            } else {
-                const res = runTask(data);
-                self.postMessage(res);
+            try {
+                if (data[0].cmd === "INIT") {
+                    init(data[0]).then(function() {
+                        self.postMessage(data.result);
+                    });
+                } else if (data[0].cmd === "TERMINATE") {
+                    self.close();
+                } else {
+                    const res = runTask(data);
+                    self.postMessage(res);
+                }
+            } catch (err) {
+                // Catch any error and send it back to main thread
+                self.postMessage({error: err.message});
             }
         };
     }
@@ -72,7 +77,7 @@ export default function thread(self) {
     }
 
     function runTask(task) {
-        if (task[0].cmd == "INIT") {
+        if (task[0].cmd === "INIT") {
             return init(task[0]);
         }
         const ctx = {
