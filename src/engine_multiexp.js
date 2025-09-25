@@ -10,6 +10,7 @@ const pTSizes = [
 export default function buildMultiexp(curve, groupName) {
     const G = curve[groupName];
     const tm = G.tm;
+
     async function _multiExpChunk(buffBases, buffScalars, inType, logger, logText) {
         if ( ! (buffBases instanceof Uint8Array) ) {
             if (logger) logger.error(`${logText} _multiExpChunk buffBases is not Uint8Array`);
@@ -25,18 +26,18 @@ export default function buildMultiexp(curve, groupName) {
         let fnName;
         if (groupName === "G1") {
             if (inType === "affine") {
-                fnName = "g1m_multiexpAffine_chunk";
+                fnName = "g1m_multiexpAffine";
                 sGIn = G.F.n8*2;
             } else {
-                fnName = "g1m_multiexp_chunk";
+                fnName = "g1m_multiexp";
                 sGIn = G.F.n8*3;
             }
         } else if (groupName === "G2") {
             if (inType === "affine") {
-                fnName = "g2m_multiexpAffine_chunk";
+                fnName = "g2m_multiexpAffine";
                 sGIn = G.F.n8*2;
             } else {
-                fnName = "g2m_multiexp_chunk";
+                fnName = "g2m_multiexp";
                 sGIn = G.F.n8*3;
             }
         } else {
@@ -51,30 +52,26 @@ export default function buildMultiexp(curve, groupName) {
         }
 
         const bitChunkSize = pTSizes[log2(nPoints)];
-        const nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) +1;
-
 
         const opPromises = [];
-        for (let i=0; i<nChunks; i++) {
-            const task = [
-                {cmd: "ALLOCSET", var: 0, buff: buffBases},
-                {cmd: "ALLOCSET", var: 1, buff: buffScalars},
-                {cmd: "ALLOC", var: 2, len: G.F.n8*3},
-                {cmd: "CALL", fnName: fnName, params: [
-                    {var: 0}, //pBases
-                    {var: 1}, // pScalars
-                    {val: sScalar}, // scalarSize
-                    {val: nPoints}, // nPoints
-                    {val: i*bitChunkSize}, // startBit
-                    {val: Math.min(sScalar*8 - i*bitChunkSize, bitChunkSize)}, // chunkSize
-                    {var: 2} // pr
-                ]},
-                {cmd: "GET", out: 0, var: 2, len: G.F.n8*3}
-            ];
-            opPromises.push(
-                G.tm.queueAction(task)
-            );
-        }
+
+        const task = [
+            {cmd: "ALLOCSET", var: 0, buff: buffBases},
+            {cmd: "ALLOCSET", var: 1, buff: buffScalars},
+            {cmd: "ALLOC", var: 2, len: G.F.n8*3},
+            {cmd: "CALL", fnName: fnName, params: [
+                {var: 0}, //pBases
+                {var: 1}, // pScalars
+                {val: sScalar}, // scalarSize
+                {val: nPoints}, // nPoints
+                {var: 2} // pr
+            ]},
+            {cmd: "GET", out: 0, var: 2, len: G.F.n8*3}
+        ];
+        opPromises.push(
+            // transfer ownership of the buffers to the worker thread
+            G.tm.queueAction(task, [buffBases.buffer, buffScalars.buffer])
+        );
 
         const result = await Promise.all(opPromises);
 
@@ -91,7 +88,7 @@ export default function buildMultiexp(curve, groupName) {
 
     async function _multiExp(buffBases, buffScalars, inType, logger, logText) {
         const MAX_CHUNK_SIZE = 1 << 22;
-        const MIN_CHUNK_SIZE = 1 << 15;
+        const MIN_CHUNK_SIZE = 1 << 10;
         let sGIn;
 
         if (groupName === "G1") {
@@ -131,8 +128,12 @@ export default function buildMultiexp(curve, groupName) {
         }
 
         let chunkSize;
-        //chunkSize = Math.floor(nPoints / (tm.concurrency /nChunks));
-        chunkSize = Math.floor(nPoints / nChunks);
+        //chunkSize = Math.floor(nPoints / tm.concurrency) + 1;
+
+        // make nChunks multiple of tm.concurrency for optimal load balancing
+        nChunks = (Math.floor((nChunks-1) / tm.concurrency) + 1) * tm.concurrency;
+        chunkSize = Math.floor(nPoints / nChunks) + 1;
+
         if (chunkSize>MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
         if (chunkSize<MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
 
@@ -143,16 +144,13 @@ export default function buildMultiexp(curve, groupName) {
             const buffBasesChunk = buffBases.slice(i*sGIn, (i+n)*sGIn);
             const buffScalarsChunk = buffScalars.slice(i*sScalar, (i+n)*sScalar);
 
-            // opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType, logger, logText).then((r) => {
-            //     if (logger) logger.debug(`Multiexp end: ${logText}: ${i}/${nPoints}`);
-            //     return r;
-            // }));
-            const r = await _multiExpChunk(buffBasesChunk, buffScalarsChunk, inType, logger, logText);
-            if (logger) logger.debug(`Multiexp end: ${logText}: ${i}/${nPoints}`);
-            result.push(r);
+            opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType, logger, logText).then((r) => {
+                if (logger) logger.debug(`Multiexp end: ${logText}: ${i}/${nPoints}`);
+                return r;
+            }));
         }
 
-        //result = await Promise.all(opPromises);
+        result = await Promise.all(opPromises);
 
         let res = G.zero;
         for (let i=result.length-1; i>=0; i--) {
