@@ -153,11 +153,9 @@ export default async function buildThreadManager(wasm, singleThread) {
 
             // handle errors
             if (data.error) {
-                console.log("Worker error", data.error);
-
                 tm.working[i]=false;
-                tm.pendingDeferreds[i].reject(data.error);
-                throw new Error(data.error);
+                tm.pendingDeferreds[i].reject("Worker error: " + data.error);
+                throw new Error("Worker error: " + data.error);
             }
 
             tm.working[i]=false;
@@ -198,6 +196,9 @@ export class ThreadManager {
     }
 
     processWorks() {
+        if (this.workers.length === 0 && this.actionQueue.length > 0) {
+            throw new Error("No workers initialized");
+        }
         for (let i=0; (i<this.workers.length)&&(this.actionQueue.length > 0); i++) {
             if (this.working[i] === false) {
                 const work = this.actionQueue.shift();
