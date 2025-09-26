@@ -64,10 +64,12 @@ export default function buildBatchApplyKey(curve, groupName) {
 
             const task = [];
 
+            const b = buff.slice(i*pointsPerChunk*sGin, i*pointsPerChunk*sGin + n*sGin);
+
             task.push({
                 cmd: "ALLOCSET",
                 var: 0,
-                buff: buff.slice(i*pointsPerChunk*sGin, i*pointsPerChunk*sGin + n*sGin)
+                buff: b
             });
             task.push({cmd: "ALLOCSET", var: 1, buff: t});
             task.push({cmd: "ALLOCSET", var: 2, buff: inc});
@@ -96,7 +98,7 @@ export default function buildBatchApplyKey(curve, groupName) {
             }
             task.push({cmd: "GET", out: 0, var: 3, len: n*sGout});
 
-            opPromises.push(tm.queueAction(task));
+            opPromises.push(tm.queueAction(task, [b.buffer]));
             t = Fr.mul(t, Fr.exp(inc, n));
         }
 

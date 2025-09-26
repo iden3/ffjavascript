@@ -146,7 +146,7 @@ export default function buildFFT(curve, groupName) {
             } else {
                 task.push({cmd: "GET", out:0, var: 0, len: sMid*pointsInChunk});
             }
-            promises.push(tm.queueAction(task).then( (r) => {
+            promises.push(tm.queueAction(task, [buffChunk.buffer]).then( (r) => {
                 if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix end: ${i}/${nChunks}`);
                 return r;
             }));
@@ -203,7 +203,7 @@ export default function buildFFT(curve, groupName) {
                         task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sMid});
                         task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sMid});
                     }
-                    opPromises.push(tm.queueAction(task).then( (r) => {
+                    opPromises.push(tm.queueAction(task, [chunks[o1].buffer, chunks[o2].buffer, first.buffer ]).then( (r) => {
                         if (logger) logger.debug(`${loggerTxt}: fft ${bits} join  ${i}/${bits}  ${j+1}/${nGroups} ${k}/${nChunksPerGroup/2}`);
                         return r;
                     }));
@@ -402,7 +402,7 @@ export default function buildFFT(curve, groupName) {
             task.push({cmd: "GET", out: 0, var: 0, len: n*sOut});
             task.push({cmd: "GET", out: 1, var: 1, len: n*sOut});
             opPromises.push(
-                tm.queueAction(task).then( (r) => {
+                tm.queueAction(task, [b1.buffer, b2.buffer, firstChunk.buffer]).then((r) => {
                     if (logger) logger.debug(`${loggerTxt}: fftJoinExt End: ${i}/${nPoints}`);
                     return r;
                 })
@@ -550,7 +550,7 @@ export default function buildFFT(curve, groupName) {
             }
             task.push({cmd: "GET", out: 0, var: 0, len: pointsPerChunk*sG});
             opPromises.push(
-                tm.queueAction(task)
+                tm.queueAction(task, [b.buffer])
             );
         }
 
@@ -585,7 +585,7 @@ export default function buildFFT(curve, groupName) {
                     ]});
                     task.push({cmd: "GET", out: 0, var: 0, len: pointsPerChunk*sG});
                     task.push({cmd: "GET", out: 1, var: 1, len: pointsPerChunk*sG});
-                    opPromises.push(tm.queueAction(task));
+                    opPromises.push(tm.queueAction(task, [chunks[o1].buffer, chunks[o2].buffer, first.buffer]));
                 }
             }
 
@@ -664,7 +664,7 @@ export default function buildFFT(curve, groupName) {
             task.push({cmd: "GET", out: 0, var: 0, len: pointsPerChunk*sG});
             task.push({cmd: "GET", out: 1, var: 1, len: pointsPerChunk*sG});
             opPromises.push(
-                tm.queueAction(task)
+                tm.queueAction(task, [b1.buffer, b2.buffer, firstChunk.buffer])
             );
 
         }
@@ -740,7 +740,7 @@ export default function buildFFT(curve, groupName) {
             ]});
             task.push({cmd: "GET", out: 0, var: 0, len: n*sGout});
             opPromises.push(
-                tm.queueAction(task)
+                tm.queueAction(task, [b.buffer])
             );
 
         }

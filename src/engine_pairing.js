@@ -60,7 +60,7 @@ export default function buildPairing(curve) {
             task.push({cmd: "GET", out: 0, var: 4, len: curve.Gt.n8});
 
             opPromises.push(
-                tm.queueAction(task)
+                tm.queueAction(task, [g1Buff.buffer, g2Buff.buffer])
             );
         }
 
