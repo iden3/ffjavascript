@@ -8,8 +8,7 @@ export default class BigBuffer {
         this.byteLength = size;
         for (let i=0; i<size; i+= PAGE_SIZE) {
             const n = Math.min(size-i, PAGE_SIZE);
-            //this.buffers.push(new Uint8Array(n));
-            this.buffers.push(new Uint8Array(new SharedArrayBuffer(n)));
+            this.buffers.push(new Uint8Array(n));
         }
 
     }

@@ -114,9 +114,6 @@ export default function buildMultiexp(curve, groupName) {
             throw new Error("Scalar size does not match");
         }
 
-        console.log("buffBases.buffer instanceof SharedArrayBuffer", buffBases.buffer instanceof SharedArrayBuffer);
-        console.log("buffScalars.buffer instanceof SharedArrayBuffer", buffScalars.buffer instanceof SharedArrayBuffer);
-
         let result = [];
         const opPromises = [];
         const bitChunkSize = pTSizes[log2(nPoints)];
