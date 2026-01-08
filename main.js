@@ -13,6 +13,7 @@ export {default as EC} from "./src/ec.js";
 
 export {default as buildBn128} from "./src/bn128.js";
 export {default as buildBls12381} from "./src/bls12381.js";
+export {default as buildBls12377} from "./src/bls12377.js";
 
 import * as _utils from "./src/utils.js";
 export const utils = _utils;
@@ -21,4 +22,3 @@ export {default as ChaCha} from "./src/chacha.js";
 export {default as BigBuffer} from "./src/bigbuffer.js";
 
 export {getCurveFromR, getCurveFromQ, getCurveFromName} from "./src/curves.js";
-

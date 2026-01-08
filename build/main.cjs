@@ -1,10 +1,18 @@
 'use strict';
 
+Object.defineProperty(exports, '__esModule', { value: true });
+
 var crypto = require('crypto');
 var wasmcurves = require('wasmcurves');
 var os = require('os');
 var Worker = require('web-worker');
 var wasmbuilder = require('wasmbuilder');
+
+function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
+
+var crypto__default = /*#__PURE__*/_interopDefaultLegacy(crypto);
+var os__default = /*#__PURE__*/_interopDefaultLegacy(os);
+var Worker__default = /*#__PURE__*/_interopDefaultLegacy(Worker);
 
 /* global BigInt */
 const hexLen = [ 0, 1, 2, 2, 3, 3, 3, 3, 4 ,4 ,4 ,4 ,4 ,4 ,4 ,4];
@@ -255,51 +263,51 @@ const one = e(1);
 
 var _Scalar = /*#__PURE__*/Object.freeze({
     __proto__: null,
-    abs: abs,
-    add: add,
-    band: band,
-    bitLength: bitLength,
-    bits: bits,
-    bor: bor,
-    bxor: bxor,
-    div: div,
-    e: e,
-    eq: eq,
-    exp: exp$1,
-    fromArray: fromArray,
-    fromRprBE: fromRprBE,
-    fromRprLE: fromRprLE,
     fromString: fromString,
-    geq: geq,
-    gt: gt,
+    e: e,
+    fromArray: fromArray,
+    bitLength: bitLength,
     isNegative: isNegative,
-    isOdd: isOdd,
     isZero: isZero,
-    land: land,
-    leq: leq,
-    lnot: lnot,
-    lor: lor,
-    lt: lt,
-    mod: mod,
-    mul: mul,
-    naf: naf,
-    neg: neg,
-    neq: neq,
-    one: one,
-    pow: pow,
     shiftLeft: shiftLeft,
     shiftRight: shiftRight,
     shl: shl,
     shr: shr,
-    square: square,
-    sub: sub,
-    toArray: toArray,
-    toLEBuff: toLEBuff,
+    isOdd: isOdd,
+    naf: naf,
+    bits: bits,
     toNumber: toNumber,
-    toRprBE: toRprBE,
+    toArray: toArray,
+    add: add,
+    sub: sub,
+    neg: neg,
+    mul: mul,
+    square: square,
+    pow: pow,
+    exp: exp$1,
+    abs: abs,
+    div: div,
+    mod: mod,
+    eq: eq,
+    neq: neq,
+    lt: lt,
+    gt: gt,
+    leq: leq,
+    geq: geq,
+    band: band,
+    bor: bor,
+    bxor: bxor,
+    land: land,
+    lor: lor,
+    lnot: lnot,
     toRprLE: toRprLE,
+    toRprBE: toRprBE,
+    fromRprLE: fromRprLE,
+    fromRprBE: fromRprBE,
     toString: toString,
-    zero: zero
+    toLEBuff: toLEBuff,
+    zero: zero,
+    one: one
 });
 
 /*
@@ -939,7 +947,6 @@ function __bitReverse(p, bits) {
 */
 
 
-
 function mulScalar(F, base, e) {
     let res;
 
@@ -1281,7 +1288,7 @@ function getRandomBytes(n) {
         }
     }
     else { // NodeJS
-        crypto.randomFillSync(array);
+        crypto__default["default"].randomFillSync(array);
     }
     return array;
 }
@@ -1833,7 +1840,6 @@ class ZqField {
     snarkjs. If not, see <https://www.gnu.org/licenses/>.
 */
 
-
 class F2Field {
     constructor(F, nonResidue) {
         this.type="F2";
@@ -2070,7 +2076,6 @@ class F2Field {
     You should have received a copy of the GNU General Public License along with
     snarkjs. If not, see <https://www.gnu.org/licenses/>.
 */
-
 
 class F3Field {
     constructor(F, nonResidue) {
@@ -2354,7 +2359,6 @@ class F3Field {
     You should have received a copy of the GNU General Public License along with
     snarkjs. If not, see <https://www.gnu.org/licenses/>.
 */
-
 
 
 function isGreatest(F, a) {
@@ -3019,19 +3023,19 @@ function buffer2array(buff, sG) {
 
 var _utils = /*#__PURE__*/Object.freeze({
     __proto__: null,
-    array2buffer: array2buffer,
+    stringifyBigInts: stringifyBigInts,
+    unstringifyBigInts: unstringifyBigInts,
     beBuff2int: beBuff2int,
     beInt2Buff: beInt2Buff,
-    bitReverse: bitReverse,
-    buffReverseBits: buffReverseBits,
-    buffer2array: buffer2array,
     leBuff2int: leBuff2int,
     leInt2Buff: leInt2Buff,
-    log2: log2,
-    stringifyBigInts: stringifyBigInts,
     stringifyFElements: stringifyFElements,
-    unstringifyBigInts: unstringifyBigInts,
-    unstringifyFElements: unstringifyFElements
+    unstringifyFElements: unstringifyFElements,
+    bitReverse: bitReverse,
+    log2: log2,
+    buffReverseBits: buffReverseBits,
+    array2buffer: array2buffer,
+    buffer2array: buffer2array
 });
 
 const PAGE_SIZE = 1<<30;
@@ -4473,7 +4477,7 @@ async function buildThreadManager(wasm, singleThread) {
                 concurrency = navigator.hardwareConcurrency;
             }
         } else {
-            concurrency = os.cpus().length;
+            concurrency = os__default["default"].cpus().length;
         }
 
         if(concurrency == 0){
@@ -4486,7 +4490,7 @@ async function buildThreadManager(wasm, singleThread) {
 
         for (let i = 0; i<concurrency; i++) {
 
-            tm.workers[i] = new Worker(workerSource);
+            tm.workers[i] = new Worker__default["default"](workerSource);
 
             tm.workers[i].addEventListener("message", getOnMsg(i));
 
@@ -5951,11 +5955,70 @@ async function buildBls12381(singleThread, plugins) {
     return curve;
 }
 
+globalThis.curve_bls12377 = null;
+
+async function buildBls12377(singleThread, plugins) {
+    if ((!singleThread) && (globalThis.curve_bls12377)) return globalThis.curve_bls12377;
+
+    const moduleBuilder = new wasmbuilder.ModuleBuilder();
+    moduleBuilder.setMemory(25);
+    wasmcurves.buildBls12377(moduleBuilder);
+
+    if (plugins) plugins(moduleBuilder);
+
+    const bls12377wasm = {};
+
+    bls12377wasm.code = moduleBuilder.build();
+    bls12377wasm.pq = moduleBuilder.modules.f1m.pq;
+    bls12377wasm.pr = moduleBuilder.modules.frm.pq;
+    bls12377wasm.pG1gen = moduleBuilder.modules.bls12377.pG1gen;
+    bls12377wasm.pG1zero = moduleBuilder.modules.bls12377.pG1zero;
+    bls12377wasm.pG1b = moduleBuilder.modules.bls12377.pG1b;
+    bls12377wasm.pG2gen = moduleBuilder.modules.bls12377.pG2gen;
+    bls12377wasm.pG2zero = moduleBuilder.modules.bls12377.pG2zero;
+    bls12377wasm.pG2b = moduleBuilder.modules.bls12377.pG2b;
+    bls12377wasm.pOneT = moduleBuilder.modules.bls12377.pOneT;
+    bls12377wasm.prePSize = moduleBuilder.modules.bls12377.prePSize;
+    bls12377wasm.preQSize = moduleBuilder.modules.bls12377.preQSize;
+    bls12377wasm.n8q = 48;
+    bls12377wasm.n8r = 32;
+    bls12377wasm.q = moduleBuilder.modules.bls12377.q;
+    bls12377wasm.r = moduleBuilder.modules.bls12377.r;
+
+    const params = {
+        name: "bls12377",
+        wasm: bls12377wasm,
+        q: e("01ae3a4617c510eac63b05c06ca1493b1a22d9f300f5138f1ef3622fba094800170b5d44300000008508c00000000001", 16),
+        r: e("12ab655e9a2ca55660b44d1e5c37b00159aa76fed00000010a11800000000001", 16),
+        n8q: 48,
+        n8r: 32,
+        cofactorG1: e("0x170b5d44300000000000000000000000", 16),
+        cofactorG2: e("0x26ba558ae9562addd88d99a6f6a829fbb36b00e1dcc40c8c505634fae2e189d693e8c36676bd09a0f3622fba094800452217cc900000000000000000000001", 16),
+        singleThread: singleThread ? true : false
+    };
+
+    const curve = await buildEngine(params);
+    curve.terminate = async function () {
+        if (!params.singleThread) {
+            globalThis.curve_bls12377 = null;
+            await this.tm.terminate();
+        }
+    };
+
+    if (!singleThread) {
+        globalThis.curve_bls12377 = curve;
+    }
+
+    return curve;
+}
+
 const bls12381r = e("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001", 16);
 const bn128r = e("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+const bls12377r = e("12ab655e9a2ca55660b44d1e5c37b00159aa76fed00000010a11800000000001", 16);
 
 const bls12381q = e("1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab", 16);
 const bn128q = e("21888242871839275222246405745257275088696311157297823662689037894645226208583");
+const bls12377q = e("01ae3a4617c510eac63b05c06ca1493b1a22d9f300f5138f1ef3622fba094800170b5d44300000008508c00000000001", 16);
 
 async function getCurveFromR(r, singleThread, plugins) {
     let curve;
@@ -5963,6 +6026,8 @@ async function getCurveFromR(r, singleThread, plugins) {
         curve = await buildBn128(singleThread, plugins);
     } else if (eq(r, bls12381r)) {
         curve = await buildBls12381(singleThread, plugins);
+    } else if (eq(r, bls12377r)) {
+        curve = await buildBls12377(singleThread, plugins);
     } else {
         throw new Error(`Curve not supported: ${toString(r)}`);
     }
@@ -5975,6 +6040,8 @@ async function getCurveFromQ(q, singleThread, plugins) {
         curve = await buildBn128(singleThread, plugins);
     } else if (eq(q, bls12381q)) {
         curve = await buildBls12381(singleThread, plugins);
+    } else if (eq(q, bls12377q)) {
+        curve = await buildBls12377(singleThread, plugins);
     } else {
         throw new Error(`Curve not supported: ${toString(q, 16)}`);
     }
@@ -5988,6 +6055,8 @@ async function getCurveFromName(name, singleThread, plugins) {
         curve = await buildBn128(singleThread, plugins);
     } else if (["BLS12381"].indexOf(normName) >= 0) {
         curve = await buildBls12381(singleThread, plugins);
+    } else if (["BLS12377"].indexOf(normName) >= 0) {
+        curve = await buildBls12377(singleThread, plugins);
     } else {
         throw new Error(`Curve not supported: ${name}`);
     }
@@ -6011,6 +6080,7 @@ exports.F3Field = F3Field;
 exports.PolField = PolField;
 exports.Scalar = Scalar;
 exports.ZqField = ZqField;
+exports.buildBls12377 = buildBls12377;
 exports.buildBls12381 = buildBls12381;
 exports.buildBn128 = buildBn128;
 exports.getCurveFromName = getCurveFromName;
