@@ -1,37 +1,78 @@
-import { buildBn128 as buildBn128wasm } from "wasmcurves";
+//import { bn128_wasm_gzip as bn128wasmPrebuilt } from "wasmcurves";
 import buildEngine from "./engine.js";
 import * as Scalar from "./scalar.js";
-import { ModuleBuilder } from "wasmbuilder";
 
 globalThis.curve_bn128 = null;
 
 export default async function buildBn128(singleThread, plugins) {
     if ((!singleThread) && (globalThis.curve_bn128)) return globalThis.curve_bn128;
 
-    const moduleBuilder = new ModuleBuilder();
-    moduleBuilder.setMemory(25);
-    buildBn128wasm(moduleBuilder);
+    let bn128wasm = {};
 
-    if (plugins) plugins(moduleBuilder);
+    if (!plugins) {
 
-    const bn128wasm = {};
+        console.log("Using prebuilt bn128 wasm");
 
-    bn128wasm.code = moduleBuilder.build();
-    bn128wasm.pq = moduleBuilder.modules.f1m.pq;
-    bn128wasm.pr = moduleBuilder.modules.frm.pq;
-    bn128wasm.pG1gen = moduleBuilder.modules.bn128.pG1gen;
-    bn128wasm.pG1zero = moduleBuilder.modules.bn128.pG1zero;
-    bn128wasm.pG1b = moduleBuilder.modules.bn128.pG1b;
-    bn128wasm.pG2gen = moduleBuilder.modules.bn128.pG2gen;
-    bn128wasm.pG2zero = moduleBuilder.modules.bn128.pG2zero;
-    bn128wasm.pG2b = moduleBuilder.modules.bn128.pG2b;
-    bn128wasm.pOneT = moduleBuilder.modules.bn128.pOneT;
-    bn128wasm.prePSize = moduleBuilder.modules.bn128.prePSize;
-    bn128wasm.preQSize = moduleBuilder.modules.bn128.preQSize;
-    bn128wasm.n8q = 32;
-    bn128wasm.n8r = 32;
-    bn128wasm.q = moduleBuilder.modules.bn128.q;
-    bn128wasm.r = moduleBuilder.modules.bn128.r;
+        //import { bn128_wasm_gzip as bn128wasmPrebuilt } from "wasmcurves";
+        //const { bn128_wasm_gzip: bn128wasmPrebuilt } = await import("wasmcurves");
+        const { default: bn128wasmPrebuilt } = await import("wasmcurves/build/bn128_wasm_gzip.js");
+
+        //console.log(bn128wasmPrebuilt);
+        bn128wasm.pq = bn128wasmPrebuilt.pq;
+        bn128wasm.pr = bn128wasmPrebuilt.pq;
+        bn128wasm.pG1gen = bn128wasmPrebuilt.pG1gen;
+        bn128wasm.pG1zero = bn128wasmPrebuilt.pG1zero;
+        bn128wasm.pG1b = bn128wasmPrebuilt.pG1b;
+        bn128wasm.pG2gen = bn128wasmPrebuilt.pG2gen;
+        bn128wasm.pG2zero = bn128wasmPrebuilt.pG2zero;
+        bn128wasm.pG2b = bn128wasmPrebuilt.pG2b;
+        bn128wasm.pOneT = bn128wasmPrebuilt.pOneT;
+        bn128wasm.prePSize = bn128wasmPrebuilt.prePSize;
+        bn128wasm.preQSize = bn128wasmPrebuilt.preQSize;
+        bn128wasm.n8q = 32;
+        bn128wasm.n8r = 32;
+        bn128wasm.q = bn128wasmPrebuilt.q;
+        bn128wasm.r = bn128wasmPrebuilt.r;
+
+        const compressedCode = new Uint8Array(Buffer.from(bn128wasmPrebuilt.gzipCode, "base64"));
+        const blob = new Blob([compressedCode]);
+
+        const ds = new DecompressionStream("gzip");
+        const decompressedStream = blob.stream().pipeThrough(ds);
+
+        bn128wasm.code = await new Response(decompressedStream).bytes();
+    } else {
+
+        //import { ModuleBuilder } from "wasmbuilder";
+        //import { buildBn128 as buildBn128wasm } from "wasmcurves";
+        const { ModuleBuilder } = await import("wasmbuilder");
+        const { buildBn128: buildBn128wasm } = await import("wasmcurves");
+
+        const moduleBuilder = new ModuleBuilder();
+        moduleBuilder.setMemory(25);
+        buildBn128wasm(moduleBuilder);
+
+        if (plugins) plugins(moduleBuilder);
+
+        bn128wasm.code = moduleBuilder.build();
+        bn128wasm.pq = moduleBuilder.modules.f1m.pq;
+        bn128wasm.pr = moduleBuilder.modules.frm.pq;
+        bn128wasm.pG1gen = moduleBuilder.modules.bn128.pG1gen;
+        bn128wasm.pG1zero = moduleBuilder.modules.bn128.pG1zero;
+        bn128wasm.pG1b = moduleBuilder.modules.bn128.pG1b;
+        bn128wasm.pG2gen = moduleBuilder.modules.bn128.pG2gen;
+        bn128wasm.pG2zero = moduleBuilder.modules.bn128.pG2zero;
+        bn128wasm.pG2b = moduleBuilder.modules.bn128.pG2b;
+        bn128wasm.pOneT = moduleBuilder.modules.bn128.pOneT;
+        bn128wasm.prePSize = moduleBuilder.modules.bn128.prePSize;
+        bn128wasm.preQSize = moduleBuilder.modules.bn128.preQSize;
+        bn128wasm.n8q = 32;
+        bn128wasm.n8r = 32;
+        bn128wasm.q = moduleBuilder.modules.bn128.q;
+        bn128wasm.r = moduleBuilder.modules.bn128.r;
+    }
+
+    //console.log("bn128wasm:", bn128wasm);
 
     const params = {
         name: "bn128",

@@ -10,6 +10,7 @@ export default [
             {
                 format: "es",
                 file: "build/browser.esm.js",
+                inlineDynamicImports: true,
             },
         ],
         plugins: [

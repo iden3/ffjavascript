@@ -1,12 +1,13 @@
-import { buildBls12381 as buildBls12381wasm } from "wasmcurves";
 import buildEngine from "./engine.js";
 import * as Scalar from "./scalar.js";
-import { ModuleBuilder } from "wasmbuilder";
 
 globalThis.curve_bls12381 = null;
 
 export default async function buildBls12381(singleThread, plugins) {
     if ((!singleThread) && (globalThis.curve_bls12381)) return globalThis.curve_bls12381;
+
+    const { ModuleBuilder } = await import("wasmbuilder");
+    const { buildBls12381: buildBls12381wasm } = await import("wasmcurves");
 
     const moduleBuilder = new ModuleBuilder();
     moduleBuilder.setMemory(25);

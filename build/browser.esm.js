@@ -2757,7 +2757,1683 @@ class EC {
 
 }
 
-var utils$6 = {};
+/* global BigInt */
+
+function stringifyBigInts(o) {
+    if (typeof o == "bigint" || o.eq !== undefined) {
+        return o.toString(10);
+    } else if (o instanceof Uint8Array) {
+        return fromRprLE(o, 0);
+    } else if (Array.isArray(o)) {
+        return o.map(stringifyBigInts);
+    } else if (typeof o == "object") {
+        const res = {};
+        const keys = Object.keys(o);
+        keys.forEach((k) => {
+            res[k] = stringifyBigInts(o[k]);
+        });
+        return res;
+    } else {
+        return o;
+    }
+}
+
+function unstringifyBigInts(o) {
+    if (typeof o == "string" && /^[0-9]+$/.test(o)) {
+        return BigInt(o);
+    } else if (typeof o == "string" && /^0x[0-9a-fA-F]+$/.test(o)) {
+        return BigInt(o);
+    } else if (Array.isArray(o)) {
+        return o.map(unstringifyBigInts);
+    } else if (typeof o == "object") {
+        if (o === null) return null;
+        const res = {};
+        const keys = Object.keys(o);
+        keys.forEach((k) => {
+            res[k] = unstringifyBigInts(o[k]);
+        });
+        return res;
+    } else {
+        return o;
+    }
+}
+
+function beBuff2int(buff) {
+    let res = BigInt(0);
+    let i = buff.length;
+    let offset = 0;
+    const buffV = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
+    while (i > 0) {
+        if (i >= 4) {
+            i -= 4;
+            res += BigInt(buffV.getUint32(i)) << BigInt(offset * 8);
+            offset += 4;
+        } else if (i >= 2) {
+            i -= 2;
+            res += BigInt(buffV.getUint16(i)) << BigInt(offset * 8);
+            offset += 2;
+        } else {
+            i -= 1;
+            res += BigInt(buffV.getUint8(i)) << BigInt(offset * 8);
+            offset += 1;
+        }
+    }
+    return res;
+}
+
+function beInt2Buff(n, len) {
+    let r = n;
+    const buff = new Uint8Array(len);
+    const buffV = new DataView(buff.buffer);
+    let o = len;
+    while (o > 0) {
+        if (o - 4 >= 0) {
+            o -= 4;
+            buffV.setUint32(o, Number(r & BigInt(0xffffffff)));
+            r = r >> BigInt(32);
+        } else if (o - 2 >= 0) {
+            o -= 2;
+            buffV.setUint16(o, Number(r & BigInt(0xffff)));
+            r = r >> BigInt(16);
+        } else {
+            o -= 1;
+            buffV.setUint8(o, Number(r & BigInt(0xff)));
+            r = r >> BigInt(8);
+        }
+    }
+    if (r) {
+        throw new Error("Number does not fit in this length");
+    }
+    return buff;
+}
+
+function leBuff2int(buff) {
+    let res = BigInt(0);
+    let i = 0;
+    const buffV = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
+    while (i < buff.length) {
+        if (i + 4 <= buff.length) {
+            res += BigInt(buffV.getUint32(i, true)) << BigInt(i * 8);
+            i += 4;
+        } else if (i + 2 <= buff.length) {
+            res += BigInt(buffV.getUint16(i, true)) << BigInt(i * 8);
+            i += 2;
+        } else {
+            res += BigInt(buffV.getUint8(i, true)) << BigInt(i * 8);
+            i += 1;
+        }
+    }
+    return res;
+}
+
+function leInt2Buff(n, len) {
+    let r = n;
+    if (typeof len === "undefined") {
+        len = Math.floor((bitLength$6(n) - 1) / 8) + 1;
+        if (len == 0) len = 1;
+    }
+    const buff = new Uint8Array(len);
+    const buffV = new DataView(buff.buffer);
+    let o = 0;
+    while (o < len) {
+        if (o + 4 <= len) {
+            buffV.setUint32(o, Number(r & BigInt(0xffffffff)), true);
+            o += 4;
+            r = r >> BigInt(32);
+        } else if (o + 2 <= len) {
+            buffV.setUint16(o, Number(r & BigInt(0xffff)), true);
+            o += 2;
+            r = r >> BigInt(16);
+        } else {
+            buffV.setUint8(o, Number(r & BigInt(0xff)), true);
+            o += 1;
+            r = r >> BigInt(8);
+        }
+    }
+    if (r) {
+        throw new Error("Number does not fit in this length");
+    }
+    return buff;
+}
+
+function stringifyFElements(F, o) {
+    if (typeof o == "bigint" || o.eq !== undefined) {
+        return o.toString(10);
+    } else if (o instanceof Uint8Array) {
+        return F.toString(F.e(o));
+    } else if (Array.isArray(o)) {
+        return o.map(stringifyFElements.bind(this, F));
+    } else if (typeof o == "object") {
+        const res = {};
+        const keys = Object.keys(o);
+        keys.forEach((k) => {
+            res[k] = stringifyFElements(F, o[k]);
+        });
+        return res;
+    } else {
+        return o;
+    }
+}
+
+function unstringifyFElements(F, o) {
+    if (typeof o == "string" && /^[0-9]+$/.test(o)) {
+        return F.e(o);
+    } else if (typeof o == "string" && /^0x[0-9a-fA-F]+$/.test(o)) {
+        return F.e(o);
+    } else if (Array.isArray(o)) {
+        return o.map(unstringifyFElements.bind(this, F));
+    } else if (typeof o == "object") {
+        if (o === null) return null;
+        const res = {};
+        const keys = Object.keys(o);
+        keys.forEach((k) => {
+            res[k] = unstringifyFElements(F, o[k]);
+        });
+        return res;
+    } else {
+        return o;
+    }
+}
+
+const _revTable = [];
+for (let i = 0; i < 256; i++) {
+    _revTable[i] = _revSlow(i, 8);
+}
+
+function _revSlow(idx, bits) {
+    let res = 0;
+    let a = idx;
+    for (let i = 0; i < bits; i++) {
+        res <<= 1;
+        res = res | (a & 1);
+        a >>= 1;
+    }
+    return res;
+}
+
+function bitReverse(idx, bits) {
+    return (
+        (_revTable[idx >>> 24] |
+        (_revTable[(idx >>> 16) & 0xff] << 8) |
+        (_revTable[(idx >>> 8) & 0xff] << 16) |
+        (_revTable[idx & 0xff] << 24)) >>>
+        (32 - bits)
+    );
+}
+
+function log2(V) {
+    return (
+        ((V & 0xffff0000) !== 0 ? ((V &= 0xffff0000), 16) : 0) |
+        ((V & 0xff00ff00) !== 0 ? ((V &= 0xff00ff00), 8) : 0) |
+        ((V & 0xf0f0f0f0) !== 0 ? ((V &= 0xf0f0f0f0), 4) : 0) |
+        ((V & 0xcccccccc) !== 0 ? ((V &= 0xcccccccc), 2) : 0) |
+        ((V & 0xaaaaaaaa) !== 0)
+    );
+}
+
+function buffReverseBits(buff, eSize) {
+    const n = buff.byteLength / eSize;
+    const bits = log2(n);
+    if (n != 1 << bits) {
+        throw new Error("Invalid number of pointers");
+    }
+    for (let i = 0; i < n; i++) {
+        const r = bitReverse(i, bits);
+        if (i > r) {
+            const tmp = buff.slice(i * eSize, (i + 1) * eSize);
+            buff.set(buff.slice(r * eSize, (r + 1) * eSize), i * eSize);
+            buff.set(tmp, r * eSize);
+        }
+    }
+}
+
+function array2buffer(arr, sG) {
+    const buff = new Uint8Array(sG * arr.length);
+
+    for (let i = 0; i < arr.length; i++) {
+        buff.set(arr[i], i * sG);
+    }
+
+    return buff;
+}
+
+function buffer2array(buff, sG) {
+    const n = buff.byteLength / sG;
+    const arr = new Array(n);
+    for (let i = 0; i < n; i++) {
+        arr[i] = buff.slice(i * sG, i * sG + sG);
+    }
+    return arr;
+}
+
+var _utils = /*#__PURE__*/Object.freeze({
+    __proto__: null,
+    array2buffer: array2buffer,
+    beBuff2int: beBuff2int,
+    beInt2Buff: beInt2Buff,
+    bitReverse: bitReverse,
+    buffReverseBits: buffReverseBits,
+    buffer2array: buffer2array,
+    leBuff2int: leBuff2int,
+    leInt2Buff: leInt2Buff,
+    log2: log2,
+    stringifyBigInts: stringifyBigInts,
+    stringifyFElements: stringifyFElements,
+    unstringifyBigInts: unstringifyBigInts,
+    unstringifyFElements: unstringifyFElements
+});
+
+const PAGE_SIZE = ( typeof Buffer !== "undefined" && Buffer.constants && Buffer.constants.MAX_LENGTH ) ? Buffer.constants.MAX_LENGTH : (1 << 30);
+
+class BigBuffer {
+
+    constructor(size) {
+        this.buffers = [];
+        this.byteLength = size;
+        for (let i=0; i<size; i+= PAGE_SIZE) {
+            const n = Math.min(size-i, PAGE_SIZE);
+            this.buffers.push(new Uint8Array(n));
+            //this.buffers.push(new Uint8Array(new SharedArrayBuffer(n)));
+        }
+        // if (this.buffers.length === 1) {
+        //     this.buffer = this.buffers[0];
+        // }
+
+    }
+
+    slice(fr, to) {
+        if ( to === undefined ) to = this.byteLength;
+        if ( fr === undefined ) fr = 0;
+        const len = to-fr;
+
+        const firstPage = Math.floor(fr / PAGE_SIZE);
+        const lastPage = Math.floor((fr+len-1) / PAGE_SIZE);
+
+        if ((firstPage == lastPage)||(len==0))
+            return this.buffers[firstPage].slice(fr%PAGE_SIZE, fr%PAGE_SIZE + len);
+
+        let buff;
+
+        let p = firstPage;
+        let o = fr % PAGE_SIZE;
+        // Remaining bytes to read
+        let r = len;
+        while (r>0) {
+            // bytes to copy from this page
+            const l = (o+r > PAGE_SIZE) ? (PAGE_SIZE -o) : r;
+            const srcView = new Uint8Array(this.buffers[p].buffer, this.buffers[p].byteOffset+o, l);
+            if (l == len) return srcView.slice();
+            if (!buff) {
+                if (len <= PAGE_SIZE) {
+                    buff = new Uint8Array(len);
+                } else {
+                    buff = new BigBuffer(len);
+                }
+            }
+            buff.set(srcView, len-r);
+            r = r-l;
+            p ++;
+            o = 0;
+        }
+
+        return buff;
+    }
+
+    set(buff, offset) {
+        if (offset === undefined) offset = 0;
+
+        const len = buff.byteLength;
+
+        if (len==0) return;
+
+        const firstPage = Math.floor(offset / PAGE_SIZE);
+        const lastPage = Math.floor((offset+len-1) / PAGE_SIZE);
+
+        if (firstPage == lastPage) {
+            if ((buff instanceof BigBuffer)&&(buff.buffers.length==1)) {
+                return this.buffers[firstPage].set(buff.buffers[0], offset % PAGE_SIZE);
+            } else {
+                return this.buffers[firstPage].set(buff, offset % PAGE_SIZE);
+            }
+
+        }
+
+
+        let p = firstPage;
+        let o = offset % PAGE_SIZE;
+        let r = len;
+        while (r>0) {
+            const l = (o+r > PAGE_SIZE) ? (PAGE_SIZE -o) : r;
+            const srcView = buff.slice( len -r, len -r+l);
+            const dstView = new Uint8Array(this.buffers[p].buffer, this.buffers[p].byteOffset + o, l);
+            dstView.set(srcView);
+            r = r-l;
+            p ++;
+            o = 0;
+        }
+
+    }
+}
+
+function buildBatchConvert(tm, fnName, sIn, sOut) {
+    return async function batchConvert(buffIn) {
+        const nPoints = Math.floor(buffIn.byteLength / sIn);
+        if ( nPoints * sIn !== buffIn.byteLength) {
+            throw new Error("Invalid buffer size");
+        }
+        const pointsPerChunk = Math.floor(nPoints/tm.concurrency);
+        const opPromises = [];
+        for (let i=0; i<tm.concurrency; i++) {
+            let n;
+            if (i< tm.concurrency-1) {
+                n = pointsPerChunk;
+            } else {
+                n = nPoints - i*pointsPerChunk;
+            }
+            if (n==0) continue;
+
+            const buffChunk = buffIn.slice(i*pointsPerChunk*sIn, i*pointsPerChunk*sIn + n*sIn);
+            const task = [
+                {cmd: "ALLOCSET", var: 0, buff:buffChunk},
+                {cmd: "ALLOC", var: 1, len:sOut * n},
+                {cmd: "CALL", fnName: fnName, params: [
+                    {var: 0},
+                    {val: n},
+                    {var: 1}
+                ]},
+                {cmd: "GET", out: 0, var: 1, len:sOut * n},
+            ];
+            opPromises.push(
+                tm.queueAction(task, [buffChunk.buffer])
+            );
+        }
+
+        const result = await Promise.all(opPromises);
+
+        let fullBuffOut;
+        if (buffIn instanceof BigBuffer) {
+            fullBuffOut = new BigBuffer(nPoints*sOut);
+        } else {
+            fullBuffOut = new Uint8Array(nPoints*sOut);
+        }
+
+        let p =0;
+        for (let i=0; i<result.length; i++) {
+            fullBuffOut.set(result[i][0], p);
+            p+=result[i][0].byteLength;
+        }
+
+        return fullBuffOut;
+    };
+}
+
+class WasmField1 {
+
+    constructor(tm, prefix, n8, p) {
+        this.tm = tm;
+        this.prefix = prefix;
+
+        this.p = p;
+        this.n8 = n8;
+        this.type = "F1";
+        this.m = 1;
+
+        this.half = shiftRight(p, one);
+        this.bitLength = bitLength$6(p);
+        this.mask = sub(shiftLeft(one, this.bitLength), one);
+
+        this.pOp1 = tm.alloc(n8);
+        this.pOp2 = tm.alloc(n8);
+        this.pOp3 = tm.alloc(n8);
+        this.tm.instance.exports[prefix + "_zero"](this.pOp1);
+        this.zero = this.tm.getBuff(this.pOp1, this.n8);
+        this.tm.instance.exports[prefix + "_one"](this.pOp1);
+        this.one = this.tm.getBuff(this.pOp1, this.n8);
+
+        this.negone = this.neg(this.one);
+        this.two = this.add(this.one, this.one);
+
+        this.n64 = Math.floor(n8/8);
+        this.n32 = Math.floor(n8/4);
+
+        if(this.n64*8 != this.n8) {
+            throw new Error("n8 must be a multiple of 8");
+        }
+
+        this.half = shiftRight(this.p, one);
+        this.nqr = this.two;
+        let r = this.exp(this.nqr, this.half);
+        while (!this.eq(r, this.negone)) {
+            this.nqr = this.add(this.nqr, this.one);
+            r = this.exp(this.nqr, this.half);
+        }
+
+        this.shift = this.mul(this.nqr, this.nqr);
+        this.shiftInv = this.inv(this.shift);
+
+        this.s = 0;
+        let t = sub(this.p, one);
+
+        while ( !isOdd$5(t) ) {
+            this.s = this.s + 1;
+            t = shiftRight(t, one);
+        }
+
+        this.w = [];
+        this.w[this.s] = this.exp(this.nqr, t);
+
+        for (let i= this.s-1; i>=0; i--) {
+            this.w[i] = this.square(this.w[i+1]);
+        }
+
+        if (!this.eq(this.w[0], this.one)) {
+            throw new Error("Error calculating roots of unity");
+        }
+
+        this.batchToMontgomery = buildBatchConvert(tm, prefix + "_batchToMontgomery", this.n8, this.n8);
+        this.batchFromMontgomery = buildBatchConvert(tm, prefix + "_batchFromMontgomery", this.n8, this.n8);
+    }
+
+
+    op2(opName, a, b) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
+    }
+
+    op2Bool(opName, a, b) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2);
+    }
+
+    op1(opName, a) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
+    }
+
+    op1Bool(opName, a) {
+        this.tm.setBuff(this.pOp1, a);
+        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
+    }
+
+    add(a,b) {
+        return this.op2("_add", a, b);
+    }
+
+
+    eq(a,b) {
+        return this.op2Bool("_eq", a, b);
+    }
+
+    isZero(a) {
+        return this.op1Bool("_isZero", a);
+    }
+
+    sub(a,b) {
+        return this.op2("_sub", a, b);
+    }
+
+    neg(a) {
+        return this.op1("_neg", a);
+    }
+
+    inv(a) {
+        return this.op1("_inverse", a);
+    }
+
+    toMontgomery(a) {
+        return this.op1("_toMontgomery", a);
+    }
+
+    fromMontgomery(a) {
+        return this.op1("_fromMontgomery", a);
+    }
+
+    mul(a,b) {
+        return this.op2("_mul", a, b);
+    }
+
+    div(a, b) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        this.tm.instance.exports[this.prefix + "_inverse"](this.pOp2, this.pOp2);
+        this.tm.instance.exports[this.prefix + "_mul"](this.pOp1, this.pOp2, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
+    }
+
+    square(a) {
+        return this.op1("_square", a);
+    }
+
+    isSquare(a) {
+        return this.op1Bool("_isSquare", a);
+    }
+
+    sqrt(a) {
+        return this.op1("_sqrt", a);
+    }
+
+    exp(a, b) {
+        if (!(b instanceof Uint8Array)) {
+            b = toLEBuff(e(b));
+        }
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        this.tm.instance.exports[this.prefix + "_exp"](this.pOp1, this.pOp2, b.byteLength, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
+    }
+
+    isNegative(a) {
+        return this.op1Bool("_isNegative", a);
+    }
+
+    e(a, b) {
+        if (a instanceof Uint8Array) return a;
+        let ra = e(a, b);
+        if (isNegative$4(ra)) {
+            ra = neg(ra);
+            if (gt(ra, this.p)) {
+                ra = mod(ra, this.p);
+            }
+            ra = sub(this.p, ra);
+        } else {
+            if (gt(ra, this.p)) {
+                ra = mod(ra, this.p);
+            }
+        }
+        const buff = leInt2Buff(ra, this.n8);
+        return this.toMontgomery(buff);
+    }
+
+    toString(a, radix) {
+        const an = this.fromMontgomery(a);
+        const s = fromRprLE(an, 0);
+        return toString(s, radix);
+    }
+
+    fromRng(rng) {
+        let v;
+        const buff = new Uint8Array(this.n8);
+        do {
+            v = zero;
+            for (let i=0; i<this.n64; i++) {
+                v = add(v,  shiftLeft(rng.nextU64(), 64*i));
+            }
+            v = band(v, this.mask);
+        } while (geq(v, this.p));
+        toRprLE(buff, 0, v, this.n8);
+        return buff;
+    }
+
+    random() {
+        return this.fromRng(getThreadRng());
+    }
+
+    toObject(a) {
+        const an = this.fromMontgomery(a);
+        return fromRprLE(an, 0);
+    }
+
+    fromObject(a) {
+        const buff = new Uint8Array(this.n8);
+        toRprLE(buff, 0, a, this.n8);
+        return this.toMontgomery(buff);
+    }
+
+    toRprLE(buff, offset, a) {
+        buff.set(this.fromMontgomery(a), offset);
+    }
+
+    toRprBE(buff, offset, a) {
+        const buff2 = this.fromMontgomery(a);
+        for (let i=0; i<this.n8/2; i++) {
+            const aux = buff2[i];
+            buff2[i] = buff2[this.n8-1-i];
+            buff2[this.n8-1-i] = aux;
+        }
+        buff.set(buff2, offset);
+    }
+
+    fromRprLE(buff, offset) {
+        offset = offset || 0;
+        const res = buff.slice(offset, offset + this.n8);
+        return this.toMontgomery(res);
+    }
+
+    async batchInverse(buffIn) {
+        let returnArray = false;
+        const sIn = this.n8;
+        const sOut = this.n8;
+
+        if (Array.isArray(buffIn)) {
+            buffIn = array2buffer(buffIn, sIn );
+            returnArray = true;
+        } else {
+            buffIn = buffIn.slice(0, buffIn.byteLength);
+        }
+
+        const nPoints = Math.floor(buffIn.byteLength / sIn);
+        if ( nPoints * sIn !== buffIn.byteLength) {
+            throw new Error("Invalid buffer size");
+        }
+        const pointsPerChunk = Math.floor(nPoints/this.tm.concurrency);
+        const opPromises = [];
+        for (let i=0; i<this.tm.concurrency; i++) {
+            let n;
+            if (i< this.tm.concurrency-1) {
+                n = pointsPerChunk;
+            } else {
+                n = nPoints - i*pointsPerChunk;
+            }
+            if (n==0) continue;
+
+            const buffChunk = buffIn.slice(i*pointsPerChunk*sIn, i*pointsPerChunk*sIn + n*sIn);
+            const task = [
+                {cmd: "ALLOCSET", var: 0, buff:buffChunk},
+                {cmd: "ALLOC", var: 1, len:sOut * n},
+                {cmd: "CALL", fnName: this.prefix + "_batchInverse", params: [
+                    {var: 0},
+                    {val: sIn},
+                    {val: n},
+                    {var: 1},
+                    {val: sOut},
+                ]},
+                {cmd: "GET", out: 0, var: 1, len:sOut * n},
+            ];
+            opPromises.push(
+                this.tm.queueAction(task, [buffChunk.buffer])
+            );
+        }
+
+        const result = await Promise.all(opPromises);
+
+        let fullBuffOut;
+        if (buffIn instanceof BigBuffer) {
+            fullBuffOut = new BigBuffer(nPoints*sOut);
+        } else {
+            fullBuffOut = new Uint8Array(nPoints*sOut);
+        }
+
+        let p =0;
+        for (let i=0; i<result.length; i++) {
+            fullBuffOut.set(result[i][0], p);
+            p+=result[i][0].byteLength;
+        }
+
+        if (returnArray) {
+            return buffer2array(fullBuffOut, sOut);
+        } else {
+            return fullBuffOut;
+        }
+
+    }
+
+}
+
+class WasmField2 {
+
+    constructor(tm, prefix, F) {
+        this.tm = tm;
+        this.prefix = prefix;
+
+        this.F = F;
+        this.type = "F2";
+        this.m = F.m * 2;
+        this.n8 = this.F.n8*2;
+        this.n32 = this.F.n32*2;
+        this.n64 = this.F.n64*2;
+
+        this.pOp1 = tm.alloc(F.n8*2);
+        this.pOp2 = tm.alloc(F.n8*2);
+        this.pOp3 = tm.alloc(F.n8*2);
+        this.tm.instance.exports[prefix + "_zero"](this.pOp1);
+        this.zero = tm.getBuff(this.pOp1, this.n8);
+        this.tm.instance.exports[prefix + "_one"](this.pOp1);
+        this.one = tm.getBuff(this.pOp1, this.n8);
+
+        this.negone = this.neg(this.one);
+        this.two = this.add(this.one, this.one);
+
+    }
+
+    op2(opName, a, b) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
+    }
+
+    op2Bool(opName, a, b) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2);
+    }
+
+    op1(opName, a) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
+    }
+
+    op1Bool(opName, a) {
+        this.tm.setBuff(this.pOp1, a);
+        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
+    }
+
+    add(a,b) {
+        return this.op2("_add", a, b);
+    }
+
+    eq(a,b) {
+        return this.op2Bool("_eq", a, b);
+    }
+
+    isZero(a) {
+        return this.op1Bool("_isZero", a);
+    }
+
+    sub(a,b) {
+        return this.op2("_sub", a, b);
+    }
+
+    neg(a) {
+        return this.op1("_neg", a);
+    }
+
+    inv(a) {
+        return this.op1("_inverse", a);
+    }
+
+    isNegative(a) {
+        return this.op1Bool("_isNegative", a);
+    }
+
+    toMontgomery(a) {
+        return this.op1("_toMontgomery", a);
+    }
+
+    fromMontgomery(a) {
+        return this.op1("_fromMontgomery", a);
+    }
+
+    mul(a,b) {
+        return this.op2("_mul", a, b);
+    }
+
+    mul1(a,b) {
+        return this.op2("_mul1", a, b);
+    }
+
+    div(a, b) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        this.tm.instance.exports[this.prefix + "_inverse"](this.pOp2, this.pOp2);
+        this.tm.instance.exports[this.prefix + "_mul"](this.pOp1, this.pOp2, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
+    }
+
+    square(a) {
+        return this.op1("_square", a);
+    }
+
+    isSquare(a) {
+        return this.op1Bool("_isSquare", a);
+    }
+
+    sqrt(a) {
+        return this.op1("_sqrt", a);
+    }
+
+    exp(a, b) {
+        if (!(b instanceof Uint8Array)) {
+            b = toLEBuff(e(b));
+        }
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        this.tm.instance.exports[this.prefix + "_exp"](this.pOp1, this.pOp2, b.byteLength, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
+    }
+
+    e(a, b) {
+        if (a instanceof Uint8Array) return a;
+        if ((Array.isArray(a)) && (a.length == 2)) {
+            const c1 = this.F.e(a[0], b);
+            const c2 = this.F.e(a[1], b);
+            const res = new Uint8Array(this.F.n8*2);
+            res.set(c1);
+            res.set(c2, this.F.n8*2);
+            return res;
+        } else {
+            throw new Error("invalid F2");
+        }
+    }
+
+    toString(a, radix) {
+        const s1 = this.F.toString(a.slice(0, this.F.n8), radix);
+        const s2 = this.F.toString(a.slice(this.F.n8), radix);
+        return `[${s1}, ${s2}]`;
+    }
+
+    fromRng(rng) {
+        const c1 = this.F.fromRng(rng);
+        const c2 = this.F.fromRng(rng);
+        const res = new Uint8Array(this.F.n8*2);
+        res.set(c1);
+        res.set(c2, this.F.n8);
+        return res;
+    }
+
+    random() {
+        return this.fromRng(getThreadRng());
+    }
+
+    toObject(a) {
+        const c1 = this.F.toObject(a.slice(0, this.F.n8));
+        const c2 = this.F.toObject(a.slice(this.F.n8, this.F.n8*2));
+        return [c1, c2];
+    }
+
+    fromObject(a) {
+        const buff = new Uint8Array(this.F.n8*2);
+        const b1 = this.F.fromObject(a[0]);
+        const b2 = this.F.fromObject(a[1]);
+        buff.set(b1);
+        buff.set(b2, this.F.n8);
+        return buff;
+    }
+
+    c1(a) {
+        return a.slice(0, this.F.n8);
+    }
+
+    c2(a) {
+        return a.slice(this.F.n8);
+    }
+
+}
+
+class WasmField3 {
+
+    constructor(tm, prefix, F) {
+        this.tm = tm;
+        this.prefix = prefix;
+
+        this.F = F;
+        this.type = "F3";
+        this.m = F.m * 3;
+        this.n8 = this.F.n8*3;
+        this.n32 = this.F.n32*3;
+        this.n64 = this.F.n64*3;
+
+        this.pOp1 = tm.alloc(F.n8*3);
+        this.pOp2 = tm.alloc(F.n8*3);
+        this.pOp3 = tm.alloc(F.n8*3);
+        this.tm.instance.exports[prefix + "_zero"](this.pOp1);
+        this.zero = tm.getBuff(this.pOp1, this.n8);
+        this.tm.instance.exports[prefix + "_one"](this.pOp1);
+        this.one = tm.getBuff(this.pOp1, this.n8);
+
+        this.negone = this.neg(this.one);
+        this.two = this.add(this.one, this.one);
+
+    }
+
+    op2(opName, a, b) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
+    }
+
+    op2Bool(opName, a, b) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2);
+    }
+
+    op1(opName, a) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
+    }
+
+    op1Bool(opName, a) {
+        this.tm.setBuff(this.pOp1, a);
+        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
+    }
+
+
+    eq(a,b) {
+        return this.op2Bool("_eq", a, b);
+    }
+
+    isZero(a) {
+        return this.op1Bool("_isZero", a);
+    }
+
+    add(a,b) {
+        return this.op2("_add", a, b);
+    }
+
+    sub(a,b) {
+        return this.op2("_sub", a, b);
+    }
+
+    neg(a) {
+        return this.op1("_neg", a);
+    }
+
+    inv(a) {
+        return this.op1("_inverse", a);
+    }
+
+    isNegative(a) {
+        return this.op1Bool("_isNegative", a);
+    }
+
+    toMontgomery(a) {
+        return this.op1("_toMontgomery", a);
+    }
+
+    fromMontgomery(a) {
+        return this.op1("_fromMontgomery", a);
+    }
+
+    mul(a,b) {
+        return this.op2("_mul", a, b);
+    }
+
+    div(a, b) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        this.tm.instance.exports[this.prefix + "_inverse"](this.pOp2, this.pOp2);
+        this.tm.instance.exports[this.prefix + "_mul"](this.pOp1, this.pOp2, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.n8);
+    }
+
+    square(a) {
+        return this.op1("_square", a);
+    }
+
+    isSquare(a) {
+        return this.op1Bool("_isSquare", a);
+    }
+
+    sqrt(a) {
+        return this.op1("_sqrt", a);
+    }
+
+    exp(a, b) {
+        if (!(b instanceof Uint8Array)) {
+            b = toLEBuff(e(b));
+        }
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        this.tm.instance.exports[this.prefix + "_exp"](this.pOp1, this.pOp2, b.byteLength, this.pOp3);
+        return this.getBuff(this.pOp3, this.n8);
+    }
+
+    e(a, b) {
+        if (a instanceof Uint8Array) return a;
+        if ((Array.isArray(a)) && (a.length == 3)) {
+            const c1 = this.F.e(a[0], b);
+            const c2 = this.F.e(a[1], b);
+            const c3 = this.F.e(a[2], b);
+            const res = new Uint8Array(this.F.n8*3);
+            res.set(c1);
+            res.set(c2, this.F.n8);
+            res.set(c3, this.F.n8*2);
+            return res;
+        } else {
+            throw new Error("invalid F3");
+        }
+    }
+
+    toString(a, radix) {
+        const s1 = this.F.toString(a.slice(0, this.F.n8), radix);
+        const s2 = this.F.toString(a.slice(this.F.n8, this.F.n8*2), radix);
+        const s3 = this.F.toString(a.slice(this.F.n8*2), radix);
+        return `[${s1}, ${s2}, ${s3}]`;
+    }
+
+    fromRng(rng) {
+        const c1 = this.F.fromRng(rng);
+        const c2 = this.F.fromRng(rng);
+        const c3 = this.F.fromRng(rng);
+        const res = new Uint8Array(this.F.n8*3);
+        res.set(c1);
+        res.set(c2, this.F.n8);
+        res.set(c3, this.F.n8*2);
+        return res;
+    }
+
+    random() {
+        return this.fromRng(getThreadRng());
+    }
+
+    toObject(a) {
+        const c1 = this.F.toObject(a.slice(0, this.F.n8));
+        const c2 = this.F.toObject(a.slice(this.F.n8, this.F.n8*2));
+        const c3 = this.F.toObject(a.slice(this.F.n8*2, this.F.n8*3));
+        return [c1, c2, c3];
+    }
+
+    fromObject(a) {
+        const buff = new Uint8Array(this.F.n8*3);
+        const b1 = this.F.fromObject(a[0]);
+        const b2 = this.F.fromObject(a[1]);
+        const b3 = this.F.fromObject(a[2]);
+        buff.set(b1);
+        buff.set(b2, this.F.n8);
+        buff.set(b3, this.F.n8*2);
+        return buff;
+    }
+
+    c1(a) {
+        return a.slice(0, this.F.n8);
+    }
+
+    c2(a) {
+        return a.slice(this.F.n8, this.F.n8*2);
+    }
+
+    c3(a) {
+        return a.slice(this.F.n8*2);
+    }
+
+}
+
+class WasmCurve {
+
+    constructor(tm, prefix, F, pGen, pGb, cofactor) {
+        this.tm = tm;
+        this.prefix = prefix;
+        this.F = F;
+
+        this.pOp1 = tm.alloc(F.n8*3);
+        this.pOp2 = tm.alloc(F.n8*3);
+        this.pOp3 = tm.alloc(F.n8*3);
+        this.tm.instance.exports[prefix + "_zero"](this.pOp1);
+        this.zero = this.tm.getBuff(this.pOp1, F.n8*3);
+        this.tm.instance.exports[prefix + "_zeroAffine"](this.pOp1);
+        this.zeroAffine = this.tm.getBuff(this.pOp1, F.n8*2);
+        this.one = this.tm.getBuff(pGen, F.n8*3);
+        this.g = this.one;
+        this.oneAffine = this.tm.getBuff(pGen, F.n8*2);
+        this.gAffine = this.oneAffine;
+        this.b = this.tm.getBuff(pGb, F.n8);
+
+        if (cofactor) {
+            this.cofactor = toLEBuff(cofactor);
+        }
+
+        this.negone = this.neg(this.one);
+        this.two = this.add(this.one, this.one);
+
+        this.batchLEMtoC = buildBatchConvert(tm, prefix + "_batchLEMtoC", F.n8*2, F.n8);
+        this.batchLEMtoU = buildBatchConvert(tm, prefix + "_batchLEMtoU", F.n8*2, F.n8*2);
+        this.batchCtoLEM = buildBatchConvert(tm, prefix + "_batchCtoLEM", F.n8, F.n8*2);
+        this.batchUtoLEM = buildBatchConvert(tm, prefix + "_batchUtoLEM", F.n8*2, F.n8*2);
+        this.batchToJacobian = buildBatchConvert(tm, prefix + "_batchToJacobian", F.n8*2, F.n8*3);
+        this.batchToAffine = buildBatchConvert(tm, prefix + "_batchToAffine", F.n8*3, F.n8*2);
+    }
+
+    op2(opName, a, b) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.F.n8*3);
+    }
+
+    op2bool(opName, a, b) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, b);
+        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2, this.pOp3);
+    }
+
+    op1(opName, a) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.F.n8*3);
+    }
+
+    op1Affine(opName, a) {
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.F.n8*2);
+    }
+
+    op1Bool(opName, a) {
+        this.tm.setBuff(this.pOp1, a);
+        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
+    }
+
+    add(a,b) {
+        if (a.byteLength == this.F.n8*3) {
+            if (b.byteLength == this.F.n8*3) {
+                return this.op2("_add", a, b);
+            } else if (b.byteLength == this.F.n8*2) {
+                return this.op2("_addMixed", a, b);
+            } else {
+                throw new Error("invalid point size");
+            }
+        } else if (a.byteLength == this.F.n8*2) {
+            if (b.byteLength == this.F.n8*3) {
+                return this.op2("_addMixed", b, a);
+            } else if (b.byteLength == this.F.n8*2) {
+                return this.op2("_addAffine", a, b);
+            } else {
+                throw new Error("invalid point size");
+            }
+        } else {
+            throw new Error("invalid point size");
+        }
+    }
+
+    sub(a,b) {
+        if (a.byteLength == this.F.n8*3) {
+            if (b.byteLength == this.F.n8*3) {
+                return this.op2("_sub", a, b);
+            } else if (b.byteLength == this.F.n8*2) {
+                return this.op2("_subMixed", a, b);
+            } else {
+                throw new Error("invalid point size");
+            }
+        } else if (a.byteLength == this.F.n8*2) {
+            if (b.byteLength == this.F.n8*3) {
+                return this.op2("_subMixed", b, a);
+            } else if (b.byteLength == this.F.n8*2) {
+                return this.op2("_subAffine", a, b);
+            } else {
+                throw new Error("invalid point size");
+            }
+        } else {
+            throw new Error("invalid point size");
+        }
+    }
+
+    neg(a) {
+        if (a.byteLength == this.F.n8*3) {
+            return this.op1("_neg", a);
+        } else if (a.byteLength == this.F.n8*2) {
+            return this.op1Affine("_negAffine", a);
+        } else {
+            throw new Error("invalid point size");
+        }
+    }
+
+    double(a) {
+        if (a.byteLength == this.F.n8*3) {
+            return this.op1("_double", a);
+        } else if (a.byteLength == this.F.n8*2) {
+            return this.op1("_doubleAffine", a);
+        } else {
+            throw new Error("invalid point size");
+        }
+    }
+
+    isZero(a) {
+        if (a.byteLength == this.F.n8*3) {
+            return this.op1Bool("_isZero", a);
+        } else if (a.byteLength == this.F.n8*2) {
+            return this.op1Bool("_isZeroAffine", a);
+        } else {
+            throw new Error("invalid point size");
+        }
+    }
+
+    timesScalar(a, s) {
+        if (!(s instanceof Uint8Array)) {
+            s = toLEBuff(e(s));
+        }
+        let fnName;
+        if (a.byteLength == this.F.n8*3) {
+            fnName = this.prefix + "_timesScalar";
+        } else if (a.byteLength == this.F.n8*2) {
+            fnName = this.prefix + "_timesScalarAffine";
+        } else {
+            throw new Error("invalid point size");
+        }
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, s);
+        this.tm.instance.exports[fnName](this.pOp1, this.pOp2, s.byteLength, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.F.n8*3);
+    }
+
+    timesFr(a, s) {
+        let fnName;
+        if (a.byteLength == this.F.n8*3) {
+            fnName = this.prefix + "_timesFr";
+        } else if (a.byteLength == this.F.n8*2) {
+            fnName = this.prefix + "_timesFrAffine";
+        } else {
+            throw new Error("invalid point size");
+        }
+        this.tm.setBuff(this.pOp1, a);
+        this.tm.setBuff(this.pOp2, s);
+        this.tm.instance.exports[fnName](this.pOp1, this.pOp2, this.pOp3);
+        return this.tm.getBuff(this.pOp3, this.F.n8*3);
+    }
+
+    eq(a,b) {
+        if (a.byteLength == this.F.n8*3) {
+            if (b.byteLength == this.F.n8*3) {
+                return this.op2bool("_eq", a, b);
+            } else if (b.byteLength == this.F.n8*2) {
+                return this.op2bool("_eqMixed", a, b);
+            } else {
+                throw new Error("invalid point size");
+            }
+        } else if (a.byteLength == this.F.n8*2) {
+            if (b.byteLength == this.F.n8*3) {
+                return this.op2bool("_eqMixed", b, a);
+            } else if (b.byteLength == this.F.n8*2) {
+                return this.op2bool("_eqAffine", a, b);
+            } else {
+                throw new Error("invalid point size");
+            }
+        } else {
+            throw new Error("invalid point size");
+        }
+    }
+
+    toAffine(a) {
+        if (a.byteLength == this.F.n8*3) {
+            return this.op1Affine("_toAffine", a);
+        } else if (a.byteLength == this.F.n8*2) {
+            return a;
+        } else {
+            throw new Error("invalid point size");
+        }
+    }
+
+    toJacobian(a) {
+        if (a.byteLength == this.F.n8*3) {
+            return a;
+        } else if (a.byteLength == this.F.n8*2) {
+            return this.op1("_toJacobian", a);
+        } else {
+            throw new Error("invalid point size");
+        }
+    }
+
+    toRprUncompressed(arr, offset, a) {
+        this.tm.setBuff(this.pOp1, a);
+        if (a.byteLength == this.F.n8*3) {
+            this.tm.instance.exports[this.prefix + "_toAffine"](this.pOp1, this.pOp1);
+        } else if (a.byteLength != this.F.n8*2) {
+            throw new Error("invalid point size");
+        }
+        this.tm.instance.exports[this.prefix + "_LEMtoU"](this.pOp1, this.pOp1);
+        const res = this.tm.getBuff(this.pOp1, this.F.n8*2);
+        arr.set(res, offset);
+    }
+
+    fromRprUncompressed(arr, offset) {
+        const buff = arr.slice(offset, offset + this.F.n8*2);
+        this.tm.setBuff(this.pOp1, buff);
+        this.tm.instance.exports[this.prefix + "_UtoLEM"](this.pOp1, this.pOp1);
+        return this.tm.getBuff(this.pOp1, this.F.n8*2);
+    }
+
+    toRprCompressed(arr, offset, a) {
+        this.tm.setBuff(this.pOp1, a);
+        if (a.byteLength == this.F.n8*3) {
+            this.tm.instance.exports[this.prefix + "_toAffine"](this.pOp1, this.pOp1);
+        } else if (a.byteLength != this.F.n8*2) {
+            throw new Error("invalid point size");
+        }
+        this.tm.instance.exports[this.prefix + "_LEMtoC"](this.pOp1, this.pOp1);
+        const res = this.tm.getBuff(this.pOp1, this.F.n8);
+        arr.set(res, offset);
+    }
+
+    fromRprCompressed(arr, offset) {
+        const buff = arr.slice(offset, offset + this.F.n8);
+        this.tm.setBuff(this.pOp1, buff);
+        this.tm.instance.exports[this.prefix + "_CtoLEM"](this.pOp1, this.pOp2);
+        return this.tm.getBuff(this.pOp2, this.F.n8*2);
+    }
+
+    toUncompressed(a) {
+        const buff = new Uint8Array(this.F.n8*2);
+        this.toRprUncompressed(buff, 0, a);
+        return buff;
+    }
+
+    toRprLEM(arr, offset, a) {
+        if (a.byteLength == this.F.n8*2) {
+            arr.set(a, offset);
+            return;
+        } else if (a.byteLength == this.F.n8*3) {
+            this.tm.setBuff(this.pOp1, a);
+            this.tm.instance.exports[this.prefix + "_toAffine"](this.pOp1, this.pOp1);
+            const res = this.tm.getBuff(this.pOp1, this.F.n8*2);
+            arr.set(res, offset);
+        } else {
+            throw new Error("invalid point size");
+        }
+    }
+
+    fromRprLEM(arr, offset) {
+        offset = offset || 0;
+        return arr.slice(offset, offset+this.F.n8*2);
+    }
+
+    toString(a, radix) {
+        if (a.byteLength == this.F.n8*3) {
+            const x = this.F.toString(a.slice(0, this.F.n8), radix);
+            const y = this.F.toString(a.slice(this.F.n8, this.F.n8*2), radix);
+            const z = this.F.toString(a.slice(this.F.n8*2), radix);
+            return `[ ${x}, ${y}, ${z} ]`;
+        } else if (a.byteLength == this.F.n8*2) {
+            const x = this.F.toString(a.slice(0, this.F.n8), radix);
+            const y = this.F.toString(a.slice(this.F.n8), radix);
+            return `[ ${x}, ${y} ]`;
+        } else {
+            throw new Error("invalid point size");
+        }
+    }
+
+    isValid(a) {
+        if (this.isZero(a)) return true;
+        const F = this.F;
+        const aa = this.toAffine(a);
+        const x = aa.slice(0, this.F.n8);
+        const y = aa.slice(this.F.n8, this.F.n8*2);
+        const x3b = F.add(F.mul(F.square(x),x), this.b);
+        const y2 = F.square(y);
+        return F.eq(x3b, y2);
+    }
+
+    fromRng(rng) {
+        const F = this.F;
+        let P = [];
+        let greatest;
+        let x3b;
+        do {
+            P[0] = F.fromRng(rng);
+            greatest = rng.nextBool();
+            x3b = F.add(F.mul(F.square(P[0]), P[0]), this.b);
+        } while (!F.isSquare(x3b));
+
+        P[1] = F.sqrt(x3b);
+
+        const s = F.isNegative(P[1]);
+        if (greatest ^ s) P[1] = F.neg(P[1]);
+
+        let Pbuff = new Uint8Array(this.F.n8*2);
+        Pbuff.set(P[0]);
+        Pbuff.set(P[1], this.F.n8);
+
+        if (this.cofactor) {
+            Pbuff = this.timesScalar(Pbuff, this.cofactor);
+        }
+
+        return Pbuff;
+    }
+
+
+
+    toObject(a) {
+        if (this.isZero(a)) {
+            return [
+                this.F.toObject(this.F.zero),
+                this.F.toObject(this.F.one),
+                this.F.toObject(this.F.zero),
+            ];
+        }
+        const x = this.F.toObject(a.slice(0, this.F.n8));
+        const y = this.F.toObject(a.slice(this.F.n8, this.F.n8*2));
+        let z;
+        if (a.byteLength == this.F.n8*3) {
+            z = this.F.toObject(a.slice(this.F.n8*2, this.F.n8*3));
+        } else {
+            z = this.F.toObject(this.F.one);
+        }
+        return [x, y, z];
+    }
+
+    fromObject(a) {
+        const x = this.F.fromObject(a[0]);
+        const y = this.F.fromObject(a[1]);
+        let z;
+        if (a.length==3) {
+            z = this.F.fromObject(a[2]);
+        } else {
+            z = this.F.one;
+        }
+        if (this.F.isZero(z, this.F.one)) {
+            return this.zeroAffine;
+        } else if (this.F.eq(z, this.F.one)) {
+            const buff = new Uint8Array(this.F.n8*2);
+            buff.set(x);
+            buff.set(y, this.F.n8);
+            return buff;
+        } else {
+            const buff = new Uint8Array(this.F.n8*3);
+            buff.set(x);
+            buff.set(y, this.F.n8);
+            buff.set(z, this.F.n8*2);
+            return buff;
+        }
+    }
+
+    e(a) {
+        if (a instanceof Uint8Array) return a;
+        return this.fromObject(a);
+    }
+
+    x(a) {
+        const tmp = this.toAffine(a);
+        return tmp.slice(0, this.F.n8);
+    }
+
+    y(a) {
+        const tmp = this.toAffine(a);
+        return tmp.slice(this.F.n8);
+    }
+
+}
+
+/* global WebAssembly */
+
+function thread(self) {
+    const MAXMEM = 32767;
+    let instance;
+    let memory;
+    let terminationTimeout = 500; // milliseconds
+    let terminationTimer;
+
+    if (self) {
+        self.onmessage = function(e) {
+            let data;
+            if (e.data) {
+                data = e.data;
+            } else {
+                data = e;
+            }
+
+            try {
+                if (data[0].cmd === "INIT") {
+                    init(data[0]).then(function() {
+                        console.log("INIT DONE");
+                        self.postMessage({status: "initialized"});
+                    });
+                } else if (data[0].cmd === "TERMINATE") {
+                    terminate();
+                } else {
+                    if (data[data.length-1].cmd === "TERMINATE") {
+                        data.pop();
+                        //terminationTimeout = 1;
+                    }
+                    const res = runTask(data);
+                    //self.postMessage(res);
+                    let transfers = [];
+                    for (let i=0; i<res.length; i++) {
+                        if (res[i] instanceof Uint8Array) {
+                            transfers.push(res[i].buffer);
+                            console.log("transfer buffer", res[i].byteLength);
+                        }
+                    }
+                    for (let i=0; i<data.length; i++) {
+                        if (data[i].cmd === "CALL") {
+                            console.log(data[i].fnName);
+                        }
+                    }
+                    //console.log("transfers", transfers);
+                    self.postMessage(res, transfers);
+                }
+            } catch (err) {
+                // Catch any error and send it back to main thread
+                self.postMessage({error: err.message});
+            }
+        };
+
+        // self.onerror = function (e) {
+        //     console.error("Worker caught an error:", e.message);
+        //     // Prevent the default behavior (which would terminate the worker)
+        //     return true;
+        // };
+    }
+
+    async function init(data) {
+        let wasmModule;
+        if (data.code instanceof WebAssembly.Module) {
+            console.log("Using precompiled WebAssembly.Module");
+            wasmModule = data.code;
+        } else {
+            console.log("Compiling WebAssembly.Module");
+            const code = new Uint8Array(data.code);
+            wasmModule = await WebAssembly.compile(code);
+        }
+        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
+
+        console.log("Initialized thread with memory", memory.buffer.byteLength / 1024 / 1024, "MB");
+
+        instance = await WebAssembly.instantiate(wasmModule, {
+            env: {
+                "memory": memory
+            }
+        });
+
+        if (data.terminationTimeout) {
+            terminationTimeout = data.terminationTimeout;
+        }
+        console.log("init done!");
+
+        scheduleTermination();
+    }
+
+
+
+    function alloc(length) {
+        const u32 = new Uint32Array(memory.buffer, 0, 1);
+        while (u32[0] & 3) u32[0]++;  // Return always aligned pointers
+        const res = u32[0];
+        u32[0] += length;
+        if (u32[0] + length > memory.buffer.byteLength) {
+            const currentPages = memory.buffer.byteLength / 0x10000;
+            let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;
+            if (requiredPages>MAXMEM) requiredPages=MAXMEM;
+            memory.grow(requiredPages-currentPages);
+            console.log("Growing memory to", memory.buffer.byteLength / 1024 / 1024, "MB");
+        }
+        return res;
+    }
+
+    function allocBuffer(buffer) {
+        const p = alloc(buffer.byteLength);
+        setBuffer(p, buffer);
+        return p;
+    }
+
+    function getBuffer(pointer, length) {
+        // const u8 = new Uint8Array(memory.buffer);
+        // return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);
+        return new Uint8Array(memory.buffer, pointer, length);
+    }
+
+    function setBuffer(pointer, buffer) {
+        const u8 = new Uint8Array(memory.buffer);
+        u8.set(new Uint8Array(buffer), pointer);
+    }
+
+    function runTask(task) {
+        clearTimeout(terminationTimer);
+        if (task[0].cmd === "INIT") {
+            return init(task[0]);
+        }
+        const ctx = {
+            vars: [],
+            out: []
+        };
+        const u32a = new Uint32Array(memory.buffer, 0, 1);
+        const oldAlloc = u32a[0];
+        for (let i=0; i<task.length; i++) {
+            switch (task[i].cmd) {
+            case "ALLOCSET":
+                ctx.vars[task[i].var] = allocBuffer(task[i].buff);
+                break;
+            case "ALLOC":
+                ctx.vars[task[i].var] = alloc(task[i].len);
+                break;
+            case "SET":
+                setBuffer(ctx.vars[task[i].var], task[i].buff);
+                break;
+            case "CALL": {
+                const params = [];
+                for (let j=0; j<task[i].params.length; j++) {
+                    const p = task[i].params[j];
+                    if (typeof p.var !== "undefined") {
+                        params.push(ctx.vars[p.var] + (p.offset || 0));
+                    } else if (typeof p.val != "undefined") {
+                        params.push(p.val);
+                    }
+                }
+                instance.exports[task[i].fnName](...params);
+                break;
+            }
+            case "GET":
+                ctx.out[task[i].out] = getBuffer(ctx.vars[task[i].var], task[i].len).slice();
+                break;
+            default:
+                throw new Error("Invalid cmd");
+            }
+        }
+        const u32b = new Uint32Array(memory.buffer, 0, 1);
+        u32b[0] = oldAlloc;
+
+        //console.log(ctx.out);
+
+        return ctx.out;
+    }
+
+    function scheduleTermination() {
+        if (terminationTimeout>0) {
+            terminationTimer = setTimeout( () => {
+                console.log("Shutting down thread due to inactivity");
+                terminate();
+            }, terminationTimeout);
+        }
+    }
+
+    function terminate() {
+        clearTimeout(terminationTimer);
+        instance = null;
+        memory = null;
+        if (self) {
+            console.log("TERMINATE");
+            self.postMessage({status: "terminated"});
+            self.close();
+        }
+    }
+
+    return runTask;
+}
 
 /*
     Copyright 2019 0KIMS association.
@@ -2778,7 +4454,1850 @@ var utils$6 = {};
     along with wasmsnark. If not, see <https://www.gnu.org/licenses/>.
 */
 
-utils$6.bigInt2BytesLE = function bigInt2BytesLE(_a, len) {
+// const MEM_SIZE = 1000;  // Memory size in 64K Pakes (512Mb)
+const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
+
+class Deferred {
+    constructor() {
+        this.promise = new Promise((resolve, reject)=> {
+            this.reject = reject;
+            this.resolve = resolve;
+        });
+    }
+}
+
+let workerSource;
+
+const threadStr = `(${"function thread(self) {\n    const MAXMEM = 32767;\n    let instance;\n    let memory;\n    let terminationTimeout = 500; // milliseconds\n    let terminationTimer;\n\n    if (self) {\n        self.onmessage = function(e) {\n            let data;\n            if (e.data) {\n                data = e.data;\n            } else {\n                data = e;\n            }\n\n            try {\n                if (data[0].cmd === \"INIT\") {\n                    init(data[0]).then(function() {\n                        console.log(\"INIT DONE\");\n                        self.postMessage({status: \"initialized\"});\n                    });\n                } else if (data[0].cmd === \"TERMINATE\") {\n                    terminate();\n                } else {\n                    let terminateAfterTask = false;\n                    if (data[data.length-1].cmd === \"TERMINATE\") {\n                        terminateAfterTask = true;\n                        data.pop();\n                        //terminationTimeout = 1;\n                    }\n                    const res = runTask(data);\n                    //self.postMessage(res);\n                    let transfers = [];\n                    for (let i=0; i<res.length; i++) {\n                        if (res[i] instanceof Uint8Array) {\n                            transfers.push(res[i].buffer);\n                            console.log(\"transfer buffer\", res[i].byteLength);\n                        }\n                    }\n                    for (let i=0; i<data.length; i++) {\n                        if (data[i].cmd === \"CALL\") {\n                            console.log(data[i].fnName);\n                        }\n                    }\n                    //console.log(\"transfers\", transfers);\n                    self.postMessage(res, transfers);\n                    //self.postMessage(res);\n                    if (terminateAfterTask) {\n                        //terminate();\n                    }\n                }\n            } catch (err) {\n                // Catch any error and send it back to main thread\n                self.postMessage({error: err.message});\n            }\n        };\n\n        // self.onerror = function (e) {\n        //     console.error(\"Worker caught an error:\", e.message);\n        //     // Prevent the default behavior (which would terminate the worker)\n        //     return true;\n        // };\n    }\n\n    async function init(data) {\n        let wasmModule;\n        if (data.code instanceof WebAssembly.Module) {\n            console.log(\"Using precompiled WebAssembly.Module\");\n            wasmModule = data.code;\n        } else {\n            console.log(\"Compiling WebAssembly.Module\");\n            const code = new Uint8Array(data.code);\n            wasmModule = await WebAssembly.compile(code);\n        }\n        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});\n\n        console.log(\"Initialized thread with memory\", memory.buffer.byteLength / 1024 / 1024, \"MB\");\n\n        instance = await WebAssembly.instantiate(wasmModule, {\n            env: {\n                \"memory\": memory\n            }\n        });\n\n        if (data.terminationTimeout) {\n            terminationTimeout = data.terminationTimeout;\n        }\n        console.log(\"init done!\");\n\n        scheduleTermination();\n    }\n\n\n\n    function alloc(length) {\n        const u32 = new Uint32Array(memory.buffer, 0, 1);\n        while (u32[0] & 3) u32[0]++;  // Return always aligned pointers\n        const res = u32[0];\n        u32[0] += length;\n        if (u32[0] + length > memory.buffer.byteLength) {\n            const currentPages = memory.buffer.byteLength / 0x10000;\n            let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;\n            if (requiredPages>MAXMEM) requiredPages=MAXMEM;\n            memory.grow(requiredPages-currentPages);\n            console.log(\"Growing memory to\", memory.buffer.byteLength / 1024 / 1024, \"MB\");\n        }\n        return res;\n    }\n\n    function allocBuffer(buffer) {\n        const p = alloc(buffer.byteLength);\n        setBuffer(p, buffer);\n        return p;\n    }\n\n    function getBuffer(pointer, length) {\n        // const u8 = new Uint8Array(memory.buffer);\n        // return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);\n        return new Uint8Array(memory.buffer, pointer, length);\n    }\n\n    function setBuffer(pointer, buffer) {\n        const u8 = new Uint8Array(memory.buffer);\n        u8.set(new Uint8Array(buffer), pointer);\n    }\n\n    function runTask(task) {\n        clearTimeout(terminationTimer);\n        if (task[0].cmd === \"INIT\") {\n            return init(task[0]);\n        }\n        const ctx = {\n            vars: [],\n            out: []\n        };\n        const u32a = new Uint32Array(memory.buffer, 0, 1);\n        const oldAlloc = u32a[0];\n        for (let i=0; i<task.length; i++) {\n            switch (task[i].cmd) {\n            case \"ALLOCSET\":\n                ctx.vars[task[i].var] = allocBuffer(task[i].buff);\n                break;\n            case \"ALLOC\":\n                ctx.vars[task[i].var] = alloc(task[i].len);\n                break;\n            case \"SET\":\n                setBuffer(ctx.vars[task[i].var], task[i].buff);\n                break;\n            case \"CALL\": {\n                const params = [];\n                for (let j=0; j<task[i].params.length; j++) {\n                    const p = task[i].params[j];\n                    if (typeof p.var !== \"undefined\") {\n                        params.push(ctx.vars[p.var] + (p.offset || 0));\n                    } else if (typeof p.val != \"undefined\") {\n                        params.push(p.val);\n                    }\n                }\n                instance.exports[task[i].fnName](...params);\n                break;\n            }\n            case \"GET\":\n                ctx.out[task[i].out] = getBuffer(ctx.vars[task[i].var], task[i].len).slice();\n                break;\n            default:\n                throw new Error(\"Invalid cmd\");\n            }\n        }\n        const u32b = new Uint32Array(memory.buffer, 0, 1);\n        u32b[0] = oldAlloc;\n\n        //console.log(ctx.out);\n\n        return ctx.out;\n    }\n\n    function scheduleTermination() {\n        if (terminationTimeout>0) {\n            terminationTimer = setTimeout( () => {\n                console.log(\"Shutting down thread due to inactivity\");\n                terminate();\n            }, terminationTimeout);\n        }\n    }\n\n    function terminate() {\n        clearTimeout(terminationTimer);\n        instance = null;\n        memory = null;\n        if (self) {\n            console.log(\"TERMINATE\");\n            self.postMessage({status: \"terminated\"});\n            self.close();\n        }\n    }\n\n    return runTask;\n}"})(self)`;
+{
+    if(globalThis?.Blob) {
+        const threadBytes= new TextEncoder().encode(threadStr);
+        const workerBlob = new Blob([threadBytes], { type: "application/javascript" }) ;
+        workerSource = URL.createObjectURL(workerBlob);
+    } else {
+        workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
+    }
+}
+
+
+
+async function buildThreadManager(wasm, singleThread) {
+    const tm = new ThreadManager();
+
+    tm.memory = new WebAssembly.Memory({initial:MEM_SIZE});
+    tm.u8 = new Uint8Array(tm.memory.buffer);
+    tm.u32 = new Uint32Array(tm.memory.buffer);
+
+    const wasmModule = await WebAssembly.compile(wasm.code);
+
+    tm.instance = await WebAssembly.instantiate(wasmModule, {
+        env: {
+            "memory": tm.memory
+        }
+    });
+
+    if(!globalThis?.Worker) {
+        singleThread = true;
+    }
+    
+    tm.singleThread = singleThread;
+    tm.initalPFree = tm.u32[0];   // Save the Pointer to free space.
+    tm.pq = wasm.pq;
+    tm.pr = wasm.pr;
+    tm.pG1gen = wasm.pG1gen;
+    tm.pG1zero = wasm.pG1zero;
+    tm.pG2gen = wasm.pG2gen;
+    tm.pG2zero = wasm.pG2zero;
+    tm.pOneT = wasm.pOneT;
+
+    tm.code = wasm.code;
+    tm.wasmModule = wasmModule;
+
+    //    tm.pTmp0 = tm.alloc(curve.G2.F.n8*3);
+    //    tm.pTmp1 = tm.alloc(curve.G2.F.n8*3);
+
+    if (singleThread) {
+        tm.taskManager = thread();
+        await tm.taskManager([{
+            cmd: "INIT",
+            init: MEM_SIZE,
+            code: tm.code.slice()
+        }]);
+        tm.concurrency  = 1;
+    } else {
+        tm.workers = [];
+        tm.pendingDeferreds = [];
+        tm.working = [];
+        tm.initialized = [];
+        tm.initializing = [];
+
+        let concurrency = 2;
+        {
+            if (typeof navigator === "object" && navigator.hardwareConcurrency) {
+                concurrency = navigator.hardwareConcurrency;
+            }
+        }
+
+        if(concurrency === 0){
+            concurrency = 2;
+        }
+
+        //concurrency = 10; // For testing
+
+        // Limit to 64 threads for memory reasons.
+        if (concurrency>64) concurrency=64;
+        tm.concurrency = concurrency;
+
+        // for (let i = 0; i<1; i++) {
+        //
+        //     tm.workers[i] = new Worker(workerSource);
+        //
+        //     tm.workers[i].addEventListener("message", getOnMsg(i));
+        //     //tm.workers[i].addEventListener("error", getOnError(i));
+        //
+        //     tm.working[i]=false;
+        // }
+        //
+        // const initPromises = [];
+        // for (let i=0; i<tm.workers.length;i++) {
+        //     const copyCode = wasm.code.slice();
+        //     initPromises.push(tm.postAction(i, [{
+        //         cmd: "INIT",
+        //         init: MEM_SIZE,
+        //         code: copyCode
+        //     }], [copyCode.buffer]));
+        // }
+        //
+        // // for (let i=0; i<tm.workers.length;i++) {
+        // //     //const copyCode = wasm.code.slice();
+        // //     initPromises.push(tm.postAction(i, [{
+        // //         cmd: "INIT",
+        // //         init: MEM_SIZE,
+        // //         code: wasmModule
+        // //     }]//, [copyCode.buffer]
+        // //     ));
+        // // }
+        //
+        // await Promise.all(initPromises);
+
+        // const initPromises = [];
+        // for (let i = 0; i < tm.concurrency; i++) {
+        //     initPromises.push(tm.startWorker(i));
+        // }
+        // await Promise.all(initPromises);
+
+    }
+    return tm;
+
+
+
+}
+
+class ThreadManager {
+    constructor() {
+        this.actionQueue = [];
+        this.oldPFree = 0;
+    }
+
+    getOnMsg(i) {
+        const tm = this;
+        return function(e) {
+            let data;
+            if ((e)&&(e.data)) {
+                data = e.data;
+            } else {
+                data = e;
+            }
+
+            // handle errors
+            if (data.error) {
+                tm.working[i]=false;
+                tm.pendingDeferreds[i].reject("Worker error: " + data.error);
+                if (tm.initializing[i]) {
+                    tm.initializing[i]=false;
+                    tm.workers[i]=null;
+                } else {
+                    tm.workers[i].postMessage([{cmd: "TERMINATE"}]);
+                }
+                throw new Error("Worker error: " + data.error);
+            }
+
+            // handle status messages
+            if (data.status) {
+                if (data.status === "initialized") {
+                    // Initialization successful message
+                    tm.initializing[i]=false;
+                    tm.initialized[i]=true;
+                } else if (data.status === "terminated") {
+                    // Termination successful message
+                    tm.initialized[i]=false;
+                    tm.initializing[i]=false;
+                    tm.workers[i]=null;
+                }
+            }
+
+            tm.working[i]=false;
+            tm.pendingDeferreds[i].resolve(data);
+            tm.processWorks();
+        };
+    }
+
+    getOnError(i) {
+        const tm = this;
+        return function(e) {
+            tm.working[i]=false;
+            tm.pendingDeferreds[i].reject(e.message);
+            throw new Error("Worker error: " + e.message);
+        };
+    }
+
+    startWorker(i){
+        this.workers[i] = new Worker(workerSource);
+
+        this.workers[i].addEventListener("message", this.getOnMsg(i));
+        //tm.workers[i].addEventListener("error", this.getOnError(i));
+
+        //this.working[i]=true;
+        this.initializing[i] = true;
+
+        // const copyCode = this.code.slice();
+        // await this.postAction(i, [{
+        //     cmd: "INIT",
+        //     init: MEM_SIZE,
+        //     code: copyCode
+        // }], [copyCode.buffer]);
+
+        //     //const copyCode = wasm.code.slice();
+        this.postAction(i, [{
+            cmd: "INIT",
+            init: MEM_SIZE,
+            code: this.wasmModule
+        }]).then(() => {
+            this.initialized[i] = true;
+        });
+    }
+
+    startSyncOp() {
+        if (this.oldPFree !== 0) throw new Error("Sync operation in progress");
+        this.oldPFree = this.u32[0];
+    }
+
+    endSyncOp() {
+        if (this.oldPFree === 0) throw new Error("No sync operation in progress");
+        this.u32[0] = this.oldPFree;
+        this.oldPFree = 0;
+    }
+
+    async postAction(workerId, e, transfers, _deferred) {
+        if (this.working[workerId]) {
+            throw new Error("Posting a job to a working worker");
+        }
+        this.working[workerId] = true;
+
+        this.pendingDeferreds[workerId] = _deferred ? _deferred : new Deferred();
+        await this.workers[workerId].postMessage(e, transfers);
+
+        return this.pendingDeferreds[workerId].promise;
+    }
+
+    async processWorks() {
+        for (let i=0; (i<this.concurrency)&&(this.actionQueue.length > 0); i++) {
+            if (this.workers[i] && this.initialized[i] && !this.working[i]) {
+                const work = this.actionQueue.shift();
+                this.postAction(i, work.data, work.transfers, work.deferred);
+            }
+        }
+
+        // Initialize more workers if needed
+        if (this.actionQueue.length > 0) {
+            // Find a worker that is not initialized yet
+            let initializingCount = 0;
+            for (let i=0; i<this.concurrency; i++) {
+                initializingCount += this.initializing[i];
+                if (this.initialized[i]) continue;
+                if (this.initializing[i]) continue;
+                if (initializingCount >= this.actionQueue.length) break;
+
+                // Initialize this worker
+                console.log(`Worker ${i} not initialized yet. Initializing...`);
+                initializingCount++;
+                await this.startWorker(i);
+                //this.startWorker(i);
+            }
+        }
+    }
+
+    queueAction(actionData, transfers) {
+        const d = new Deferred();
+
+        if (this.singleThread) {
+            const res = this.taskManager(actionData);
+            d.resolve(res);
+        } else {
+            this.actionQueue.push({
+                data: actionData,
+                transfers: transfers,
+                deferred: d
+            });
+            this.processWorks();
+        }
+        return d.promise;
+    }
+
+    resetMemory() {
+        this.u32[0] = this.initalPFree;
+    }
+
+    allocBuff(buff) {
+        const pointer = this.alloc(buff.byteLength);
+        this.setBuff(pointer, buff);
+        return pointer;
+    }
+
+    getBuff(pointer, length) {
+        return this.u8.slice(pointer, pointer+ length);
+    }
+
+    setBuff(pointer, buffer) {
+        this.u8.set(new Uint8Array(buffer), pointer);
+    }
+
+    alloc(length) {
+        while (this.u32[0] & 3) this.u32[0]++;  // Return always aligned pointers
+        const res = this.u32[0];
+        this.u32[0] += length;
+        return res;
+    }
+
+    async terminate() {
+        console.log("terminate!!!");
+        for (let i=0; i<this.workers.length; i++) {
+            this.workers[i].postMessage([{cmd: "TERMINATE"}]);
+        }
+        // Give some time to the workers to terminate
+        //await sleep(200);
+    }
+
+}
+
+function buildBatchApplyKey(curve, groupName) {
+    const G = curve[groupName];
+    const Fr = curve.Fr;
+    const tm = curve.tm;
+
+    curve[groupName].batchApplyKey = async function(buff, first, inc, inType, outType) {
+        inType = inType || "affine";
+        outType = outType || "affine";
+        let fnName, fnAffine;
+        let sGin, sGmid, sGout;
+        if (groupName == "G1") {
+            if (inType == "jacobian") {
+                sGin = G.F.n8*3;
+                fnName = "g1m_batchApplyKey";
+            } else {
+                sGin = G.F.n8*2;
+                fnName = "g1m_batchApplyKeyMixed";
+            }
+            sGmid = G.F.n8*3;
+            if (outType == "jacobian") {
+                sGout = G.F.n8*3;
+            } else {
+                fnAffine = "g1m_batchToAffine";
+                sGout = G.F.n8*2;
+            }
+        } else if (groupName == "G2") {
+            if (inType == "jacobian") {
+                sGin = G.F.n8*3;
+                fnName = "g2m_batchApplyKey";
+            } else {
+                sGin = G.F.n8*2;
+                fnName = "g2m_batchApplyKeyMixed";
+            }
+            sGmid = G.F.n8*3;
+            if (outType == "jacobian") {
+                sGout = G.F.n8*3;
+            } else {
+                fnAffine = "g2m_batchToAffine";
+                sGout = G.F.n8*2;
+            }
+        } else if (groupName == "Fr") {
+            fnName = "frm_batchApplyKey";
+            sGin = G.n8;
+            sGmid = G.n8;
+            sGout = G.n8;
+        } else {
+            throw new Error("Invalid group: " + groupName);
+        }
+        const nPoints = Math.floor(buff.byteLength / sGin);
+        const pointsPerChunk = Math.floor(nPoints/tm.concurrency);
+        const opPromises = [];
+        inc = Fr.e(inc);
+        let t = Fr.e(first);
+        for (let i=0; i<tm.concurrency; i++) {
+            let n;
+            if (i< tm.concurrency-1) {
+                n = pointsPerChunk;
+            } else {
+                n = nPoints - i*pointsPerChunk;
+            }
+            if (n==0) continue;
+
+            const task = [];
+
+            const b = buff.slice(i*pointsPerChunk*sGin, i*pointsPerChunk*sGin + n*sGin);
+
+            task.push({
+                cmd: "ALLOCSET",
+                var: 0,
+                buff: b
+            });
+            task.push({cmd: "ALLOCSET", var: 1, buff: t});
+            task.push({cmd: "ALLOCSET", var: 2, buff: inc});
+            task.push({cmd: "ALLOC", var: 3, len: n*Math.max(sGmid, sGout)});
+            task.push({
+                cmd: "CALL",
+                fnName: fnName,
+                params: [
+                    {var: 0},
+                    {val: n},
+                    {var: 1},
+                    {var: 2},
+                    {var:3}
+                ]
+            });
+            if (fnAffine) {
+                task.push({
+                    cmd: "CALL",
+                    fnName: fnAffine,
+                    params: [
+                        {var: 3},
+                        {val: n},
+                        {var: 3},
+                    ]
+                });
+            }
+            task.push({cmd: "GET", out: 0, var: 3, len: n*sGout});
+
+            opPromises.push(tm.queueAction(task, [b.buffer]));
+            t = Fr.mul(t, Fr.exp(inc, n));
+        }
+
+        const result = await Promise.all(opPromises);
+
+        let outBuff;
+        if (buff instanceof BigBuffer) {
+            outBuff = new BigBuffer(nPoints*sGout);
+        } else {
+            outBuff = new Uint8Array(nPoints*sGout);
+        }
+
+        let p=0;
+        for (let i=0; i<result.length; i++) {
+            outBuff.set(result[i][0], p);
+            p += result[i][0].byteLength;
+        }
+
+        return outBuff;
+    };
+}
+
+function buildPairing(curve) {
+    const tm = curve.tm;
+    curve.pairing = function pairing(a, b) {
+
+        tm.startSyncOp();
+        const pA = tm.allocBuff(curve.G1.toJacobian(a));
+        const pB = tm.allocBuff(curve.G2.toJacobian(b));
+        const pRes = tm.alloc(curve.Gt.n8);
+        tm.instance.exports[curve.name + "_pairing"](pA, pB, pRes);
+
+        const res = tm.getBuff(pRes, curve.Gt.n8);
+
+        tm.endSyncOp();
+        return res;
+    };
+
+    curve.pairingEq = async function pairingEq() {
+        let  buffCt;
+        let nEqs;
+        if ((arguments.length % 2) == 1) {
+            buffCt = arguments[arguments.length-1];
+            nEqs = (arguments.length -1) /2;
+        } else {
+            buffCt = curve.Gt.one;
+            nEqs = arguments.length /2;
+        }
+
+        const opPromises = [];
+        for (let i=0; i<nEqs; i++) {
+
+            const task = [];
+
+            const g1Buff = curve.G1.toJacobian(arguments[i*2]);
+            task.push({cmd: "ALLOCSET", var: 0, buff: g1Buff});
+            task.push({cmd: "ALLOC", var: 1, len: curve.prePSize});
+
+            const g2Buff = curve.G2.toJacobian(arguments[i*2 +1]);
+            task.push({cmd: "ALLOCSET", var: 2, buff: g2Buff});
+            task.push({cmd: "ALLOC", var: 3, len: curve.preQSize});
+
+            task.push({cmd: "ALLOC", var: 4, len: curve.Gt.n8});
+
+            task.push({cmd: "CALL", fnName: curve.name + "_prepareG1", params: [
+                {var: 0},
+                {var: 1}
+            ]});
+
+            task.push({cmd: "CALL", fnName: curve.name + "_prepareG2", params: [
+                {var: 2},
+                {var: 3}
+            ]});
+
+            task.push({cmd: "CALL", fnName: curve.name + "_millerLoop", params: [
+                {var: 1},
+                {var: 3},
+                {var: 4}
+            ]});
+
+            task.push({cmd: "GET", out: 0, var: 4, len: curve.Gt.n8});
+
+            opPromises.push(
+                tm.queueAction(task, [g1Buff.buffer, g2Buff.buffer])
+            );
+        }
+
+
+        const result = await Promise.all(opPromises);
+
+        tm.startSyncOp();
+        const pRes = tm.alloc(curve.Gt.n8);
+        tm.instance.exports.ftm_one(pRes);
+
+        for (let i=0; i<result.length; i++) {
+            const pMR = tm.allocBuff(result[i][0]);
+            tm.instance.exports.ftm_mul(pRes, pMR, pRes);
+        }
+        tm.instance.exports[curve.name + "_finalExponentiation"](pRes, pRes);
+
+        const pCt = tm.allocBuff(buffCt);
+
+        const r = !!tm.instance.exports.ftm_eq(pRes, pCt);
+
+        tm.endSyncOp();
+
+        return r;
+    };
+
+    curve.prepareG1 = function(p) {
+        this.tm.startSyncOp();
+        const pP = this.tm.allocBuff(p);
+        const pPrepP = this.tm.alloc(this.prePSize);
+        this.tm.instance.exports[this.name + "_prepareG1"](pP, pPrepP);
+        const res = this.tm.getBuff(pPrepP, this.prePSize);
+        this.tm.endSyncOp();
+        return res;
+    };
+
+    curve.prepareG2 = function(q) {
+        this.tm.startSyncOp();
+        const pQ = this.tm.allocBuff(q);
+        const pPrepQ = this.tm.alloc(this.preQSize);
+        this.tm.instance.exports[this.name + "_prepareG2"](pQ, pPrepQ);
+        const res = this.tm.getBuff(pPrepQ, this.preQSize);
+        this.tm.endSyncOp();
+        return res;
+    };
+
+    curve.millerLoop = function(preP, preQ) {
+        this.tm.startSyncOp();
+        const pPreP = this.tm.allocBuff(preP);
+        const pPreQ = this.tm.allocBuff(preQ);
+        const pRes = this.tm.alloc(this.Gt.n8);
+        this.tm.instance.exports[this.name + "_millerLoop"](pPreP, pPreQ, pRes);
+        const res = this.tm.getBuff(pRes, this.Gt.n8);
+        this.tm.endSyncOp();
+        return res;
+    };
+
+    curve.finalExponentiation = function(a) {
+        this.tm.startSyncOp();
+        const pA = this.tm.allocBuff(a);
+        const pRes = this.tm.alloc(this.Gt.n8);
+        this.tm.instance.exports[this.name + "_finalExponentiation"](pA, pRes);
+        const res = this.tm.getBuff(pRes, this.Gt.n8);
+        this.tm.endSyncOp();
+        return res;
+    };
+
+}
+
+/* eslint-disable indent */
+
+const pTSizes = [
+    1 ,  1,  1,  1,    2,  3,  4,  5,
+    6 ,  7,  7,  8,    9, 10, 11, 12,
+    13, 13, 14, 15,   16, 16, 17, 17,
+    17, 17, 17, 17,   17, 17, 17, 17
+];
+
+function buildMultiexp$1(curve, groupName) {
+    const G = curve[groupName];
+    const tm = G.tm;
+
+    async function _multiExpChunk(buffBases, buffScalars, inType, logger, logText) {
+        if ( ! (buffBases instanceof Uint8Array) ) {
+            if (logger) logger.error(`${logText} _multiExpChunk buffBases is not Uint8Array`);
+            throw new Error(`${logText} _multiExpChunk buffBases is not Uint8Array`);
+        }
+        if ( ! (buffScalars instanceof Uint8Array) ) {
+            if (logger) logger.error(`${logText} _multiExpChunk buffScalars is not Uint8Array`);
+            throw new Error(`${logText} _multiExpChunk buffScalars is not Uint8Array`);
+        }
+        inType = inType || "affine";
+
+        let sGIn;
+        let fnName;
+        if (groupName === "G1") {
+            if (inType === "affine") {
+                fnName = "g1m_multiexpAffine";
+                sGIn = G.F.n8*2;
+            } else {
+                fnName = "g1m_multiexp";
+                sGIn = G.F.n8*3;
+            }
+        } else if (groupName === "G2") {
+            if (inType === "affine") {
+                fnName = "g2m_multiexpAffine";
+                sGIn = G.F.n8*2;
+            } else {
+                fnName = "g2m_multiexp";
+                sGIn = G.F.n8*3;
+            }
+        } else {
+            throw new Error("Invalid group");
+        }
+        const nPoints = Math.floor(buffBases.byteLength / sGIn);
+
+        if (nPoints === 0) return G.zero;
+        const sScalar = Math.floor(buffScalars.byteLength / nPoints);
+        if( sScalar * nPoints !== buffScalars.byteLength) {
+            throw new Error("Scalar size does not match");
+        }
+
+        const bitChunkSize = pTSizes[log2(nPoints)];
+
+        const opPromises = [];
+
+        const task = [
+            {cmd: "ALLOCSET", var: 0, buff: buffBases},
+            {cmd: "ALLOCSET", var: 1, buff: buffScalars},
+            {cmd: "ALLOC", var: 2, len: G.F.n8*3},
+            {cmd: "CALL", fnName: fnName, params: [
+                {var: 0}, //pBases
+                {var: 1}, // pScalars
+                {val: sScalar}, // scalarSize
+                {val: nPoints}, // nPoints
+                {var: 2} // pr
+            ]},
+            {cmd: "GET", out: 0, var: 2, len: G.F.n8*3}
+        ];
+        opPromises.push(
+            // transfer ownership of the buffers to the worker thread
+            G.tm.queueAction(task, [buffBases.buffer, buffScalars.buffer])
+        );
+
+        const result = await Promise.all(opPromises);
+
+        let res = G.zero;
+        for (let i=result.length-1; i>=0; i--) {
+            if (!G.isZero(res)) {
+                for (let j=0; j<bitChunkSize; j++) res = G.double(res);
+            }
+            res = G.add(res, result[i][0]);
+        }
+
+        return res;
+    }
+
+    async function _multiExp(buffBases, buffScalars, inType, logger, logText) {
+        const MAX_CHUNK_SIZE = 1 << 22;
+        const MIN_CHUNK_SIZE = 1 << 12;
+        let sGIn;
+
+        if (groupName === "G1") {
+            if (inType === "affine") {
+                sGIn = G.F.n8*2;
+            } else {
+                sGIn = G.F.n8*3;
+            }
+        } else if (groupName === "G2") {
+            if (inType === "affine") {
+                sGIn = G.F.n8*2;
+            } else {
+                sGIn = G.F.n8*3;
+            }
+        } else {
+            throw new Error("Invalid group");
+        }
+
+        const nPoints = Math.floor(buffBases.byteLength / sGIn);
+        if (nPoints === 0) return G.zero;
+        const sScalar = Math.floor(buffScalars.byteLength / nPoints);
+        if( sScalar * nPoints !== buffScalars.byteLength) {
+            throw new Error("Scalar size does not match");
+        }
+
+        //console.log("buffBases.buffer instanceof SharedArrayBuffer", buffBases.buffer instanceof SharedArrayBuffer);
+        //console.log("buffScalars.buffer instanceof SharedArrayBuffer", buffScalars.buffer instanceof SharedArrayBuffer);
+
+        //let result = [];
+        const opPromises = [];
+        const bitChunkSize = pTSizes[log2(nPoints)];
+        let nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) +1;
+
+        if (groupName === "G2") {
+            // G2 has bigger points, so we reduce chunk size to optimize memory usage
+            nChunks *= 2;
+        }
+
+        let chunkSize;
+        //chunkSize = Math.floor(nPoints / tm.concurrency) + 1;
+
+        console.log("nChunks_0", nChunks);
+
+        // make nChunks multiple of tm.concurrency for optimal load balancing
+        nChunks = (Math.floor((nChunks-1) / tm.concurrency) + 1) * tm.concurrency;
+        chunkSize = Math.floor(nPoints / nChunks) + 1;
+
+        if (chunkSize>MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
+        if (chunkSize<MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
+
+        console.log("nChunks", nChunks);
+        console.log("effective nChunks", nPoints / chunkSize);
+
+        for (let i=0; i<nPoints; i += chunkSize) {
+            if (logger) logger.debug(`Multiexp start: ${logText}: ${i}/${nPoints}`);
+            const n = Math.min(nPoints - i, chunkSize);
+
+            const buffBasesChunk = buffBases.slice(i*sGIn, (i+n)*sGIn);
+            const buffScalarsChunk = buffScalars.slice(i*sScalar, (i+n)*sScalar);
+
+            opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType, logger, logText).then((r) => {
+                if (logger) logger.debug(`Multiexp end: ${logText}: ${i}/${nPoints}`);
+                return r;
+            }));
+        }
+
+        let result = await Promise.all(opPromises);
+
+        let res = G.zero;
+        for (let i=result.length-1; i>=0; i--) {
+            res = G.add(res, result[i]);
+        }
+
+        return res;
+    }
+
+    G.multiExp = async function multiExpAffine(buffBases, buffScalars, logger, logText) {
+        return await _multiExp(buffBases, buffScalars, "jacobian", logger, logText);
+    };
+    G.multiExpAffine = async function multiExpAffine(buffBases, buffScalars, logger, logText) {
+        return await _multiExp(buffBases, buffScalars, "affine", logger, logText);
+    };
+}
+
+function buildFFT$2(curve, groupName) {
+    const G = curve[groupName];
+    const Fr = curve.Fr;
+    const tm = G.tm;
+    async function _fft(buff, inverse, inType, outType, logger, loggerTxt) {
+
+        inType = inType || "affine";
+        outType = outType || "affine";
+        const MAX_BITS_THREAD = 14;
+
+        let sIn, sMid, sOut, fnIn2Mid, fnMid2Out, fnFFTMix, fnFFTJoin, fnFFTFinal, fnReversePermutation;
+        if (groupName == "G1") {
+            if (inType == "affine") {
+                sIn = G.F.n8*2;
+                fnIn2Mid = "g1m_batchToJacobian";
+            } else {
+                sIn = G.F.n8*3;
+            }
+            sMid = G.F.n8*3;
+            if (inverse) {
+                fnFFTFinal = "g1m_fftFinal";
+            }
+            fnFFTJoin = "g1m_fftJoin";
+            fnFFTMix = "g1m_fftMix";
+            fnReversePermutation = "g1m_reversePermutation";
+
+            if (outType == "affine") {
+                sOut = G.F.n8*2;
+                fnMid2Out = "g1m_batchToAffine";
+            } else {
+                sOut = G.F.n8*3;
+            }
+
+        } else if (groupName == "G2") {
+            if (inType == "affine") {
+                sIn = G.F.n8*2;
+                fnIn2Mid = "g2m_batchToJacobian";
+            } else {
+                sIn = G.F.n8*3;
+            }
+            sMid = G.F.n8*3;
+            if (inverse) {
+                fnFFTFinal = "g2m_fftFinal";
+            }
+            fnFFTJoin = "g2m_fftJoin";
+            fnFFTMix = "g2m_fftMix";
+            fnReversePermutation = "g2m_reversePermutation";
+            if (outType == "affine") {
+                sOut = G.F.n8*2;
+                fnMid2Out = "g2m_batchToAffine";
+            } else {
+                sOut = G.F.n8*3;
+            }
+        } else if (groupName == "Fr") {
+            sIn = G.n8;
+            sMid = G.n8;
+            sOut = G.n8;
+            if (inverse) {
+                fnFFTFinal = "frm_fftFinal";
+            }
+            fnFFTMix = "frm_fftMix";
+            fnFFTJoin = "frm_fftJoin";
+            fnReversePermutation = "frm_fftReversePermutation";
+        }
+
+
+        let returnArray = false;
+        if (Array.isArray(buff)) {
+            buff = array2buffer(buff, sIn);
+            returnArray = true;
+        } else {
+            buff = buff.slice(0, buff.byteLength);
+        }
+
+        console.log("FFT input size:", buff.byteLength, " bytes");
+
+        const nPoints = buff.byteLength / sIn;
+        const bits = log2(nPoints);
+
+        console.log("FFT points:", nPoints, " bits:", bits);
+
+        if  ((1 << bits) != nPoints) {
+            throw new Error("fft must be multiple of 2" );
+        }
+
+        if (bits == Fr.s +1) {
+            let buffOut;
+
+            if (inverse) {
+                buffOut =  await _fftExtInv(buff, inType, outType, logger, loggerTxt);
+            } else {
+                buffOut =  await _fftExt(buff, inType, outType, logger, loggerTxt);
+            }
+
+            if (returnArray) {
+                return buffer2array(buffOut, sOut);
+            } else {
+                return buffOut;
+            }
+        }
+
+        let inv;
+        if (inverse) {
+            inv = Fr.inv(Fr.e(nPoints));
+        }
+
+        let buffOut;
+
+        // TODO: optimize. Move to wasm?
+        //buffReverseBits(buff, sIn);
+
+        console.log("fnReversePermutation:", fnReversePermutation);
+
+        const task = [];
+        task.push({cmd: "ALLOC", var: 0, len: buff.byteLength});
+        task.push({cmd: "SET", var: 0, buff: buff});
+        task.push({cmd: "CALL", fnName: fnReversePermutation, params: [{var:0}, {val: bits}, {var: 0}]});
+        task.push({cmd: "GET", out:0, var: 0, len: buff.byteLength});
+        const res = await tm.queueAction(task, [buff.buffer]);
+
+        buff.set(res[0]);
+
+        let chunks;
+        let pointsInChunk = Math.min(1 << MAX_BITS_THREAD, nPoints);
+        let nChunks = nPoints / pointsInChunk;
+
+        while ((nChunks < tm.concurrency)&&(pointsInChunk>=16)) {
+            nChunks *= 2;
+            pointsInChunk /= 2;
+        }
+
+        const l2Chunk = log2(pointsInChunk);
+
+        const promises = [];
+        for (let i = 0; i< nChunks; i++) {
+            if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix start: ${i}/${nChunks}`);
+            const task = [];
+            task.push({cmd: "ALLOC", var: 0, len: sMid*pointsInChunk});
+            const buffChunk = buff.slice( (pointsInChunk * i)*sIn, (pointsInChunk * (i+1))*sIn);
+            task.push({cmd: "SET", var: 0, buff: buffChunk});
+            if (fnIn2Mid) {
+                task.push({cmd: "CALL", fnName:fnIn2Mid, params: [{var:0}, {val: pointsInChunk}, {var: 0}]});
+            }
+            for (let j=1; j<=l2Chunk;j++) {
+                task.push({cmd: "CALL", fnName:fnFFTMix, params: [{var:0}, {val: pointsInChunk}, {val: j}]});
+            }
+
+            if (l2Chunk==bits) {
+                if (fnFFTFinal) {
+                    task.push({cmd: "ALLOCSET", var: 1, buff: inv});
+                    task.push({cmd: "CALL", fnName: fnFFTFinal,  params:[
+                        {var: 0},
+                        {val: pointsInChunk},
+                        {var: 1},
+                    ]});
+                }
+                if (fnMid2Out) {
+                    task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:0}, {val: pointsInChunk}, {var: 0}]});
+                }
+                task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sOut});
+            } else {
+                task.push({cmd: "GET", out:0, var: 0, len: sMid*pointsInChunk});
+            }
+            promises.push(tm.queueAction(task, [buffChunk.buffer]).then( (r) => {
+                if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix end: ${i}/${nChunks}`);
+                return r;
+            }));
+        }
+
+        chunks = await Promise.all(promises);
+        for (let i = 0; i< nChunks; i++) chunks[i] = chunks[i][0];
+
+        for (let i = l2Chunk+1;   i<=bits; i++) {
+            if (logger) logger.debug(`${loggerTxt}: fft  ${bits}  join: ${i}/${bits}`);
+            const nGroups = 1 << (bits - i);
+            const nChunksPerGroup = nChunks / nGroups;
+            const opPromises = [];
+            for (let j=0; j<nGroups; j++) {
+                for (let k=0; k <nChunksPerGroup/2; k++) {
+                    const first = Fr.exp( Fr.w[i], k*pointsInChunk);
+                    const inc = Fr.w[i];
+                    const o1 = j*nChunksPerGroup + k;
+                    const o2 = j*nChunksPerGroup + k + nChunksPerGroup/2;
+
+                    const task = [];
+                    task.push({cmd: "ALLOCSET", var: 0, buff: chunks[o1]});
+                    task.push({cmd: "ALLOCSET", var: 1, buff: chunks[o2]});
+                    task.push({cmd: "ALLOCSET", var: 2, buff: first});
+                    task.push({cmd: "ALLOCSET", var: 3, buff: inc});
+                    task.push({cmd: "CALL", fnName: fnFFTJoin,  params:[
+                        {var: 0},
+                        {var: 1},
+                        {val: pointsInChunk},
+                        {var: 2},
+                        {var: 3}
+                    ]});
+                    if (i==bits) {
+                        if (fnFFTFinal) {
+                            task.push({cmd: "ALLOCSET", var: 4, buff: inv});
+                            task.push({cmd: "CALL", fnName: fnFFTFinal,  params:[
+                                {var: 0},
+                                {val: pointsInChunk},
+                                {var: 4},
+                            ]});
+                            task.push({cmd: "CALL", fnName: fnFFTFinal,  params:[
+                                {var: 1},
+                                {val: pointsInChunk},
+                                {var: 4},
+                            ]});
+                        }
+                        if (fnMid2Out) {
+                            task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:0}, {val: pointsInChunk}, {var: 0}]});
+                            task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:1}, {val: pointsInChunk}, {var: 1}]});
+                        }
+                        task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sOut});
+                        task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sOut});
+                    } else {
+                        task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sMid});
+                        task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sMid});
+                    }
+                    opPromises.push(tm.queueAction(task, [chunks[o1].buffer, chunks[o2].buffer, first.buffer ]).then( (r) => {
+                        if (logger) logger.debug(`${loggerTxt}: fft ${bits} join  ${i}/${bits}  ${j+1}/${nGroups} ${k}/${nChunksPerGroup/2}`);
+                        return r;
+                    }));
+                }
+            }
+
+            const res = await Promise.all(opPromises);
+            for (let j=0; j<nGroups; j++) {
+                for (let k=0; k <nChunksPerGroup/2; k++) {
+                    const o1 = j*nChunksPerGroup + k;
+                    const o2 = j*nChunksPerGroup + k + nChunksPerGroup/2;
+                    const resChunk = res.shift();
+                    chunks[o1] = resChunk[0];
+                    chunks[o2] = resChunk[1];
+                }
+            }
+        }
+
+        if (buff instanceof BigBuffer) {
+            buffOut = new BigBuffer(nPoints*sOut);
+        } else {
+            buffOut = new Uint8Array(nPoints*sOut);
+        }
+        if (inverse) {
+            buffOut.set(chunks[0].slice((pointsInChunk-1)*sOut));
+            let p= sOut;
+            for (let i=nChunks-1; i>0; i--) {
+                buffOut.set(chunks[i], p);
+                p += pointsInChunk*sOut;
+                delete chunks[i];  // Liberate mem
+            }
+            buffOut.set(chunks[0].slice(0, (pointsInChunk-1)*sOut), p);
+            delete chunks[0];
+        } else {
+            for (let i=0; i<nChunks; i++) {
+                buffOut.set(chunks[i], pointsInChunk*sOut*i);
+                delete chunks[i];
+            }
+        }
+
+        if (returnArray) {
+            return buffer2array(buffOut, sOut);
+        } else {
+            return buffOut;
+        }
+    }
+
+    async function _fftExt(buff, inType, outType, logger, loggerTxt) {
+        let b1, b2;
+        b1 = buff.slice( 0 , buff.byteLength/2);
+        b2 = buff.slice( buff.byteLength/2, buff.byteLength);
+
+        const promises = [];
+
+        [b1, b2] = await _fftJoinExt(b1, b2, "fftJoinExt", Fr.one, Fr.shift, inType, "jacobian", logger, loggerTxt);
+
+        promises.push( _fft(b1, false, "jacobian", outType, logger, loggerTxt));
+        promises.push( _fft(b2, false, "jacobian", outType, logger, loggerTxt));
+
+        const res1 = await Promise.all(promises);
+
+        let buffOut;
+        if (res1[0].byteLength > (1<<28)) {
+            buffOut = new BigBuffer(res1[0].byteLength*2);
+        } else {
+            buffOut = new Uint8Array(res1[0].byteLength*2);
+        }
+
+        buffOut.set(res1[0]);
+        buffOut.set(res1[1], res1[0].byteLength);
+
+        return buffOut;
+    }
+
+    async function _fftExtInv(buff, inType, outType, logger, loggerTxt) {
+        let b1, b2;
+        b1 = buff.slice( 0 , buff.byteLength/2);
+        b2 = buff.slice( buff.byteLength/2, buff.byteLength);
+
+        const promises = [];
+
+        promises.push( _fft(b1, true, inType, "jacobian", logger, loggerTxt));
+        promises.push( _fft(b2, true, inType, "jacobian", logger, loggerTxt));
+
+        [b1, b2] = await Promise.all(promises);
+
+        const res1 = await _fftJoinExt(b1, b2, "fftJoinExtInv", Fr.one, Fr.shiftInv, "jacobian", outType, logger, loggerTxt);
+
+        let buffOut;
+        if (res1[0].byteLength > (1<<28)) {
+            buffOut = new BigBuffer(res1[0].byteLength*2);
+        } else {
+            buffOut = new Uint8Array(res1[0].byteLength*2);
+        }
+
+        buffOut.set(res1[0]);
+        buffOut.set(res1[1], res1[0].byteLength);
+
+        return buffOut;
+    }
+
+
+    async function _fftJoinExt(buff1, buff2, fn, first, inc, inType, outType, logger, loggerTxt) {
+        const MAX_CHUNK_SIZE = 1<<16;
+        const MIN_CHUNK_SIZE = 1<<4;
+
+        let fnName;
+        let fnIn2Mid, fnMid2Out;
+        let sOut, sIn, sMid;
+
+        if (groupName == "G1") {
+            if (inType == "affine") {
+                sIn = G.F.n8*2;
+                fnIn2Mid = "g1m_batchToJacobian";
+            } else {
+                sIn = G.F.n8*3;
+            }
+            sMid = G.F.n8*3;
+            fnName = "g1m_"+fn;
+            if (outType == "affine") {
+                fnMid2Out = "g1m_batchToAffine";
+                sOut = G.F.n8*2;
+            } else {
+                sOut = G.F.n8*3;
+            }
+        } else if (groupName == "G2") {
+            if (inType == "affine") {
+                sIn = G.F.n8*2;
+                fnIn2Mid = "g2m_batchToJacobian";
+            } else {
+                sIn = G.F.n8*3;
+            }
+            fnName = "g2m_"+fn;
+            sMid = G.F.n8*3;
+            if (outType == "affine") {
+                fnMid2Out = "g2m_batchToAffine";
+                sOut = G.F.n8*2;
+            } else {
+                sOut = G.F.n8*3;
+            }
+        } else if (groupName == "Fr") {
+            sIn = Fr.n8;
+            sOut = Fr.n8;
+            sMid = Fr.n8;
+            fnName = "frm_" + fn;
+        } else {
+            throw new Error("Invalid group");
+        }
+
+        if (buff1.byteLength != buff2.byteLength) {
+            throw new Error("Invalid buffer size");
+        }
+        const nPoints = Math.floor(buff1.byteLength / sIn);
+        if (nPoints != 1 << log2(nPoints)) {
+            throw new Error("Invalid number of points");
+        }
+
+        let chunkSize = Math.floor(nPoints /tm.concurrency);
+        if (chunkSize < MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
+        if (chunkSize > MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
+
+        const opPromises = [];
+
+        for (let i=0; i<nPoints; i += chunkSize) {
+            if (logger) logger.debug(`${loggerTxt}: fftJoinExt Start: ${i}/${nPoints}`);
+            const n= Math.min(nPoints - i, chunkSize);
+
+            const firstChunk = Fr.mul(first, Fr.exp( inc, i));
+            const task = [];
+
+            const b1 = buff1.slice(i*sIn, (i+n)*sIn);
+            const b2 = buff2.slice(i*sIn, (i+n)*sIn);
+
+            task.push({cmd: "ALLOC", var: 0, len: sMid*n});
+            task.push({cmd: "SET", var: 0, buff: b1});
+            task.push({cmd: "ALLOC", var: 1, len: sMid*n});
+            task.push({cmd: "SET", var: 1, buff: b2});
+            task.push({cmd: "ALLOCSET", var: 2, buff: firstChunk});
+            task.push({cmd: "ALLOCSET", var: 3, buff: inc});
+            if (fnIn2Mid) {
+                task.push({cmd: "CALL", fnName:fnIn2Mid, params: [{var:0}, {val: n}, {var: 0}]});
+                task.push({cmd: "CALL", fnName:fnIn2Mid, params: [{var:1}, {val: n}, {var: 1}]});
+            }
+            task.push({cmd: "CALL", fnName: fnName, params: [
+                {var: 0},
+                {var: 1},
+                {val: n},
+                {var: 2},
+                {var: 3},
+                {val: Fr.s},
+            ]});
+            if (fnMid2Out) {
+                task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:0}, {val: n}, {var: 0}]});
+                task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:1}, {val: n}, {var: 1}]});
+            }
+            task.push({cmd: "GET", out: 0, var: 0, len: n*sOut});
+            task.push({cmd: "GET", out: 1, var: 1, len: n*sOut});
+            opPromises.push(
+                tm.queueAction(task, [b1.buffer, b2.buffer, firstChunk.buffer]).then((r) => {
+                    if (logger) logger.debug(`${loggerTxt}: fftJoinExt End: ${i}/${nPoints}`);
+                    return r;
+                })
+            );
+        }
+
+        const result = await Promise.all(opPromises);
+
+        let fullBuffOut1;
+        let fullBuffOut2;
+        if (nPoints * sOut > 1<<28) {
+            fullBuffOut1 = new BigBuffer(nPoints*sOut);
+            fullBuffOut2 = new BigBuffer(nPoints*sOut);
+        } else {
+            fullBuffOut1 = new Uint8Array(nPoints*sOut);
+            fullBuffOut2 = new Uint8Array(nPoints*sOut);
+        }
+
+        let p =0;
+        for (let i=0; i<result.length; i++) {
+            fullBuffOut1.set(result[i][0], p);
+            fullBuffOut2.set(result[i][1], p);
+            p+=result[i][0].byteLength;
+        }
+
+        return [fullBuffOut1, fullBuffOut2];
+    }
+
+
+    G.fft = async function(buff, inType, outType, logger, loggerTxt) {
+        return await _fft(buff, false, inType, outType, logger, loggerTxt);
+    };
+
+    G.ifft = async function(buff, inType, outType, logger, loggerTxt) {
+        return await _fft(buff, true, inType, outType, logger, loggerTxt);
+    };
+
+    G.lagrangeEvaluations = async function (buff, inType, outType, logger, loggerTxt) {
+        inType = inType || "affine";
+        outType = outType || "affine";
+
+        let sIn;
+        if (groupName == "G1") {
+            if (inType == "affine") {
+                sIn = G.F.n8*2;
+            } else {
+                sIn = G.F.n8*3;
+            }
+        } else if (groupName == "G2") {
+            if (inType == "affine") {
+                sIn = G.F.n8*2;
+            } else {
+                sIn = G.F.n8*3;
+            }
+        } else if (groupName == "Fr") {
+            sIn = Fr.n8;
+        } else {
+            throw new Error("Invalid group");
+        }
+
+        const nPoints = buff.byteLength /sIn;
+        const bits = log2(nPoints);
+
+        if ((2 ** bits)*sIn != buff.byteLength) {
+            if (logger) logger.error("lagrangeEvaluations iinvalid input size");
+            throw new Error("lagrangeEvaluations invalid Input size");
+        }
+
+        if (bits <= Fr.s) {
+            return await G.ifft(buff, inType, outType, logger, loggerTxt);
+        }
+
+        if (bits > Fr.s+1) {
+            if (logger) logger.error("lagrangeEvaluations input too big");
+            throw new Error("lagrangeEvaluations input too big");
+        }
+
+        let t0 = buff.slice(0, buff.byteLength/2);
+        let t1 = buff.slice(buff.byteLength/2, buff.byteLength);
+
+
+        const shiftToSmallM = Fr.exp(Fr.shift, nPoints/2);
+        const sConst = Fr.inv( Fr.sub(Fr.one, shiftToSmallM));
+
+        [t0, t1] = await _fftJoinExt(t0, t1, "prepareLagrangeEvaluation", sConst, Fr.shiftInv, inType, "jacobian", logger, loggerTxt + " prep");
+
+        const promises = [];
+
+        promises.push( _fft(t0, true, "jacobian", outType, logger, loggerTxt + " t0"));
+        promises.push( _fft(t1, true, "jacobian", outType, logger, loggerTxt + " t1"));
+
+        [t0, t1] = await Promise.all(promises);
+
+        let buffOut;
+        if (t0.byteLength > (1<<28)) {
+            buffOut = new BigBuffer(t0.byteLength*2);
+        } else {
+            buffOut = new Uint8Array(t0.byteLength*2);
+        }
+
+        buffOut.set(t0);
+        buffOut.set(t1, t0.byteLength);
+
+        return buffOut;
+    };
+
+    G.fftMix = async function fftMix(buff) {
+        const sG = G.F.n8*3;
+        let fnName, fnFFTJoin;
+        if (groupName == "G1") {
+            fnName = "g1m_fftMix";
+            fnFFTJoin = "g1m_fftJoin";
+        } else if (groupName == "G2") {
+            fnName = "g2m_fftMix";
+            fnFFTJoin = "g2m_fftJoin";
+        } else if (groupName == "Fr") {
+            fnName = "frm_fftMix";
+            fnFFTJoin = "frm_fftJoin";
+        } else {
+            throw new Error("Invalid group");
+        }
+
+        const nPoints = Math.floor(buff.byteLength / sG);
+        const power = log2(nPoints);
+
+        let nChunks = 1 << log2(tm.concurrency);
+
+        if (nPoints <= nChunks*2) nChunks = 1;
+
+        const pointsPerChunk = nPoints / nChunks;
+
+        const powerChunk = log2(pointsPerChunk);
+
+        const opPromises = [];
+        for (let i=0; i<nChunks; i++) {
+            const task = [];
+            const b = buff.slice((i* pointsPerChunk)*sG, ((i+1)* pointsPerChunk)*sG);
+            task.push({cmd: "ALLOCSET", var: 0, buff: b});
+            for (let j=1; j<=powerChunk; j++) {
+                task.push({cmd: "CALL", fnName: fnName, params: [
+                    {var: 0},
+                    {val: pointsPerChunk},
+                    {val: j}
+                ]});
+            }
+            task.push({cmd: "GET", out: 0, var: 0, len: pointsPerChunk*sG});
+            opPromises.push(
+                tm.queueAction(task, [b.buffer])
+            );
+        }
+
+        const result = await Promise.all(opPromises);
+
+        const chunks = [];
+        for (let i=0; i<result.length; i++) chunks[i] = result[i][0];
+
+
+        for (let i = powerChunk+1; i<=power; i++) {
+            const nGroups = 1 << (power - i);
+            const nChunksPerGroup = nChunks / nGroups;
+            const opPromises = [];
+            for (let j=0; j<nGroups; j++) {
+                for (let k=0; k <nChunksPerGroup/2; k++) {
+                    const first = Fr.exp( Fr.w[i], k*pointsPerChunk);
+                    const inc = Fr.w[i];
+                    const o1 = j*nChunksPerGroup + k;
+                    const o2 = j*nChunksPerGroup + k + nChunksPerGroup/2;
+
+                    const task = [];
+                    task.push({cmd: "ALLOCSET", var: 0, buff: chunks[o1]});
+                    task.push({cmd: "ALLOCSET", var: 1, buff: chunks[o2]});
+                    task.push({cmd: "ALLOCSET", var: 2, buff: first});
+                    task.push({cmd: "ALLOCSET", var: 3, buff: inc});
+                    task.push({cmd: "CALL", fnName: fnFFTJoin,  params:[
+                        {var: 0},
+                        {var: 1},
+                        {val: pointsPerChunk},
+                        {var: 2},
+                        {var: 3}
+                    ]});
+                    task.push({cmd: "GET", out: 0, var: 0, len: pointsPerChunk*sG});
+                    task.push({cmd: "GET", out: 1, var: 1, len: pointsPerChunk*sG});
+                    opPromises.push(tm.queueAction(task, [chunks[o1].buffer, chunks[o2].buffer, first.buffer]));
+                }
+            }
+
+            const res = await Promise.all(opPromises);
+            for (let j=0; j<nGroups; j++) {
+                for (let k=0; k <nChunksPerGroup/2; k++) {
+                    const o1 = j*nChunksPerGroup + k;
+                    const o2 = j*nChunksPerGroup + k + nChunksPerGroup/2;
+                    const resChunk = res.shift();
+                    chunks[o1] = resChunk[0];
+                    chunks[o2] = resChunk[1];
+                }
+            }
+        }
+
+        let fullBuffOut;
+        if (buff instanceof BigBuffer) {
+            fullBuffOut = new BigBuffer(nPoints*sG);
+        } else {
+            fullBuffOut = new Uint8Array(nPoints*sG);
+        }
+        let p =0;
+        for (let i=0; i<nChunks; i++) {
+            fullBuffOut.set(chunks[i], p);
+            p+=chunks[i].byteLength;
+        }
+
+        return fullBuffOut;
+    };
+
+    G.fftJoin = async function fftJoin(buff1, buff2, first, inc) {
+        const sG = G.F.n8*3;
+        let fnName;
+        if (groupName == "G1") {
+            fnName = "g1m_fftJoin";
+        } else if (groupName == "G2") {
+            fnName = "g2m_fftJoin";
+        } else if (groupName == "Fr") {
+            fnName = "frm_fftJoin";
+        } else {
+            throw new Error("Invalid group");
+        }
+
+        if (buff1.byteLength != buff2.byteLength) {
+            throw new Error("Invalid buffer size");
+        }
+        const nPoints = Math.floor(buff1.byteLength / sG);
+        if (nPoints != 1 << log2(nPoints)) {
+            throw new Error("Invalid number of points");
+        }
+
+        let nChunks = 1 << log2(tm.concurrency);
+        if (nPoints <= nChunks*2) nChunks = 1;
+
+        const pointsPerChunk = nPoints / nChunks;
+
+
+        const opPromises = [];
+        for (let i=0; i<nChunks; i++) {
+            const task = [];
+
+            const firstChunk = Fr.mul(first, Fr.exp(inc, i*pointsPerChunk));
+            const b1 = buff1.slice((i* pointsPerChunk)*sG, ((i+1)* pointsPerChunk)*sG);
+            const b2 = buff2.slice((i* pointsPerChunk)*sG, ((i+1)* pointsPerChunk)*sG);
+            task.push({cmd: "ALLOCSET", var: 0, buff: b1});
+            task.push({cmd: "ALLOCSET", var: 1, buff: b2});
+            task.push({cmd: "ALLOCSET", var: 2, buff: firstChunk});
+            task.push({cmd: "ALLOCSET", var: 3, buff: inc});
+            task.push({cmd: "CALL", fnName: fnName, params: [
+                {var: 0},
+                {var: 1},
+                {val: pointsPerChunk},
+                {var: 2},
+                {var: 3}
+            ]});
+            task.push({cmd: "GET", out: 0, var: 0, len: pointsPerChunk*sG});
+            task.push({cmd: "GET", out: 1, var: 1, len: pointsPerChunk*sG});
+            opPromises.push(
+                tm.queueAction(task, [b1.buffer, b2.buffer, firstChunk.buffer])
+            );
+
+        }
+
+
+        const result = await Promise.all(opPromises);
+
+        let fullBuffOut1;
+        let fullBuffOut2;
+        if (buff1 instanceof BigBuffer) {
+            fullBuffOut1 = new BigBuffer(nPoints*sG);
+            fullBuffOut2 = new BigBuffer(nPoints*sG);
+        } else {
+            fullBuffOut1 = new Uint8Array(nPoints*sG);
+            fullBuffOut2 = new Uint8Array(nPoints*sG);
+        }
+
+        let p =0;
+        for (let i=0; i<result.length; i++) {
+            fullBuffOut1.set(result[i][0], p);
+            fullBuffOut2.set(result[i][1], p);
+            p+=result[i][0].byteLength;
+        }
+
+        return [fullBuffOut1, fullBuffOut2];
+    };
+
+
+
+    G.fftFinal =  async function fftFinal(buff, factor) {
+        const sG = G.F.n8*3;
+        const sGout = G.F.n8*2;
+        let fnName, fnToAffine;
+        if (groupName == "G1") {
+            fnName = "g1m_fftFinal";
+            fnToAffine = "g1m_batchToAffine";
+        } else if (groupName == "G2") {
+            fnName = "g2m_fftFinal";
+            fnToAffine = "g2m_batchToAffine";
+        } else {
+            throw new Error("Invalid group");
+        }
+
+        const nPoints = Math.floor(buff.byteLength / sG);
+        if (nPoints != 1 << log2(nPoints)) {
+            throw new Error("Invalid number of points");
+        }
+
+        const pointsPerChunk = Math.floor(nPoints / tm.concurrency);
+
+        const opPromises = [];
+        for (let i=0; i<tm.concurrency; i++) {
+            let n;
+            if (i< tm.concurrency-1) {
+                n = pointsPerChunk;
+            } else {
+                n = nPoints - i*pointsPerChunk;
+            }
+            if (n==0) continue;
+            const task = [];
+            const b = buff.slice((i* pointsPerChunk)*sG, (i*pointsPerChunk+n)*sG);
+            task.push({cmd: "ALLOCSET", var: 0, buff: b});
+            task.push({cmd: "ALLOCSET", var: 1, buff: factor});
+            task.push({cmd: "CALL", fnName: fnName, params: [
+                {var: 0},
+                {val: n},
+                {var: 1},
+            ]});
+            task.push({cmd: "CALL", fnName: fnToAffine, params: [
+                {var: 0},
+                {val: n},
+                {var: 0},
+            ]});
+            task.push({cmd: "GET", out: 0, var: 0, len: n*sGout});
+            opPromises.push(
+                tm.queueAction(task, [b.buffer])
+            );
+
+        }
+
+        const result = await Promise.all(opPromises);
+
+        let fullBuffOut;
+        if (buff instanceof BigBuffer) {
+            fullBuffOut = new BigBuffer(nPoints*sGout);
+        } else {
+            fullBuffOut = new Uint8Array(nPoints*sGout);
+        }
+
+        let p =0;
+        for (let i=result.length-1; i>=0; i--) {
+            fullBuffOut.set(result[i][0], p);
+            p+=result[i][0].byteLength;
+        }
+
+        return fullBuffOut;
+    };
+}
+
+async function buildEngine(params) {
+
+    const tm = await buildThreadManager(params.wasm, params.singleThread);
+
+
+    const curve = {};
+
+    curve.q = e(params.wasm.q.toString());
+    curve.r = e(params.wasm.r.toString());
+    curve.name = params.name;
+    curve.tm = tm;
+    curve.prePSize = params.wasm.prePSize;
+    curve.preQSize = params.wasm.preQSize;
+    curve.Fr = new WasmField1(tm, "frm", params.n8r, params.r);
+    curve.F1 = new WasmField1(tm, "f1m", params.n8q, params.q);
+    curve.F2 = new WasmField2(tm, "f2m", curve.F1);
+    curve.G1 = new WasmCurve(tm, "g1m", curve.F1, params.wasm.pG1gen, params.wasm.pG1b, params.cofactorG1);
+    curve.G2 = new WasmCurve(tm, "g2m", curve.F2, params.wasm.pG2gen, params.wasm.pG2b, params.cofactorG2);
+    curve.F6 = new WasmField3(tm, "f6m", curve.F2);
+    curve.F12 = new WasmField2(tm, "ftm", curve.F6);
+
+    curve.Gt = curve.F12;
+
+    buildBatchApplyKey(curve, "G1");
+    buildBatchApplyKey(curve, "G2");
+    buildBatchApplyKey(curve, "Fr");
+
+    buildMultiexp$1(curve, "G1");
+    buildMultiexp$1(curve, "G2");
+
+    buildFFT$2(curve, "G1");
+    buildFFT$2(curve, "G2");
+    buildFFT$2(curve, "Fr");
+
+    buildPairing(curve);
+
+    curve.array2buffer = function(arr, sG) {
+        const buff = new Uint8Array(sG*arr.length);
+
+        for (let i=0; i<arr.length; i++) {
+            buff.set(arr[i], i*sG);
+        }
+
+        return buff;
+    };
+
+    curve.buffer2array = function(buff , sG) {
+        const n= buff.byteLength / sG;
+        const arr = new Array(n);
+        for (let i=0; i<n; i++) {
+            arr[i] = buff.slice(i*sG, i*sG+sG);
+        }
+        return arr;
+    };
+
+    return curve;
+}
+
+//import { bn128_wasm_gzip as bn128wasmPrebuilt } from "wasmcurves";
+
+globalThis.curve_bn128 = null;
+
+async function buildBn128$1(singleThread, plugins) {
+    if ((!singleThread) && (globalThis.curve_bn128)) return globalThis.curve_bn128;
+
+    let bn128wasm = {};
+
+    if (!plugins) {
+
+        console.log("Using prebuilt bn128 wasm");
+
+        //import { bn128_wasm_gzip as bn128wasmPrebuilt } from "wasmcurves";
+        const { bn128_wasm_gzip: bn128wasmPrebuilt } = await Promise.resolve().then(function () { return index; });
+        //const { default: bn128wasmPrebuilt } = await import("wasmcurves/build/bn128_wasm_gzip.js");
+
+        //console.log(bn128wasmPrebuilt);
+        bn128wasm.pq = bn128wasmPrebuilt.pq;
+        bn128wasm.pr = bn128wasmPrebuilt.pq;
+        bn128wasm.pG1gen = bn128wasmPrebuilt.pG1gen;
+        bn128wasm.pG1zero = bn128wasmPrebuilt.pG1zero;
+        bn128wasm.pG1b = bn128wasmPrebuilt.pG1b;
+        bn128wasm.pG2gen = bn128wasmPrebuilt.pG2gen;
+        bn128wasm.pG2zero = bn128wasmPrebuilt.pG2zero;
+        bn128wasm.pG2b = bn128wasmPrebuilt.pG2b;
+        bn128wasm.pOneT = bn128wasmPrebuilt.pOneT;
+        bn128wasm.prePSize = bn128wasmPrebuilt.prePSize;
+        bn128wasm.preQSize = bn128wasmPrebuilt.preQSize;
+        bn128wasm.n8q = 32;
+        bn128wasm.n8r = 32;
+        bn128wasm.q = bn128wasmPrebuilt.q;
+        bn128wasm.r = bn128wasmPrebuilt.r;
+
+        const compressedCode = new Uint8Array(Buffer.from(bn128wasmPrebuilt.gzipCode, "base64"));
+        const blob = new Blob([compressedCode]);
+
+        const ds = new DecompressionStream("gzip");
+        const decompressedStream = blob.stream().pipeThrough(ds);
+
+        bn128wasm.code = await new Response(decompressedStream).bytes();
+    } else {
+
+        //import { ModuleBuilder } from "wasmbuilder";
+        //import { buildBn128 as buildBn128wasm } from "wasmcurves";
+        const { ModuleBuilder } = await Promise.resolve().then(function () { return main; });
+        const { buildBn128: buildBn128wasm } = await Promise.resolve().then(function () { return index; });
+
+        const moduleBuilder = new ModuleBuilder();
+        moduleBuilder.setMemory(25);
+        buildBn128wasm(moduleBuilder);
+
+        if (plugins) plugins(moduleBuilder);
+
+        bn128wasm.code = moduleBuilder.build();
+        bn128wasm.pq = moduleBuilder.modules.f1m.pq;
+        bn128wasm.pr = moduleBuilder.modules.frm.pq;
+        bn128wasm.pG1gen = moduleBuilder.modules.bn128.pG1gen;
+        bn128wasm.pG1zero = moduleBuilder.modules.bn128.pG1zero;
+        bn128wasm.pG1b = moduleBuilder.modules.bn128.pG1b;
+        bn128wasm.pG2gen = moduleBuilder.modules.bn128.pG2gen;
+        bn128wasm.pG2zero = moduleBuilder.modules.bn128.pG2zero;
+        bn128wasm.pG2b = moduleBuilder.modules.bn128.pG2b;
+        bn128wasm.pOneT = moduleBuilder.modules.bn128.pOneT;
+        bn128wasm.prePSize = moduleBuilder.modules.bn128.prePSize;
+        bn128wasm.preQSize = moduleBuilder.modules.bn128.preQSize;
+        bn128wasm.n8q = 32;
+        bn128wasm.n8r = 32;
+        bn128wasm.q = moduleBuilder.modules.bn128.q;
+        bn128wasm.r = moduleBuilder.modules.bn128.r;
+    }
+
+    //console.log("bn128wasm:", bn128wasm);
+
+    const params = {
+        name: "bn128",
+        wasm: bn128wasm,
+        q: e("21888242871839275222246405745257275088696311157297823662689037894645226208583"),
+        r: e("21888242871839275222246405745257275088548364400416034343698204186575808495617"),
+        n8q: 32,
+        n8r: 32,
+        cofactorG2: e("30644e72e131a029b85045b68181585e06ceecda572a2489345f2299c0f9fa8d", 16),
+        singleThread: singleThread ? true : false
+    };
+
+    const curve = await buildEngine(params);
+    curve.terminate = async function () {
+        if (!params.singleThread) {
+            globalThis.curve_bn128 = null;
+            await this.tm.terminate();
+        }
+    };
+
+    if (!singleThread) {
+        globalThis.curve_bn128 = curve;
+    }
+
+    return curve;
+}
+
+globalThis.curve_bls12381 = null;
+
+async function buildBls12381$1(singleThread, plugins) {
+    if ((!singleThread) && (globalThis.curve_bls12381)) return globalThis.curve_bls12381;
+
+    const { ModuleBuilder } = await Promise.resolve().then(function () { return main; });
+    const { buildBls12381: buildBls12381wasm } = await Promise.resolve().then(function () { return index; });
+
+    const moduleBuilder = new ModuleBuilder();
+    moduleBuilder.setMemory(25);
+    buildBls12381wasm(moduleBuilder);
+
+    if (plugins) plugins(moduleBuilder);
+
+    const bls12381wasm = {};
+
+    bls12381wasm.code = moduleBuilder.build();
+    bls12381wasm.pq = moduleBuilder.modules.f1m.pq;
+    bls12381wasm.pr = moduleBuilder.modules.frm.pq;
+    bls12381wasm.pG1gen = moduleBuilder.modules.bls12381.pG1gen;
+    bls12381wasm.pG1zero = moduleBuilder.modules.bls12381.pG1zero;
+    bls12381wasm.pG1b = moduleBuilder.modules.bls12381.pG1b;
+    bls12381wasm.pG2gen = moduleBuilder.modules.bls12381.pG2gen;
+    bls12381wasm.pG2zero = moduleBuilder.modules.bls12381.pG2zero;
+    bls12381wasm.pG2b = moduleBuilder.modules.bls12381.pG2b;
+    bls12381wasm.pOneT = moduleBuilder.modules.bls12381.pOneT;
+    bls12381wasm.prePSize = moduleBuilder.modules.bls12381.prePSize;
+    bls12381wasm.preQSize = moduleBuilder.modules.bls12381.preQSize;
+    bls12381wasm.n8q = 48;
+    bls12381wasm.n8r = 32;
+    bls12381wasm.q = moduleBuilder.modules.bls12381.q;
+    bls12381wasm.r = moduleBuilder.modules.bls12381.r;
+
+
+    const params = {
+        name: "bls12381",
+        wasm: bls12381wasm,
+        q: e("1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab", 16),
+        r: e("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001", 16),
+        n8q: 48,
+        n8r: 32,
+        cofactorG1: e("0x396c8c005555e1568c00aaab0000aaab", 16),
+        cofactorG2: e("0x5d543a95414e7f1091d50792876a202cd91de4547085abaa68a205b2e5a7ddfa628f1cb4d9e82ef21537e293a6691ae1616ec6e786f0c70cf1c38e31c7238e5", 16),
+        singleThread: singleThread ? true : false
+    };
+
+    const curve = await buildEngine(params);
+    curve.terminate = async function () {
+        if (!params.singleThread) {
+            globalThis.curve_bls12381 = null;
+            await this.tm.terminate();
+        }
+    };
+
+    if (!singleThread) {
+        globalThis.curve_bls12381 = curve;
+    }
+
+    return curve;
+}
+
+const bls12381r = e("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001", 16);
+const bn128r = e("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+
+const bls12381q = e("1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab", 16);
+const bn128q = e("21888242871839275222246405745257275088696311157297823662689037894645226208583");
+
+async function getCurveFromR(r, singleThread, plugins) {
+    let curve;
+    if (eq(r, bn128r)) {
+        curve = await buildBn128$1(singleThread, plugins);
+    } else if (eq(r, bls12381r)) {
+        curve = await buildBls12381$1(singleThread, plugins);
+    } else {
+        throw new Error(`Curve not supported: ${toString(r)}`);
+    }
+    return curve;
+}
+
+async function getCurveFromQ(q, singleThread, plugins) {
+    let curve;
+    if (eq(q, bn128q)) {
+        curve = await buildBn128$1(singleThread, plugins);
+    } else if (eq(q, bls12381q)) {
+        curve = await buildBls12381$1(singleThread, plugins);
+    } else {
+        throw new Error(`Curve not supported: ${toString(q, 16)}`);
+    }
+    return curve;
+}
+
+async function getCurveFromName(name, singleThread, plugins) {
+    let curve;
+    const normName = normalizeName(name);
+    if (["BN128", "BN254", "ALTBN128"].indexOf(normName) >= 0) {
+        curve = await buildBn128$1(singleThread, plugins);
+    } else if (["BLS12381"].indexOf(normName) >= 0) {
+        curve = await buildBls12381$1(singleThread, plugins);
+    } else {
+        throw new Error(`Curve not supported: ${name}`);
+    }
+    return curve;
+
+    function normalizeName(n) {
+        return n.toUpperCase().match(/[A-Za-z0-9]+/g).join("");
+    }
+
+}
+
+const Scalar=_Scalar;
+const utils$6 = _utils;
+
+var bn128_wasm_gzip$1 = {};
+
+bn128_wasm_gzip$1.gzipCode = "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";
+            bn128_wasm_gzip$1.pq = 488;
+            bn128_wasm_gzip$1.pr = 1768;
+            bn128_wasm_gzip$1.pG1gen = 31432;
+            bn128_wasm_gzip$1.pG1zero = 31528;
+            bn128_wasm_gzip$1.pG1b = 3080;
+            bn128_wasm_gzip$1.pG2gen = 31624;
+            bn128_wasm_gzip$1.pG2zero = 31816;
+            bn128_wasm_gzip$1.pG2b = 12456;
+            bn128_wasm_gzip$1.pOneT = 32008;
+            bn128_wasm_gzip$1.prePSize = 192;
+            bn128_wasm_gzip$1.preQSize = 19776;
+            bn128_wasm_gzip$1.n8q = 32;
+            bn128_wasm_gzip$1.n8r = 32;
+            bn128_wasm_gzip$1.q = "21888242871839275222246405745257275088696311157297823662689037894645226208583";
+            bn128_wasm_gzip$1.r = "21888242871839275222246405745257275088548364400416034343698204186575808495617";
+
+var utils$5 = {};
+
+/*
+    Copyright 2019 0KIMS association.
+
+    This file is part of wasmsnark (Web Assembly zkSnark Prover).
+
+    wasmsnark is a free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    wasmsnark is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+    License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with wasmsnark. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+utils$5.bigInt2BytesLE = function bigInt2BytesLE(_a, len) {
     const b = Array(len);
     let v = BigInt(_a);
     for (let i=0; i<len; i++) {
@@ -2788,7 +6307,7 @@ utils$6.bigInt2BytesLE = function bigInt2BytesLE(_a, len) {
     return b;
 };
 
-utils$6.bigInt2U32LE = function bigInt2BytesLE(_a, len) {
+utils$5.bigInt2U32LE = function bigInt2BytesLE(_a, len) {
     const b = Array(len);
     let v = BigInt(_a);
     for (let i=0; i<len; i++) {
@@ -2798,7 +6317,7 @@ utils$6.bigInt2U32LE = function bigInt2BytesLE(_a, len) {
     return b;
 };
 
-utils$6.isOcamNum = function(a) {
+utils$5.isOcamNum = function(a) {
     if (!Array.isArray(a)) return false;
     if (a.length != 3) return false;
     if (typeof a[0] !== "number") return false;
@@ -4469,7 +7988,7 @@ bigint.square = square$1;
 */
 
 const buildInt = build_int;
-const utils$5 = utils$6;
+const utils$4 = utils$5;
 const buildExp$2 = build_timesscalar;
 const buildBatchInverse$2 = build_batchinverse;
 const buildBatchConvertion$1 = build_batchconvertion;
@@ -4486,17 +8005,17 @@ var build_f1m = function buildF1m(module, _q, _prefix, _intPrefix) {
     if (module.modules[prefix]) return prefix;  // already builded
 
     const intPrefix = buildInt(module, n64, _intPrefix);
-    const pq = module.alloc(n8, utils$5.bigInt2BytesLE(q, n8));
+    const pq = module.alloc(n8, utils$4.bigInt2BytesLE(q, n8));
 
-    const pR2 = module.alloc(utils$5.bigInt2BytesLE(square(1n << BigInt(n64*64)) % q, n8));
-    const pOne = module.alloc(utils$5.bigInt2BytesLE((1n << BigInt(n64*64)) % q, n8));
-    const pZero = module.alloc(utils$5.bigInt2BytesLE(0n, n8));
+    const pR2 = module.alloc(utils$4.bigInt2BytesLE(square(1n << BigInt(n64*64)) % q, n8));
+    const pOne = module.alloc(utils$4.bigInt2BytesLE((1n << BigInt(n64*64)) % q, n8));
+    const pZero = module.alloc(utils$4.bigInt2BytesLE(0n, n8));
     const _minusOne = q - 1n;
     const _e = _minusOne >> 1n; // e = (p-1)/2
-    const pe = module.alloc(n8, utils$5.bigInt2BytesLE(_e, n8));
+    const pe = module.alloc(n8, utils$4.bigInt2BytesLE(_e, n8));
 
     const _ePlusOne = _e + 1n; // e = (p-1)/2
-    const pePlusOne = module.alloc(n8, utils$5.bigInt2BytesLE(_ePlusOne, n8));
+    const pePlusOne = module.alloc(n8, utils$4.bigInt2BytesLE(_ePlusOne, n8));
 
     module.modules[prefix] = {
         pq: pq,
@@ -5251,13 +8770,13 @@ var build_f1m = function buildF1m(module, _q, _prefix, _intPrefix) {
         s2++;
         _t = _t >> 1n;
     }
-    const pt = module.alloc(n8, utils$5.bigInt2BytesLE(_t, n8));
+    const pt = module.alloc(n8, utils$4.bigInt2BytesLE(_t, n8));
 
     const _nqrToT = modPow$1(_nqr, _t, q);
-    const pNqrToT = module.alloc(utils$5.bigInt2BytesLE((_nqrToT << BigInt(n64*64)) % q, n8));
+    const pNqrToT = module.alloc(utils$4.bigInt2BytesLE((_nqrToT << BigInt(n64*64)) % q, n8));
 
     const _tPlusOneOver2 = (_t + 1n) >> 1n;
-    const ptPlusOneOver2 = module.alloc(n8, utils$5.bigInt2BytesLE(_tPlusOneOver2, n8));
+    const ptPlusOneOver2 = module.alloc(n8, utils$4.bigInt2BytesLE(_tPlusOneOver2, n8));
 
     function buildSqrt() {
 
@@ -5641,7 +9160,7 @@ var build_f1 = function buildF1(module, _q, _prefix, _f1mPrefix, _intPrefix) {
 
 const buildExp$1 = build_timesscalar;
 const buildBatchInverse$1 = build_batchinverse;
-const utils$4 = utils$6;
+const utils$3 = utils$5;
 
 var build_f2m = function buildF2m(module, mulNonResidueFn, prefix, f1mPrefix) {
 
@@ -6082,9 +9601,9 @@ var build_f2m = function buildF2m(module, mulNonResidueFn, prefix, f1mPrefix) {
         const c = f.getCodeBuilder();
 
         // BigInt can't take `undefined` so we use `|| 0`
-        const e34 = c.i32_const(module.alloc(utils$4.bigInt2BytesLE((BigInt(q || 0) - 3n) / 4n, f1n8 )));
+        const e34 = c.i32_const(module.alloc(utils$3.bigInt2BytesLE((BigInt(q || 0) - 3n) / 4n, f1n8 )));
         // BigInt can't take `undefined` so we use `|| 0`
-        const e12 = c.i32_const(module.alloc(utils$4.bigInt2BytesLE((BigInt(q || 0) - 1n) / 2n, f1n8 )));
+        const e12 = c.i32_const(module.alloc(utils$3.bigInt2BytesLE((BigInt(q || 0) - 1n) / 2n, f1n8 )));
 
         const a = c.getLocal("a");
         const a1 = c.i32_const(module.alloc(f1n8*2));
@@ -6152,7 +9671,7 @@ var build_f2m = function buildF2m(module, mulNonResidueFn, prefix, f1mPrefix) {
         const c = f.getCodeBuilder();
 
         // BigInt can't take `undefined` so we use `|| 0`
-        const e34 = c.i32_const(module.alloc(utils$4.bigInt2BytesLE((BigInt(q || 0) - 3n) / 4n, f1n8 )));
+        const e34 = c.i32_const(module.alloc(utils$3.bigInt2BytesLE((BigInt(q || 0) - 3n) / 4n, f1n8 )));
 
         const a = c.getLocal("a");
         const a1 = c.i32_const(module.alloc(f1n8*2));
@@ -7557,7 +11076,7 @@ var build_multiexp = function buildMultiexp(module, prefix, fnName, opAdd, n8b) 
 const buildTimesScalarNAF = build_timesscalarnaf;
 //const buildTimesScalar = require("./build_timesscalar");
 const buildBatchConvertion = build_batchconvertion;
-const buildMultiexp$1 = build_multiexp;
+const buildMultiexp = build_multiexp;
 
 var build_curve_jacobian_a0 = function buildCurve(module, prefix, prefixField, pB) {
 
@@ -8946,8 +12465,8 @@ var build_curve_jacobian_a0 = function buildCurve(module, prefix, prefixField, p
 
     buildBatchConvertion(module, prefix + "_batchToJacobian", prefix + "_toJacobian", n8*2, n8*3, true);
 
-    buildMultiexp$1(module, prefix, prefix + "_multiexp", prefix + "_add", n8*3);
-    buildMultiexp$1(module, prefix, prefix + "_multiexpAffine", prefix + "_addMixed", n8*2);
+    buildMultiexp(module, prefix, prefix + "_multiexp", prefix + "_add", n8*3);
+    buildMultiexp(module, prefix, prefix + "_multiexpAffine", prefix + "_addMixed", n8*2);
 
     /*
     buildTimesScalar(
@@ -9068,7 +12587,7 @@ var build_curve_jacobian_a0 = function buildCurve(module, prefix, prefixField, p
 */
 
 const { isOdd: isOdd$2, modInv: modInv$1, modPow } = bigint;
-const utils$3 = utils$6;
+const utils$2 = utils$5;
 
 var build_fft = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) {
 
@@ -9107,7 +12626,7 @@ var build_fft = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) {
 
     for (let i=0; i<w.length; i++) {
         const m = w[i] * R % q;
-        bytes.push(...utils$3.bigInt2BytesLE(m, n8f));
+        bytes.push(...utils$2.bigInt2BytesLE(m, n8f));
     }
 
     const ROOTs = module.alloc(bytes);
@@ -9122,7 +12641,7 @@ var build_fft = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) {
     const bytesi2 =[];
     for (let i=0; i<=maxBits; i++) {
         const m = modInv$1(i2[i], q) * R % q;
-        bytesi2.push(...utils$3.bigInt2BytesLE(m, n8f));
+        bytesi2.push(...utils$2.bigInt2BytesLE(m, n8f));
     }
 
     const INV2 = module.alloc(bytesi2);
@@ -9133,8 +12652,8 @@ var build_fft = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) {
     for (let i=0; i<=maxBits; i++) {
         const shiftToSmallM = modPow(shift, 2n ** BigInt(i), q);
         const sConst = modInv$1(q + 1n - shiftToSmallM, q);
-        bytesShiftToSmallM.push(...utils$3.bigInt2BytesLE(shiftToSmallM * R % q, n8f));
-        bytesSConst.push(...utils$3.bigInt2BytesLE(sConst * R % q, n8f));
+        bytesShiftToSmallM.push(...utils$2.bigInt2BytesLE(shiftToSmallM * R % q, n8f));
+        bytesSConst.push(...utils$2.bigInt2BytesLE(sConst * R % q, n8f));
     }
 
     const SHIFT_TO_M = module.alloc( bytesShiftToSmallM  );
@@ -10403,6 +13922,7 @@ var build_fft = function buildFFT(module, prefix, gPrefix, fPrefix, opGtimesF) {
     buildFFTFinal();
     buildPrepareLagrangeEvaluation();
 
+    module.exportFunction(prefix+"__reversePermutation");
     module.exportFunction(prefix+"_fft");
     module.exportFunction(prefix+"_ifft");
     module.exportFunction(prefix+"_rawfft");
@@ -10990,14 +14510,14 @@ var build_applykey = function buildApplyKey(module, fnName, gPrefix, frPrefix, s
 
 };
 
-const utils$2 = utils$6;
+const utils$1 = utils$5;
 
 const buildF1m$1 =build_f1m;
 const buildF1$1 =build_f1;
 const buildF2m$1 =build_f2m;
 const buildF3m$1 =build_f3m;
 const buildCurve$1 =build_curve_jacobian_a0;
-const buildFFT$2 = build_fft;
+const buildFFT$1 = build_fft;
 const buildPol$1 = build_pol;
 const buildQAP$1 = build_qap;
 const buildApplyKey$1 = build_applykey;
@@ -11020,23 +14540,23 @@ var build_bn128 = function buildBN128(module, _prefix) {
     const f2size = f1size * 2;
     const ftsize = f1size * 12;
 
-    const pr = module.alloc(utils$2.bigInt2BytesLE( r, frsize ));
+    const pr = module.alloc(utils$1.bigInt2BytesLE( r, frsize ));
 
     const f1mPrefix = buildF1m$1(module, q, "f1m");
     buildF1$1(module, r, "fr", "frm");
 
-    const pG1b = module.alloc(utils$2.bigInt2BytesLE( toMontgomery(3n), f1size ));
+    const pG1b = module.alloc(utils$1.bigInt2BytesLE( toMontgomery(3n), f1size ));
     const g1mPrefix = buildCurve$1(module, "g1m", "f1m", pG1b);
 
-    buildFFT$2(module, "frm", "frm", "frm", "frm_mul");
+    buildFFT$1(module, "frm", "frm", "frm", "frm_mul");
 
     buildPol$1(module, "pol", "frm");
     buildQAP$1(module, "qap", "frm");
 
     const f2mPrefix = buildF2m$1(module, "f1m_neg", "f2m", "f1m");
     const pG2b = module.alloc([
-        ...utils$2.bigInt2BytesLE( toMontgomery(19485874751759354771024239261021720505790618469301721065564631296452457478373n), f1size ),
-        ...utils$2.bigInt2BytesLE( toMontgomery(266929791119991161246907387137283842545076965332900288569378510910307636690n), f1size )
+        ...utils$1.bigInt2BytesLE( toMontgomery(19485874751759354771024239261021720505790618469301721065564631296452457478373n), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(266929791119991161246907387137283842545076965332900288569378510910307636690n), f1size )
     ]);
     const g2mPrefix = buildCurve$1(module, "g2m", "f2m", pG2b);
 
@@ -11065,10 +14585,10 @@ var build_bn128 = function buildBN128(module, _prefix) {
         module.exportFunction(fnName);
     }
     buildGTimesFr("g1m_timesFr", "g1m_timesScalar");
-    buildFFT$2(module, "g1m", "g1m", "frm", "g1m_timesFr");
+    buildFFT$1(module, "g1m", "g1m", "frm", "g1m_timesFr");
 
     buildGTimesFr("g2m_timesFr", "g2m_timesScalar");
-    buildFFT$2(module, "g2m", "g2m", "frm", "g2m_timesFr");
+    buildFFT$1(module, "g2m", "g2m", "frm", "g2m_timesFr");
 
     buildGTimesFr("g1m_timesFrAffine", "g1m_timesScalarAffine");
     buildGTimesFr("g2m_timesFrAffine", "g2m_timesScalarAffine");
@@ -11091,9 +14611,9 @@ var build_bn128 = function buildBN128(module, _prefix) {
 
     const pG1gen = module.alloc(
         [
-            ...utils$2.bigInt2BytesLE( toMontgomery(G1gen[0]), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery(G1gen[1]), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery(G1gen[2]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G1gen[0]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G1gen[1]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G1gen[2]), f1size ),
         ]
     );
 
@@ -11105,9 +14625,9 @@ var build_bn128 = function buildBN128(module, _prefix) {
 
     const pG1zero = module.alloc(
         [
-            ...utils$2.bigInt2BytesLE( toMontgomery(G1zero[0]), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery(G1zero[1]), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery(G1zero[2]), f1size )
+            ...utils$1.bigInt2BytesLE( toMontgomery(G1zero[0]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G1zero[1]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G1zero[2]), f1size )
         ]
     );
 
@@ -11126,12 +14646,12 @@ var build_bn128 = function buildBN128(module, _prefix) {
 
     const pG2gen = module.alloc(
         [
-            ...utils$2.bigInt2BytesLE( toMontgomery(G2gen[0][0]), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery(G2gen[0][1]), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery(G2gen[1][0]), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery(G2gen[1][1]), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery(G2gen[2][0]), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery(G2gen[2][1]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G2gen[0][0]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G2gen[0][1]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G2gen[1][0]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G2gen[1][1]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G2gen[2][0]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G2gen[2][1]), f1size ),
         ]
     );
 
@@ -11150,45 +14670,45 @@ var build_bn128 = function buildBN128(module, _prefix) {
 
     const pG2zero = module.alloc(
         [
-            ...utils$2.bigInt2BytesLE( toMontgomery(G2zero[0][0]), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery(G2zero[0][1]), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery(G2zero[1][0]), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery(G2zero[1][1]), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery(G2zero[2][0]), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery(G2zero[2][1]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G2zero[0][0]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G2zero[0][1]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G2zero[1][0]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G2zero[1][1]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G2zero[2][0]), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery(G2zero[2][1]), f1size ),
         ]
     );
 
     const pOneT = module.alloc([
-        ...utils$2.bigInt2BytesLE( toMontgomery(1), f1size ),
-        ...utils$2.bigInt2BytesLE( toMontgomery(0), f1size ),
-        ...utils$2.bigInt2BytesLE( toMontgomery(0), f1size ),
-        ...utils$2.bigInt2BytesLE( toMontgomery(0), f1size ),
-        ...utils$2.bigInt2BytesLE( toMontgomery(0), f1size ),
-        ...utils$2.bigInt2BytesLE( toMontgomery(0), f1size ),
-        ...utils$2.bigInt2BytesLE( toMontgomery(0), f1size ),
-        ...utils$2.bigInt2BytesLE( toMontgomery(0), f1size ),
-        ...utils$2.bigInt2BytesLE( toMontgomery(0), f1size ),
-        ...utils$2.bigInt2BytesLE( toMontgomery(0), f1size ),
-        ...utils$2.bigInt2BytesLE( toMontgomery(0), f1size ),
-        ...utils$2.bigInt2BytesLE( toMontgomery(0), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(1), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(0), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(0), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(0), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(0), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(0), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(0), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(0), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(0), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(0), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(0), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(0), f1size ),
     ]);
 
     const pNonResidueF6 = module.alloc([
-        ...utils$2.bigInt2BytesLE( toMontgomery(9), f1size ),
-        ...utils$2.bigInt2BytesLE( toMontgomery(1), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(9), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(1), f1size ),
     ]);
 
     const pTwoInv = module.alloc([
-        ...utils$2.bigInt2BytesLE( toMontgomery(  modInv(2n, q)), f1size ),
-        ...utils$2.bigInt2BytesLE( 0n, f1size )
+        ...utils$1.bigInt2BytesLE( toMontgomery(  modInv(2n, q)), f1size ),
+        ...utils$1.bigInt2BytesLE( 0n, f1size )
     ]);
 
     const pAltBn128Twist = pNonResidueF6;
 
     const pTwistCoefB = module.alloc([
-        ...utils$2.bigInt2BytesLE( toMontgomery(19485874751759354771024239261021720505790618469301721065564631296452457478373n), f1size ),
-        ...utils$2.bigInt2BytesLE( toMontgomery(266929791119991161246907387137283842545076965332900288569378510910307636690n), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(19485874751759354771024239261021720505790618469301721065564631296452457478373n), f1size ),
+        ...utils$1.bigInt2BytesLE( toMontgomery(266929791119991161246907387137283842545076965332900288569378510910307636690n), f1size ),
     ]);
 
     function build_mulNR6() {
@@ -11515,13 +15035,13 @@ var build_bn128 = function buildBN128(module, _prefix) {
         const z3 = c.i32_add(c.getLocal("pr"), c.i32_const(f2size*2));
 
         const MulByQX = c.i32_const(module.alloc([
-            ...utils$2.bigInt2BytesLE( toMontgomery("21575463638280843010398324269430826099269044274347216827212613867836435027261"), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery("10307601595873709700152284273816112264069230130616436755625194854815875713954"), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery("21575463638280843010398324269430826099269044274347216827212613867836435027261"), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery("10307601595873709700152284273816112264069230130616436755625194854815875713954"), f1size ),
         ]));
 
         const MulByQY = c.i32_const(module.alloc([
-            ...utils$2.bigInt2BytesLE( toMontgomery("2821565182194536844548159561693502659359617185244120367078079554186484126554"), f1size ),
-            ...utils$2.bigInt2BytesLE( toMontgomery("3505843767911556378687030309984248845540243509899259641013678093033130930403"), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery("2821565182194536844548159561693502659359617185244120367078079554186484126554"), f1size ),
+            ...utils$1.bigInt2BytesLE( toMontgomery("3505843767911556378687030309984248845540243509899259641013678093033130930403"), f1size ),
         ]));
 
         f.addCode(
@@ -11936,8 +15456,8 @@ var build_bn128 = function buildBN128(module, _prefix) {
             const Rc1 = c.i32_add(c.getLocal("r"), c.i32_const(i*f2size + f1size));
             const coef = mul2(F12[Math.floor(i/3)][n%12] , F6[i%3][n%6]);
             const pCoef = module.alloc([
-                ...utils$2.bigInt2BytesLE(toMontgomery(coef[0]), 32),
-                ...utils$2.bigInt2BytesLE(toMontgomery(coef[1]), 32),
+                ...utils$1.bigInt2BytesLE(toMontgomery(coef[0]), 32),
+                ...utils$1.bigInt2BytesLE(toMontgomery(coef[1]), 32),
             ]);
             if (n%2 == 1) {
                 f.addCode(
@@ -12289,7 +15809,7 @@ var build_bn128 = function buildBN128(module, _prefix) {
 
         const exponent = 552484233613224096312617126783173147097382103762957654188882734314196910839907541213974502761540629817009608548654680343627701153829446747810907373256841551006201639677726139946029199968412598804882391702273019083653272047566316584365559776493027495458238373902875937659943504873220554161550525926302303331747463515644711876653177129578303191095900909191624817826566688241804408081892785725967931714097716709526092261278071952560171111444072049229123565057483750161460024353346284167282452756217662335528813519139808291170539072125381230815729071544861602750936964829313608137325426383735122175229541155376346436093930287402089517426973178917569713384748081827255472576937471496195752727188261435633271238710131736096299798168852925540549342330775279877006784354801422249722573783561685179618816480037695005515426162362431072245638324744480n;
 
-        const pExponent = module.alloc(utils$2.bigInt2BytesLE( exponent, 352 ));
+        const pExponent = module.alloc(utils$1.bigInt2BytesLE( exponent, 352 ));
 
         const c = f.getCodeBuilder();
 
@@ -12397,14 +15917,14 @@ var build_bn128 = function buildBN128(module, _prefix) {
 
 };
 
-const utils$1 = utils$6;
+const utils = utils$5;
 
 const buildF1m =build_f1m;
 const buildF1 =build_f1;
 const buildF2m =build_f2m;
 const buildF3m =build_f3m;
 const buildCurve =build_curve_jacobian_a0;
-const buildFFT$1 = build_fft;
+const buildFFT = build_fft;
 const buildPol = build_pol;
 const buildQAP = build_qap;
 const buildApplyKey = build_applykey;
@@ -12432,22 +15952,22 @@ var build_bls12381 = function buildBLS12381(module, _prefix) {
     const frsize = n8r;
 
 
-    const pr = module.alloc(utils$1.bigInt2BytesLE( r, frsize ));
+    const pr = module.alloc(utils.bigInt2BytesLE( r, frsize ));
 
     const f1mPrefix = buildF1m(module, q, "f1m", "intq");
     buildF1(module, r, "fr", "frm", "intr");
-    const pG1b = module.alloc(utils$1.bigInt2BytesLE( toMontgomery(4n), f1size ));
+    const pG1b = module.alloc(utils.bigInt2BytesLE( toMontgomery(4n), f1size ));
     const g1mPrefix = buildCurve(module, "g1m", "f1m", pG1b);
 
-    buildFFT$1(module, "frm", "frm", "frm", "frm_mul");
+    buildFFT(module, "frm", "frm", "frm", "frm_mul");
 
     buildPol(module, "pol", "frm");
     buildQAP(module, "qap", "frm");
 
     const f2mPrefix = buildF2m(module, "f1m_neg", "f2m", "f1m");
     const pG2b = module.alloc([
-        ...utils$1.bigInt2BytesLE( toMontgomery(4n), f1size ),
-        ...utils$1.bigInt2BytesLE( toMontgomery(4n), f1size )
+        ...utils.bigInt2BytesLE( toMontgomery(4n), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(4n), f1size )
     ]);
     const g2mPrefix = buildCurve(module, "g2m", "f2m", pG2b);
 
@@ -12476,10 +15996,10 @@ var build_bls12381 = function buildBLS12381(module, _prefix) {
         module.exportFunction(fnName);
     }
     buildGTimesFr("g1m_timesFr", "g1m_timesScalar");
-    buildFFT$1(module, "g1m", "g1m", "frm", "g1m_timesFr");
+    buildFFT(module, "g1m", "g1m", "frm", "g1m_timesFr");
 
     buildGTimesFr("g2m_timesFr", "g2m_timesScalar");
-    buildFFT$1(module, "g2m", "g2m", "frm", "g2m_timesFr");
+    buildFFT(module, "g2m", "g2m", "frm", "g2m_timesFr");
 
     buildGTimesFr("g1m_timesFrAffine", "g1m_timesScalarAffine");
     buildGTimesFr("g2m_timesFrAffine", "g2m_timesScalarAffine");
@@ -12503,9 +16023,9 @@ var build_bls12381 = function buildBLS12381(module, _prefix) {
 
     const pG1gen = module.alloc(
         [
-            ...utils$1.bigInt2BytesLE( toMontgomery(G1gen[0]), f1size ),
-            ...utils$1.bigInt2BytesLE( toMontgomery(G1gen[1]), f1size ),
-            ...utils$1.bigInt2BytesLE( toMontgomery(G1gen[2]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G1gen[0]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G1gen[1]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G1gen[2]), f1size ),
         ]
     );
 
@@ -12517,9 +16037,9 @@ var build_bls12381 = function buildBLS12381(module, _prefix) {
 
     const pG1zero = module.alloc(
         [
-            ...utils$1.bigInt2BytesLE( toMontgomery(G1zero[0]), f1size ),
-            ...utils$1.bigInt2BytesLE( toMontgomery(G1zero[1]), f1size ),
-            ...utils$1.bigInt2BytesLE( toMontgomery(G1zero[2]), f1size )
+            ...utils.bigInt2BytesLE( toMontgomery(G1zero[0]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G1zero[1]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G1zero[2]), f1size )
         ]
     );
 
@@ -12538,12 +16058,12 @@ var build_bls12381 = function buildBLS12381(module, _prefix) {
 
     const pG2gen = module.alloc(
         [
-            ...utils$1.bigInt2BytesLE( toMontgomery(G2gen[0][0]), f1size ),
-            ...utils$1.bigInt2BytesLE( toMontgomery(G2gen[0][1]), f1size ),
-            ...utils$1.bigInt2BytesLE( toMontgomery(G2gen[1][0]), f1size ),
-            ...utils$1.bigInt2BytesLE( toMontgomery(G2gen[1][1]), f1size ),
-            ...utils$1.bigInt2BytesLE( toMontgomery(G2gen[2][0]), f1size ),
-            ...utils$1.bigInt2BytesLE( toMontgomery(G2gen[2][1]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G2gen[0][0]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G2gen[0][1]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G2gen[1][0]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G2gen[1][1]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G2gen[2][0]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G2gen[2][1]), f1size ),
         ]
     );
 
@@ -12562,33 +16082,33 @@ var build_bls12381 = function buildBLS12381(module, _prefix) {
 
     const pG2zero = module.alloc(
         [
-            ...utils$1.bigInt2BytesLE( toMontgomery(G2zero[0][0]), f1size ),
-            ...utils$1.bigInt2BytesLE( toMontgomery(G2zero[0][1]), f1size ),
-            ...utils$1.bigInt2BytesLE( toMontgomery(G2zero[1][0]), f1size ),
-            ...utils$1.bigInt2BytesLE( toMontgomery(G2zero[1][1]), f1size ),
-            ...utils$1.bigInt2BytesLE( toMontgomery(G2zero[2][0]), f1size ),
-            ...utils$1.bigInt2BytesLE( toMontgomery(G2zero[2][1]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G2zero[0][0]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G2zero[0][1]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G2zero[1][0]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G2zero[1][1]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G2zero[2][0]), f1size ),
+            ...utils.bigInt2BytesLE( toMontgomery(G2zero[2][1]), f1size ),
         ]
     );
 
     const pOneT = module.alloc([
-        ...utils$1.bigInt2BytesLE( toMontgomery(1n), f1size ),
-        ...utils$1.bigInt2BytesLE( toMontgomery(0n), f1size ),
-        ...utils$1.bigInt2BytesLE( toMontgomery(0n), f1size ),
-        ...utils$1.bigInt2BytesLE( toMontgomery(0n), f1size ),
-        ...utils$1.bigInt2BytesLE( toMontgomery(0n), f1size ),
-        ...utils$1.bigInt2BytesLE( toMontgomery(0n), f1size ),
-        ...utils$1.bigInt2BytesLE( toMontgomery(0n), f1size ),
-        ...utils$1.bigInt2BytesLE( toMontgomery(0n), f1size ),
-        ...utils$1.bigInt2BytesLE( toMontgomery(0n), f1size ),
-        ...utils$1.bigInt2BytesLE( toMontgomery(0n), f1size ),
-        ...utils$1.bigInt2BytesLE( toMontgomery(0n), f1size ),
-        ...utils$1.bigInt2BytesLE( toMontgomery(0n), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(1n), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(0n), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(0n), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(0n), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(0n), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(0n), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(0n), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(0n), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(0n), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(0n), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(0n), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(0n), f1size ),
     ]);
 
     const pBls12381Twist =  module.alloc([
-        ...utils$1.bigInt2BytesLE( toMontgomery(1n), f1size ),
-        ...utils$1.bigInt2BytesLE( toMontgomery(1n), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(1n), f1size ),
+        ...utils.bigInt2BytesLE( toMontgomery(1n), f1size ),
     ]);
 
     function build_mulNR2() {
@@ -13373,8 +16893,8 @@ var build_bls12381 = function buildBLS12381(module, _prefix) {
             const Rc1 = c.i32_add(c.getLocal("r"), c.i32_const(i*f2size + f1size));
             const coef = mul2(F12[Math.floor(i/3)][n%12] , F6[i%3][n%6]);
             const pCoef = module.alloc([
-                ...utils$1.bigInt2BytesLE(toMontgomery(coef[0]), n8q),
-                ...utils$1.bigInt2BytesLE(toMontgomery(coef[1]), n8q),
+                ...utils.bigInt2BytesLE(toMontgomery(coef[0]), n8q),
+                ...utils.bigInt2BytesLE(toMontgomery(coef[1]), n8q),
             ]);
             if (n%2 == 1) {
                 f.addCode(
@@ -13693,7 +17213,7 @@ var build_bls12381 = function buildBLS12381(module, _prefix) {
 
         const exponent = 322277361516934140462891564586510139908379969514828494218366688025288661041104682794998680497580008899973249814104447692778988208376779573819485263026159588510513834876303014016798809919343532899164848730280942609956670917565618115867287399623286813270357901731510188149934363360381614501334086825442271920079363289954510565375378443704372994881406797882676971082200626541916413184642520269678897559532260949334760604962086348898118982248842634379637598665468817769075878555493752214492790122785850202957575200176084204422751485957336465472324810982833638490904279282696134323072515220044451592646885410572234451732790590013479358343841220074174848221722017083597872017638514103174122784843925578370430843522959600095676285723737049438346544753168912974976791528535276317256904336520179281145394686565050419250614107803233314658825463117900250701199181529205942363159325765991819433914303908860460720581408201373164047773794825411011922305820065611121544561808414055302212057471395719432072209245600258134364584636810093520285711072578721435517884103526483832733289802426157301542744476740008494780363354305116978805620671467071400711358839553375340724899735460480144599782014906586543813292157922220645089192130209334926661588737007768565838519456601560804957985667880395221049249803753582637708560n;
 
-        const pExponent = module.alloc(utils$1.bigInt2BytesLE( exponent, 544 ));
+        const pExponent = module.alloc(utils.bigInt2BytesLE( exponent, 544 ));
 
         const c = f.getCodeBuilder();
 
@@ -13789,17 +17309,17 @@ var build_bls12381 = function buildBLS12381(module, _prefix) {
         ];
 
         const wInv = c.i32_const(module.alloc([
-            ...utils$1.bigInt2BytesLE(toMontgomery(WINV[0]), n8q),
-            ...utils$1.bigInt2BytesLE(toMontgomery(WINV[1]), n8q),
+            ...utils.bigInt2BytesLE(toMontgomery(WINV[0]), n8q),
+            ...utils.bigInt2BytesLE(toMontgomery(WINV[1]), n8q),
         ]));
 
-        const frob2X = c.i32_const(module.alloc(utils$1.bigInt2BytesLE(toMontgomery(FROB2X), n8q)));
+        const frob2X = c.i32_const(module.alloc(utils.bigInt2BytesLE(toMontgomery(FROB2X), n8q)));
         const frob3Y = c.i32_const(module.alloc([
-            ...utils$1.bigInt2BytesLE(toMontgomery(FROB3Y[0]), n8q),
-            ...utils$1.bigInt2BytesLE(toMontgomery(FROB3Y[1]), n8q),
+            ...utils.bigInt2BytesLE(toMontgomery(FROB3Y[0]), n8q),
+            ...utils.bigInt2BytesLE(toMontgomery(FROB3Y[1]), n8q),
         ]));
 
-        const z = c.i32_const(module.alloc(utils$1.bigInt2BytesLE(finalExpZ, 8)));
+        const z = c.i32_const(module.alloc(utils.bigInt2BytesLE(finalExpZ, 8)));
 
         const px = c.getLocal("p");
         const py = c.i32_add(c.getLocal("p"), c.i32_const(f2size));
@@ -13900,10 +17420,10 @@ var build_bls12381 = function buildBLS12381(module, _prefix) {
         const BETA2 = 793479390729215512621379701633421447060886740281060493010456487427281649075476305620758731620350n;
         const Z2M1D3 = (finalExpZ * finalExpZ - 1n) / 3n;
 
-        const beta = c.i32_const(module.alloc(utils$1.bigInt2BytesLE(toMontgomery(BETA), n8q)));
-        const beta2 = c.i32_const(module.alloc(utils$1.bigInt2BytesLE(toMontgomery(BETA2), n8q)));
+        const beta = c.i32_const(module.alloc(utils.bigInt2BytesLE(toMontgomery(BETA), n8q)));
+        const beta2 = c.i32_const(module.alloc(utils.bigInt2BytesLE(toMontgomery(BETA2), n8q)));
 
-        const z2m1d3 = c.i32_const(module.alloc(utils$1.bigInt2BytesLE(Z2M1D3, 16)));
+        const z2m1d3 = c.i32_const(module.alloc(utils.bigInt2BytesLE(Z2M1D3, 16)));
 
 
         const px = c.getLocal("p");
@@ -14035,3076 +17555,19 @@ var build_bls12381 = function buildBLS12381(module, _prefix) {
 */
 
 // module.exports.bn128_wasm = require("./build/bn128_wasm.js");
+var bn128_wasm_gzip = bn128_wasm_gzip$1;
 // module.exports.bls12381_wasm = require("./build/bls12381_wasm.js");
 // module.exports.mnt6753_wasm = require("./build/mnt6753_wasm.js");
 
-var buildBn128$1 = build_bn128;
-var buildBls12381$1 = build_bls12381;
+var buildBn128 = build_bn128;
+var buildBls12381 = build_bls12381;
 
-/* global BigInt */
-
-function stringifyBigInts(o) {
-    if (typeof o == "bigint" || o.eq !== undefined) {
-        return o.toString(10);
-    } else if (o instanceof Uint8Array) {
-        return fromRprLE(o, 0);
-    } else if (Array.isArray(o)) {
-        return o.map(stringifyBigInts);
-    } else if (typeof o == "object") {
-        const res = {};
-        const keys = Object.keys(o);
-        keys.forEach((k) => {
-            res[k] = stringifyBigInts(o[k]);
-        });
-        return res;
-    } else {
-        return o;
-    }
-}
-
-function unstringifyBigInts(o) {
-    if (typeof o == "string" && /^[0-9]+$/.test(o)) {
-        return BigInt(o);
-    } else if (typeof o == "string" && /^0x[0-9a-fA-F]+$/.test(o)) {
-        return BigInt(o);
-    } else if (Array.isArray(o)) {
-        return o.map(unstringifyBigInts);
-    } else if (typeof o == "object") {
-        if (o === null) return null;
-        const res = {};
-        const keys = Object.keys(o);
-        keys.forEach((k) => {
-            res[k] = unstringifyBigInts(o[k]);
-        });
-        return res;
-    } else {
-        return o;
-    }
-}
-
-function beBuff2int(buff) {
-    let res = BigInt(0);
-    let i = buff.length;
-    let offset = 0;
-    const buffV = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
-    while (i > 0) {
-        if (i >= 4) {
-            i -= 4;
-            res += BigInt(buffV.getUint32(i)) << BigInt(offset * 8);
-            offset += 4;
-        } else if (i >= 2) {
-            i -= 2;
-            res += BigInt(buffV.getUint16(i)) << BigInt(offset * 8);
-            offset += 2;
-        } else {
-            i -= 1;
-            res += BigInt(buffV.getUint8(i)) << BigInt(offset * 8);
-            offset += 1;
-        }
-    }
-    return res;
-}
-
-function beInt2Buff(n, len) {
-    let r = n;
-    const buff = new Uint8Array(len);
-    const buffV = new DataView(buff.buffer);
-    let o = len;
-    while (o > 0) {
-        if (o - 4 >= 0) {
-            o -= 4;
-            buffV.setUint32(o, Number(r & BigInt(0xffffffff)));
-            r = r >> BigInt(32);
-        } else if (o - 2 >= 0) {
-            o -= 2;
-            buffV.setUint16(o, Number(r & BigInt(0xffff)));
-            r = r >> BigInt(16);
-        } else {
-            o -= 1;
-            buffV.setUint8(o, Number(r & BigInt(0xff)));
-            r = r >> BigInt(8);
-        }
-    }
-    if (r) {
-        throw new Error("Number does not fit in this length");
-    }
-    return buff;
-}
-
-function leBuff2int(buff) {
-    let res = BigInt(0);
-    let i = 0;
-    const buffV = new DataView(buff.buffer, buff.byteOffset, buff.byteLength);
-    while (i < buff.length) {
-        if (i + 4 <= buff.length) {
-            res += BigInt(buffV.getUint32(i, true)) << BigInt(i * 8);
-            i += 4;
-        } else if (i + 2 <= buff.length) {
-            res += BigInt(buffV.getUint16(i, true)) << BigInt(i * 8);
-            i += 2;
-        } else {
-            res += BigInt(buffV.getUint8(i, true)) << BigInt(i * 8);
-            i += 1;
-        }
-    }
-    return res;
-}
-
-function leInt2Buff(n, len) {
-    let r = n;
-    if (typeof len === "undefined") {
-        len = Math.floor((bitLength$6(n) - 1) / 8) + 1;
-        if (len == 0) len = 1;
-    }
-    const buff = new Uint8Array(len);
-    const buffV = new DataView(buff.buffer);
-    let o = 0;
-    while (o < len) {
-        if (o + 4 <= len) {
-            buffV.setUint32(o, Number(r & BigInt(0xffffffff)), true);
-            o += 4;
-            r = r >> BigInt(32);
-        } else if (o + 2 <= len) {
-            buffV.setUint16(o, Number(r & BigInt(0xffff)), true);
-            o += 2;
-            r = r >> BigInt(16);
-        } else {
-            buffV.setUint8(o, Number(r & BigInt(0xff)), true);
-            o += 1;
-            r = r >> BigInt(8);
-        }
-    }
-    if (r) {
-        throw new Error("Number does not fit in this length");
-    }
-    return buff;
-}
-
-function stringifyFElements(F, o) {
-    if (typeof o == "bigint" || o.eq !== undefined) {
-        return o.toString(10);
-    } else if (o instanceof Uint8Array) {
-        return F.toString(F.e(o));
-    } else if (Array.isArray(o)) {
-        return o.map(stringifyFElements.bind(this, F));
-    } else if (typeof o == "object") {
-        const res = {};
-        const keys = Object.keys(o);
-        keys.forEach((k) => {
-            res[k] = stringifyFElements(F, o[k]);
-        });
-        return res;
-    } else {
-        return o;
-    }
-}
-
-function unstringifyFElements(F, o) {
-    if (typeof o == "string" && /^[0-9]+$/.test(o)) {
-        return F.e(o);
-    } else if (typeof o == "string" && /^0x[0-9a-fA-F]+$/.test(o)) {
-        return F.e(o);
-    } else if (Array.isArray(o)) {
-        return o.map(unstringifyFElements.bind(this, F));
-    } else if (typeof o == "object") {
-        if (o === null) return null;
-        const res = {};
-        const keys = Object.keys(o);
-        keys.forEach((k) => {
-            res[k] = unstringifyFElements(F, o[k]);
-        });
-        return res;
-    } else {
-        return o;
-    }
-}
-
-const _revTable = [];
-for (let i = 0; i < 256; i++) {
-    _revTable[i] = _revSlow(i, 8);
-}
-
-function _revSlow(idx, bits) {
-    let res = 0;
-    let a = idx;
-    for (let i = 0; i < bits; i++) {
-        res <<= 1;
-        res = res | (a & 1);
-        a >>= 1;
-    }
-    return res;
-}
-
-function bitReverse(idx, bits) {
-    return (
-        (_revTable[idx >>> 24] |
-        (_revTable[(idx >>> 16) & 0xff] << 8) |
-        (_revTable[(idx >>> 8) & 0xff] << 16) |
-        (_revTable[idx & 0xff] << 24)) >>>
-        (32 - bits)
-    );
-}
-
-function log2(V) {
-    return (
-        ((V & 0xffff0000) !== 0 ? ((V &= 0xffff0000), 16) : 0) |
-        ((V & 0xff00ff00) !== 0 ? ((V &= 0xff00ff00), 8) : 0) |
-        ((V & 0xf0f0f0f0) !== 0 ? ((V &= 0xf0f0f0f0), 4) : 0) |
-        ((V & 0xcccccccc) !== 0 ? ((V &= 0xcccccccc), 2) : 0) |
-        ((V & 0xaaaaaaaa) !== 0)
-    );
-}
-
-function buffReverseBits(buff, eSize) {
-    const n = buff.byteLength / eSize;
-    const bits = log2(n);
-    if (n != 1 << bits) {
-        throw new Error("Invalid number of pointers");
-    }
-    for (let i = 0; i < n; i++) {
-        const r = bitReverse(i, bits);
-        if (i > r) {
-            const tmp = buff.slice(i * eSize, (i + 1) * eSize);
-            buff.set(buff.slice(r * eSize, (r + 1) * eSize), i * eSize);
-            buff.set(tmp, r * eSize);
-        }
-    }
-}
-
-function array2buffer(arr, sG) {
-    const buff = new Uint8Array(sG * arr.length);
-
-    for (let i = 0; i < arr.length; i++) {
-        buff.set(arr[i], i * sG);
-    }
-
-    return buff;
-}
-
-function buffer2array(buff, sG) {
-    const n = buff.byteLength / sG;
-    const arr = new Array(n);
-    for (let i = 0; i < n; i++) {
-        arr[i] = buff.slice(i * sG, i * sG + sG);
-    }
-    return arr;
-}
-
-var _utils = /*#__PURE__*/Object.freeze({
+var index = /*#__PURE__*/Object.freeze({
     __proto__: null,
-    array2buffer: array2buffer,
-    beBuff2int: beBuff2int,
-    beInt2Buff: beInt2Buff,
-    bitReverse: bitReverse,
-    buffReverseBits: buffReverseBits,
-    buffer2array: buffer2array,
-    leBuff2int: leBuff2int,
-    leInt2Buff: leInt2Buff,
-    log2: log2,
-    stringifyBigInts: stringifyBigInts,
-    stringifyFElements: stringifyFElements,
-    unstringifyBigInts: unstringifyBigInts,
-    unstringifyFElements: unstringifyFElements
+    bn128_wasm_gzip: bn128_wasm_gzip,
+    buildBls12381: buildBls12381,
+    buildBn128: buildBn128
 });
-
-const PAGE_SIZE = 1<<30;
-
-class BigBuffer {
-
-    constructor(size) {
-        this.buffers = [];
-        this.byteLength = size;
-        for (let i=0; i<size; i+= PAGE_SIZE) {
-            const n = Math.min(size-i, PAGE_SIZE);
-            this.buffers.push(new Uint8Array(n));
-        }
-
-    }
-
-    slice(fr, to) {
-        if ( to === undefined ) to = this.byteLength;
-        if ( fr === undefined ) fr = 0;
-        const len = to-fr;
-
-        const firstPage = Math.floor(fr / PAGE_SIZE);
-        const lastPage = Math.floor((fr+len-1) / PAGE_SIZE);
-
-        if ((firstPage == lastPage)||(len==0))
-            return this.buffers[firstPage].slice(fr%PAGE_SIZE, fr%PAGE_SIZE + len);
-
-        let buff;
-
-        let p = firstPage;
-        let o = fr % PAGE_SIZE;
-        // Remaining bytes to read
-        let r = len;
-        while (r>0) {
-            // bytes to copy from this page
-            const l = (o+r > PAGE_SIZE) ? (PAGE_SIZE -o) : r;
-            const srcView = new Uint8Array(this.buffers[p].buffer, this.buffers[p].byteOffset+o, l);
-            if (l == len) return srcView.slice();
-            if (!buff) {
-                if (len <= PAGE_SIZE) {
-                    buff = new Uint8Array(len);
-                } else {
-                    buff = new BigBuffer(len);
-                }
-            }
-            buff.set(srcView, len-r);
-            r = r-l;
-            p ++;
-            o = 0;
-        }
-
-        return buff;
-    }
-
-    set(buff, offset) {
-        if (offset === undefined) offset = 0;
-
-        const len = buff.byteLength;
-
-        if (len==0) return;
-
-        const firstPage = Math.floor(offset / PAGE_SIZE);
-        const lastPage = Math.floor((offset+len-1) / PAGE_SIZE);
-
-        if (firstPage == lastPage) {
-            if ((buff instanceof BigBuffer)&&(buff.buffers.length==1)) {
-                return this.buffers[firstPage].set(buff.buffers[0], offset % PAGE_SIZE);
-            } else {
-                return this.buffers[firstPage].set(buff, offset % PAGE_SIZE);
-            }
-
-        }
-
-
-        let p = firstPage;
-        let o = offset % PAGE_SIZE;
-        let r = len;
-        while (r>0) {
-            const l = (o+r > PAGE_SIZE) ? (PAGE_SIZE -o) : r;
-            const srcView = buff.slice( len -r, len -r+l);
-            const dstView = new Uint8Array(this.buffers[p].buffer, this.buffers[p].byteOffset + o, l);
-            dstView.set(srcView);
-            r = r-l;
-            p ++;
-            o = 0;
-        }
-
-    }
-}
-
-function buildBatchConvert(tm, fnName, sIn, sOut) {
-    return async function batchConvert(buffIn) {
-        const nPoints = Math.floor(buffIn.byteLength / sIn);
-        if ( nPoints * sIn !== buffIn.byteLength) {
-            throw new Error("Invalid buffer size");
-        }
-        const pointsPerChunk = Math.floor(nPoints/tm.concurrency);
-        const opPromises = [];
-        for (let i=0; i<tm.concurrency; i++) {
-            let n;
-            if (i< tm.concurrency-1) {
-                n = pointsPerChunk;
-            } else {
-                n = nPoints - i*pointsPerChunk;
-            }
-            if (n==0) continue;
-
-            const buffChunk = buffIn.slice(i*pointsPerChunk*sIn, i*pointsPerChunk*sIn + n*sIn);
-            const task = [
-                {cmd: "ALLOCSET", var: 0, buff:buffChunk},
-                {cmd: "ALLOC", var: 1, len:sOut * n},
-                {cmd: "CALL", fnName: fnName, params: [
-                    {var: 0},
-                    {val: n},
-                    {var: 1}
-                ]},
-                {cmd: "GET", out: 0, var: 1, len:sOut * n},
-            ];
-            opPromises.push(
-                tm.queueAction(task)
-            );
-        }
-
-        const result = await Promise.all(opPromises);
-
-        let fullBuffOut;
-        if (buffIn instanceof BigBuffer) {
-            fullBuffOut = new BigBuffer(nPoints*sOut);
-        } else {
-            fullBuffOut = new Uint8Array(nPoints*sOut);
-        }
-
-        let p =0;
-        for (let i=0; i<result.length; i++) {
-            fullBuffOut.set(result[i][0], p);
-            p+=result[i][0].byteLength;
-        }
-
-        return fullBuffOut;
-    };
-}
-
-class WasmField1 {
-
-    constructor(tm, prefix, n8, p) {
-        this.tm = tm;
-        this.prefix = prefix;
-
-        this.p = p;
-        this.n8 = n8;
-        this.type = "F1";
-        this.m = 1;
-
-        this.half = shiftRight(p, one);
-        this.bitLength = bitLength$6(p);
-        this.mask = sub(shiftLeft(one, this.bitLength), one);
-
-        this.pOp1 = tm.alloc(n8);
-        this.pOp2 = tm.alloc(n8);
-        this.pOp3 = tm.alloc(n8);
-        this.tm.instance.exports[prefix + "_zero"](this.pOp1);
-        this.zero = this.tm.getBuff(this.pOp1, this.n8);
-        this.tm.instance.exports[prefix + "_one"](this.pOp1);
-        this.one = this.tm.getBuff(this.pOp1, this.n8);
-
-        this.negone = this.neg(this.one);
-        this.two = this.add(this.one, this.one);
-
-        this.n64 = Math.floor(n8/8);
-        this.n32 = Math.floor(n8/4);
-
-        if(this.n64*8 != this.n8) {
-            throw new Error("n8 must be a multiple of 8");
-        }
-
-        this.half = shiftRight(this.p, one);
-        this.nqr = this.two;
-        let r = this.exp(this.nqr, this.half);
-        while (!this.eq(r, this.negone)) {
-            this.nqr = this.add(this.nqr, this.one);
-            r = this.exp(this.nqr, this.half);
-        }
-
-        this.shift = this.mul(this.nqr, this.nqr);
-        this.shiftInv = this.inv(this.shift);
-
-        this.s = 0;
-        let t = sub(this.p, one);
-
-        while ( !isOdd$5(t) ) {
-            this.s = this.s + 1;
-            t = shiftRight(t, one);
-        }
-
-        this.w = [];
-        this.w[this.s] = this.exp(this.nqr, t);
-
-        for (let i= this.s-1; i>=0; i--) {
-            this.w[i] = this.square(this.w[i+1]);
-        }
-
-        if (!this.eq(this.w[0], this.one)) {
-            throw new Error("Error calculating roots of unity");
-        }
-
-        this.batchToMontgomery = buildBatchConvert(tm, prefix + "_batchToMontgomery", this.n8, this.n8);
-        this.batchFromMontgomery = buildBatchConvert(tm, prefix + "_batchFromMontgomery", this.n8, this.n8);
-    }
-
-
-    op2(opName, a, b) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, b);
-        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.n8);
-    }
-
-    op2Bool(opName, a, b) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, b);
-        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2);
-    }
-
-    op1(opName, a) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.n8);
-    }
-
-    op1Bool(opName, a) {
-        this.tm.setBuff(this.pOp1, a);
-        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
-    }
-
-    add(a,b) {
-        return this.op2("_add", a, b);
-    }
-
-
-    eq(a,b) {
-        return this.op2Bool("_eq", a, b);
-    }
-
-    isZero(a) {
-        return this.op1Bool("_isZero", a);
-    }
-
-    sub(a,b) {
-        return this.op2("_sub", a, b);
-    }
-
-    neg(a) {
-        return this.op1("_neg", a);
-    }
-
-    inv(a) {
-        return this.op1("_inverse", a);
-    }
-
-    toMontgomery(a) {
-        return this.op1("_toMontgomery", a);
-    }
-
-    fromMontgomery(a) {
-        return this.op1("_fromMontgomery", a);
-    }
-
-    mul(a,b) {
-        return this.op2("_mul", a, b);
-    }
-
-    div(a, b) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, b);
-        this.tm.instance.exports[this.prefix + "_inverse"](this.pOp2, this.pOp2);
-        this.tm.instance.exports[this.prefix + "_mul"](this.pOp1, this.pOp2, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.n8);
-    }
-
-    square(a) {
-        return this.op1("_square", a);
-    }
-
-    isSquare(a) {
-        return this.op1Bool("_isSquare", a);
-    }
-
-    sqrt(a) {
-        return this.op1("_sqrt", a);
-    }
-
-    exp(a, b) {
-        if (!(b instanceof Uint8Array)) {
-            b = toLEBuff(e(b));
-        }
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, b);
-        this.tm.instance.exports[this.prefix + "_exp"](this.pOp1, this.pOp2, b.byteLength, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.n8);
-    }
-
-    isNegative(a) {
-        return this.op1Bool("_isNegative", a);
-    }
-
-    e(a, b) {
-        if (a instanceof Uint8Array) return a;
-        let ra = e(a, b);
-        if (isNegative$4(ra)) {
-            ra = neg(ra);
-            if (gt(ra, this.p)) {
-                ra = mod(ra, this.p);
-            }
-            ra = sub(this.p, ra);
-        } else {
-            if (gt(ra, this.p)) {
-                ra = mod(ra, this.p);
-            }
-        }
-        const buff = leInt2Buff(ra, this.n8);
-        return this.toMontgomery(buff);
-    }
-
-    toString(a, radix) {
-        const an = this.fromMontgomery(a);
-        const s = fromRprLE(an, 0);
-        return toString(s, radix);
-    }
-
-    fromRng(rng) {
-        let v;
-        const buff = new Uint8Array(this.n8);
-        do {
-            v = zero;
-            for (let i=0; i<this.n64; i++) {
-                v = add(v,  shiftLeft(rng.nextU64(), 64*i));
-            }
-            v = band(v, this.mask);
-        } while (geq(v, this.p));
-        toRprLE(buff, 0, v, this.n8);
-        return buff;
-    }
-
-    random() {
-        return this.fromRng(getThreadRng());
-    }
-
-    toObject(a) {
-        const an = this.fromMontgomery(a);
-        return fromRprLE(an, 0);
-    }
-
-    fromObject(a) {
-        const buff = new Uint8Array(this.n8);
-        toRprLE(buff, 0, a, this.n8);
-        return this.toMontgomery(buff);
-    }
-
-    toRprLE(buff, offset, a) {
-        buff.set(this.fromMontgomery(a), offset);
-    }
-
-    toRprBE(buff, offset, a) {
-        const buff2 = this.fromMontgomery(a);
-        for (let i=0; i<this.n8/2; i++) {
-            const aux = buff2[i];
-            buff2[i] = buff2[this.n8-1-i];
-            buff2[this.n8-1-i] = aux;
-        }
-        buff.set(buff2, offset);
-    }
-
-    fromRprLE(buff, offset) {
-        offset = offset || 0;
-        const res = buff.slice(offset, offset + this.n8);
-        return this.toMontgomery(res);
-    }
-
-    async batchInverse(buffIn) {
-        let returnArray = false;
-        const sIn = this.n8;
-        const sOut = this.n8;
-
-        if (Array.isArray(buffIn)) {
-            buffIn = array2buffer(buffIn, sIn );
-            returnArray = true;
-        } else {
-            buffIn = buffIn.slice(0, buffIn.byteLength);
-        }
-
-        const nPoints = Math.floor(buffIn.byteLength / sIn);
-        if ( nPoints * sIn !== buffIn.byteLength) {
-            throw new Error("Invalid buffer size");
-        }
-        const pointsPerChunk = Math.floor(nPoints/this.tm.concurrency);
-        const opPromises = [];
-        for (let i=0; i<this.tm.concurrency; i++) {
-            let n;
-            if (i< this.tm.concurrency-1) {
-                n = pointsPerChunk;
-            } else {
-                n = nPoints - i*pointsPerChunk;
-            }
-            if (n==0) continue;
-
-            const buffChunk = buffIn.slice(i*pointsPerChunk*sIn, i*pointsPerChunk*sIn + n*sIn);
-            const task = [
-                {cmd: "ALLOCSET", var: 0, buff:buffChunk},
-                {cmd: "ALLOC", var: 1, len:sOut * n},
-                {cmd: "CALL", fnName: this.prefix + "_batchInverse", params: [
-                    {var: 0},
-                    {val: sIn},
-                    {val: n},
-                    {var: 1},
-                    {val: sOut},
-                ]},
-                {cmd: "GET", out: 0, var: 1, len:sOut * n},
-            ];
-            opPromises.push(
-                this.tm.queueAction(task)
-            );
-        }
-
-        const result = await Promise.all(opPromises);
-
-        let fullBuffOut;
-        if (buffIn instanceof BigBuffer) {
-            fullBuffOut = new BigBuffer(nPoints*sOut);
-        } else {
-            fullBuffOut = new Uint8Array(nPoints*sOut);
-        }
-
-        let p =0;
-        for (let i=0; i<result.length; i++) {
-            fullBuffOut.set(result[i][0], p);
-            p+=result[i][0].byteLength;
-        }
-
-        if (returnArray) {
-            return buffer2array(fullBuffOut, sOut);
-        } else {
-            return fullBuffOut;
-        }
-
-    }
-
-}
-
-class WasmField2 {
-
-    constructor(tm, prefix, F) {
-        this.tm = tm;
-        this.prefix = prefix;
-
-        this.F = F;
-        this.type = "F2";
-        this.m = F.m * 2;
-        this.n8 = this.F.n8*2;
-        this.n32 = this.F.n32*2;
-        this.n64 = this.F.n64*2;
-
-        this.pOp1 = tm.alloc(F.n8*2);
-        this.pOp2 = tm.alloc(F.n8*2);
-        this.pOp3 = tm.alloc(F.n8*2);
-        this.tm.instance.exports[prefix + "_zero"](this.pOp1);
-        this.zero = tm.getBuff(this.pOp1, this.n8);
-        this.tm.instance.exports[prefix + "_one"](this.pOp1);
-        this.one = tm.getBuff(this.pOp1, this.n8);
-
-        this.negone = this.neg(this.one);
-        this.two = this.add(this.one, this.one);
-
-    }
-
-    op2(opName, a, b) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, b);
-        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.n8);
-    }
-
-    op2Bool(opName, a, b) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, b);
-        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2);
-    }
-
-    op1(opName, a) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.n8);
-    }
-
-    op1Bool(opName, a) {
-        this.tm.setBuff(this.pOp1, a);
-        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
-    }
-
-    add(a,b) {
-        return this.op2("_add", a, b);
-    }
-
-    eq(a,b) {
-        return this.op2Bool("_eq", a, b);
-    }
-
-    isZero(a) {
-        return this.op1Bool("_isZero", a);
-    }
-
-    sub(a,b) {
-        return this.op2("_sub", a, b);
-    }
-
-    neg(a) {
-        return this.op1("_neg", a);
-    }
-
-    inv(a) {
-        return this.op1("_inverse", a);
-    }
-
-    isNegative(a) {
-        return this.op1Bool("_isNegative", a);
-    }
-
-    toMontgomery(a) {
-        return this.op1("_toMontgomery", a);
-    }
-
-    fromMontgomery(a) {
-        return this.op1("_fromMontgomery", a);
-    }
-
-    mul(a,b) {
-        return this.op2("_mul", a, b);
-    }
-
-    mul1(a,b) {
-        return this.op2("_mul1", a, b);
-    }
-
-    div(a, b) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, b);
-        this.tm.instance.exports[this.prefix + "_inverse"](this.pOp2, this.pOp2);
-        this.tm.instance.exports[this.prefix + "_mul"](this.pOp1, this.pOp2, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.n8);
-    }
-
-    square(a) {
-        return this.op1("_square", a);
-    }
-
-    isSquare(a) {
-        return this.op1Bool("_isSquare", a);
-    }
-
-    sqrt(a) {
-        return this.op1("_sqrt", a);
-    }
-
-    exp(a, b) {
-        if (!(b instanceof Uint8Array)) {
-            b = toLEBuff(e(b));
-        }
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, b);
-        this.tm.instance.exports[this.prefix + "_exp"](this.pOp1, this.pOp2, b.byteLength, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.n8);
-    }
-
-    e(a, b) {
-        if (a instanceof Uint8Array) return a;
-        if ((Array.isArray(a)) && (a.length == 2)) {
-            const c1 = this.F.e(a[0], b);
-            const c2 = this.F.e(a[1], b);
-            const res = new Uint8Array(this.F.n8*2);
-            res.set(c1);
-            res.set(c2, this.F.n8*2);
-            return res;
-        } else {
-            throw new Error("invalid F2");
-        }
-    }
-
-    toString(a, radix) {
-        const s1 = this.F.toString(a.slice(0, this.F.n8), radix);
-        const s2 = this.F.toString(a.slice(this.F.n8), radix);
-        return `[${s1}, ${s2}]`;
-    }
-
-    fromRng(rng) {
-        const c1 = this.F.fromRng(rng);
-        const c2 = this.F.fromRng(rng);
-        const res = new Uint8Array(this.F.n8*2);
-        res.set(c1);
-        res.set(c2, this.F.n8);
-        return res;
-    }
-
-    random() {
-        return this.fromRng(getThreadRng());
-    }
-
-    toObject(a) {
-        const c1 = this.F.toObject(a.slice(0, this.F.n8));
-        const c2 = this.F.toObject(a.slice(this.F.n8, this.F.n8*2));
-        return [c1, c2];
-    }
-
-    fromObject(a) {
-        const buff = new Uint8Array(this.F.n8*2);
-        const b1 = this.F.fromObject(a[0]);
-        const b2 = this.F.fromObject(a[1]);
-        buff.set(b1);
-        buff.set(b2, this.F.n8);
-        return buff;
-    }
-
-    c1(a) {
-        return a.slice(0, this.F.n8);
-    }
-
-    c2(a) {
-        return a.slice(this.F.n8);
-    }
-
-}
-
-class WasmField3 {
-
-    constructor(tm, prefix, F) {
-        this.tm = tm;
-        this.prefix = prefix;
-
-        this.F = F;
-        this.type = "F3";
-        this.m = F.m * 3;
-        this.n8 = this.F.n8*3;
-        this.n32 = this.F.n32*3;
-        this.n64 = this.F.n64*3;
-
-        this.pOp1 = tm.alloc(F.n8*3);
-        this.pOp2 = tm.alloc(F.n8*3);
-        this.pOp3 = tm.alloc(F.n8*3);
-        this.tm.instance.exports[prefix + "_zero"](this.pOp1);
-        this.zero = tm.getBuff(this.pOp1, this.n8);
-        this.tm.instance.exports[prefix + "_one"](this.pOp1);
-        this.one = tm.getBuff(this.pOp1, this.n8);
-
-        this.negone = this.neg(this.one);
-        this.two = this.add(this.one, this.one);
-
-    }
-
-    op2(opName, a, b) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, b);
-        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.n8);
-    }
-
-    op2Bool(opName, a, b) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, b);
-        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2);
-    }
-
-    op1(opName, a) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.n8);
-    }
-
-    op1Bool(opName, a) {
-        this.tm.setBuff(this.pOp1, a);
-        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
-    }
-
-
-    eq(a,b) {
-        return this.op2Bool("_eq", a, b);
-    }
-
-    isZero(a) {
-        return this.op1Bool("_isZero", a);
-    }
-
-    add(a,b) {
-        return this.op2("_add", a, b);
-    }
-
-    sub(a,b) {
-        return this.op2("_sub", a, b);
-    }
-
-    neg(a) {
-        return this.op1("_neg", a);
-    }
-
-    inv(a) {
-        return this.op1("_inverse", a);
-    }
-
-    isNegative(a) {
-        return this.op1Bool("_isNegative", a);
-    }
-
-    toMontgomery(a) {
-        return this.op1("_toMontgomery", a);
-    }
-
-    fromMontgomery(a) {
-        return this.op1("_fromMontgomery", a);
-    }
-
-    mul(a,b) {
-        return this.op2("_mul", a, b);
-    }
-
-    div(a, b) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, b);
-        this.tm.instance.exports[this.prefix + "_inverse"](this.pOp2, this.pOp2);
-        this.tm.instance.exports[this.prefix + "_mul"](this.pOp1, this.pOp2, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.n8);
-    }
-
-    square(a) {
-        return this.op1("_square", a);
-    }
-
-    isSquare(a) {
-        return this.op1Bool("_isSquare", a);
-    }
-
-    sqrt(a) {
-        return this.op1("_sqrt", a);
-    }
-
-    exp(a, b) {
-        if (!(b instanceof Uint8Array)) {
-            b = toLEBuff(e(b));
-        }
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, b);
-        this.tm.instance.exports[this.prefix + "_exp"](this.pOp1, this.pOp2, b.byteLength, this.pOp3);
-        return this.getBuff(this.pOp3, this.n8);
-    }
-
-    e(a, b) {
-        if (a instanceof Uint8Array) return a;
-        if ((Array.isArray(a)) && (a.length == 3)) {
-            const c1 = this.F.e(a[0], b);
-            const c2 = this.F.e(a[1], b);
-            const c3 = this.F.e(a[2], b);
-            const res = new Uint8Array(this.F.n8*3);
-            res.set(c1);
-            res.set(c2, this.F.n8);
-            res.set(c3, this.F.n8*2);
-            return res;
-        } else {
-            throw new Error("invalid F3");
-        }
-    }
-
-    toString(a, radix) {
-        const s1 = this.F.toString(a.slice(0, this.F.n8), radix);
-        const s2 = this.F.toString(a.slice(this.F.n8, this.F.n8*2), radix);
-        const s3 = this.F.toString(a.slice(this.F.n8*2), radix);
-        return `[${s1}, ${s2}, ${s3}]`;
-    }
-
-    fromRng(rng) {
-        const c1 = this.F.fromRng(rng);
-        const c2 = this.F.fromRng(rng);
-        const c3 = this.F.fromRng(rng);
-        const res = new Uint8Array(this.F.n8*3);
-        res.set(c1);
-        res.set(c2, this.F.n8);
-        res.set(c3, this.F.n8*2);
-        return res;
-    }
-
-    random() {
-        return this.fromRng(getThreadRng());
-    }
-
-    toObject(a) {
-        const c1 = this.F.toObject(a.slice(0, this.F.n8));
-        const c2 = this.F.toObject(a.slice(this.F.n8, this.F.n8*2));
-        const c3 = this.F.toObject(a.slice(this.F.n8*2, this.F.n8*3));
-        return [c1, c2, c3];
-    }
-
-    fromObject(a) {
-        const buff = new Uint8Array(this.F.n8*3);
-        const b1 = this.F.fromObject(a[0]);
-        const b2 = this.F.fromObject(a[1]);
-        const b3 = this.F.fromObject(a[2]);
-        buff.set(b1);
-        buff.set(b2, this.F.n8);
-        buff.set(b3, this.F.n8*2);
-        return buff;
-    }
-
-    c1(a) {
-        return a.slice(0, this.F.n8);
-    }
-
-    c2(a) {
-        return a.slice(this.F.n8, this.F.n8*2);
-    }
-
-    c3(a) {
-        return a.slice(this.F.n8*2);
-    }
-
-}
-
-class WasmCurve {
-
-    constructor(tm, prefix, F, pGen, pGb, cofactor) {
-        this.tm = tm;
-        this.prefix = prefix;
-        this.F = F;
-
-        this.pOp1 = tm.alloc(F.n8*3);
-        this.pOp2 = tm.alloc(F.n8*3);
-        this.pOp3 = tm.alloc(F.n8*3);
-        this.tm.instance.exports[prefix + "_zero"](this.pOp1);
-        this.zero = this.tm.getBuff(this.pOp1, F.n8*3);
-        this.tm.instance.exports[prefix + "_zeroAffine"](this.pOp1);
-        this.zeroAffine = this.tm.getBuff(this.pOp1, F.n8*2);
-        this.one = this.tm.getBuff(pGen, F.n8*3);
-        this.g = this.one;
-        this.oneAffine = this.tm.getBuff(pGen, F.n8*2);
-        this.gAffine = this.oneAffine;
-        this.b = this.tm.getBuff(pGb, F.n8);
-
-        if (cofactor) {
-            this.cofactor = toLEBuff(cofactor);
-        }
-
-        this.negone = this.neg(this.one);
-        this.two = this.add(this.one, this.one);
-
-        this.batchLEMtoC = buildBatchConvert(tm, prefix + "_batchLEMtoC", F.n8*2, F.n8);
-        this.batchLEMtoU = buildBatchConvert(tm, prefix + "_batchLEMtoU", F.n8*2, F.n8*2);
-        this.batchCtoLEM = buildBatchConvert(tm, prefix + "_batchCtoLEM", F.n8, F.n8*2);
-        this.batchUtoLEM = buildBatchConvert(tm, prefix + "_batchUtoLEM", F.n8*2, F.n8*2);
-        this.batchToJacobian = buildBatchConvert(tm, prefix + "_batchToJacobian", F.n8*2, F.n8*3);
-        this.batchToAffine = buildBatchConvert(tm, prefix + "_batchToAffine", F.n8*3, F.n8*2);
-    }
-
-    op2(opName, a, b) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, b);
-        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.F.n8*3);
-    }
-
-    op2bool(opName, a, b) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, b);
-        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp2, this.pOp3);
-    }
-
-    op1(opName, a) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.F.n8*3);
-    }
-
-    op1Affine(opName, a) {
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.F.n8*2);
-    }
-
-    op1Bool(opName, a) {
-        this.tm.setBuff(this.pOp1, a);
-        return !!this.tm.instance.exports[this.prefix + opName](this.pOp1, this.pOp3);
-    }
-
-    add(a,b) {
-        if (a.byteLength == this.F.n8*3) {
-            if (b.byteLength == this.F.n8*3) {
-                return this.op2("_add", a, b);
-            } else if (b.byteLength == this.F.n8*2) {
-                return this.op2("_addMixed", a, b);
-            } else {
-                throw new Error("invalid point size");
-            }
-        } else if (a.byteLength == this.F.n8*2) {
-            if (b.byteLength == this.F.n8*3) {
-                return this.op2("_addMixed", b, a);
-            } else if (b.byteLength == this.F.n8*2) {
-                return this.op2("_addAffine", a, b);
-            } else {
-                throw new Error("invalid point size");
-            }
-        } else {
-            throw new Error("invalid point size");
-        }
-    }
-
-    sub(a,b) {
-        if (a.byteLength == this.F.n8*3) {
-            if (b.byteLength == this.F.n8*3) {
-                return this.op2("_sub", a, b);
-            } else if (b.byteLength == this.F.n8*2) {
-                return this.op2("_subMixed", a, b);
-            } else {
-                throw new Error("invalid point size");
-            }
-        } else if (a.byteLength == this.F.n8*2) {
-            if (b.byteLength == this.F.n8*3) {
-                return this.op2("_subMixed", b, a);
-            } else if (b.byteLength == this.F.n8*2) {
-                return this.op2("_subAffine", a, b);
-            } else {
-                throw new Error("invalid point size");
-            }
-        } else {
-            throw new Error("invalid point size");
-        }
-    }
-
-    neg(a) {
-        if (a.byteLength == this.F.n8*3) {
-            return this.op1("_neg", a);
-        } else if (a.byteLength == this.F.n8*2) {
-            return this.op1Affine("_negAffine", a);
-        } else {
-            throw new Error("invalid point size");
-        }
-    }
-
-    double(a) {
-        if (a.byteLength == this.F.n8*3) {
-            return this.op1("_double", a);
-        } else if (a.byteLength == this.F.n8*2) {
-            return this.op1("_doubleAffine", a);
-        } else {
-            throw new Error("invalid point size");
-        }
-    }
-
-    isZero(a) {
-        if (a.byteLength == this.F.n8*3) {
-            return this.op1Bool("_isZero", a);
-        } else if (a.byteLength == this.F.n8*2) {
-            return this.op1Bool("_isZeroAffine", a);
-        } else {
-            throw new Error("invalid point size");
-        }
-    }
-
-    timesScalar(a, s) {
-        if (!(s instanceof Uint8Array)) {
-            s = toLEBuff(e(s));
-        }
-        let fnName;
-        if (a.byteLength == this.F.n8*3) {
-            fnName = this.prefix + "_timesScalar";
-        } else if (a.byteLength == this.F.n8*2) {
-            fnName = this.prefix + "_timesScalarAffine";
-        } else {
-            throw new Error("invalid point size");
-        }
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, s);
-        this.tm.instance.exports[fnName](this.pOp1, this.pOp2, s.byteLength, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.F.n8*3);
-    }
-
-    timesFr(a, s) {
-        let fnName;
-        if (a.byteLength == this.F.n8*3) {
-            fnName = this.prefix + "_timesFr";
-        } else if (a.byteLength == this.F.n8*2) {
-            fnName = this.prefix + "_timesFrAffine";
-        } else {
-            throw new Error("invalid point size");
-        }
-        this.tm.setBuff(this.pOp1, a);
-        this.tm.setBuff(this.pOp2, s);
-        this.tm.instance.exports[fnName](this.pOp1, this.pOp2, this.pOp3);
-        return this.tm.getBuff(this.pOp3, this.F.n8*3);
-    }
-
-    eq(a,b) {
-        if (a.byteLength == this.F.n8*3) {
-            if (b.byteLength == this.F.n8*3) {
-                return this.op2bool("_eq", a, b);
-            } else if (b.byteLength == this.F.n8*2) {
-                return this.op2bool("_eqMixed", a, b);
-            } else {
-                throw new Error("invalid point size");
-            }
-        } else if (a.byteLength == this.F.n8*2) {
-            if (b.byteLength == this.F.n8*3) {
-                return this.op2bool("_eqMixed", b, a);
-            } else if (b.byteLength == this.F.n8*2) {
-                return this.op2bool("_eqAffine", a, b);
-            } else {
-                throw new Error("invalid point size");
-            }
-        } else {
-            throw new Error("invalid point size");
-        }
-    }
-
-    toAffine(a) {
-        if (a.byteLength == this.F.n8*3) {
-            return this.op1Affine("_toAffine", a);
-        } else if (a.byteLength == this.F.n8*2) {
-            return a;
-        } else {
-            throw new Error("invalid point size");
-        }
-    }
-
-    toJacobian(a) {
-        if (a.byteLength == this.F.n8*3) {
-            return a;
-        } else if (a.byteLength == this.F.n8*2) {
-            return this.op1("_toJacobian", a);
-        } else {
-            throw new Error("invalid point size");
-        }
-    }
-
-    toRprUncompressed(arr, offset, a) {
-        this.tm.setBuff(this.pOp1, a);
-        if (a.byteLength == this.F.n8*3) {
-            this.tm.instance.exports[this.prefix + "_toAffine"](this.pOp1, this.pOp1);
-        } else if (a.byteLength != this.F.n8*2) {
-            throw new Error("invalid point size");
-        }
-        this.tm.instance.exports[this.prefix + "_LEMtoU"](this.pOp1, this.pOp1);
-        const res = this.tm.getBuff(this.pOp1, this.F.n8*2);
-        arr.set(res, offset);
-    }
-
-    fromRprUncompressed(arr, offset) {
-        const buff = arr.slice(offset, offset + this.F.n8*2);
-        this.tm.setBuff(this.pOp1, buff);
-        this.tm.instance.exports[this.prefix + "_UtoLEM"](this.pOp1, this.pOp1);
-        return this.tm.getBuff(this.pOp1, this.F.n8*2);
-    }
-
-    toRprCompressed(arr, offset, a) {
-        this.tm.setBuff(this.pOp1, a);
-        if (a.byteLength == this.F.n8*3) {
-            this.tm.instance.exports[this.prefix + "_toAffine"](this.pOp1, this.pOp1);
-        } else if (a.byteLength != this.F.n8*2) {
-            throw new Error("invalid point size");
-        }
-        this.tm.instance.exports[this.prefix + "_LEMtoC"](this.pOp1, this.pOp1);
-        const res = this.tm.getBuff(this.pOp1, this.F.n8);
-        arr.set(res, offset);
-    }
-
-    fromRprCompressed(arr, offset) {
-        const buff = arr.slice(offset, offset + this.F.n8);
-        this.tm.setBuff(this.pOp1, buff);
-        this.tm.instance.exports[this.prefix + "_CtoLEM"](this.pOp1, this.pOp2);
-        return this.tm.getBuff(this.pOp2, this.F.n8*2);
-    }
-
-    toUncompressed(a) {
-        const buff = new Uint8Array(this.F.n8*2);
-        this.toRprUncompressed(buff, 0, a);
-        return buff;
-    }
-
-    toRprLEM(arr, offset, a) {
-        if (a.byteLength == this.F.n8*2) {
-            arr.set(a, offset);
-            return;
-        } else if (a.byteLength == this.F.n8*3) {
-            this.tm.setBuff(this.pOp1, a);
-            this.tm.instance.exports[this.prefix + "_toAffine"](this.pOp1, this.pOp1);
-            const res = this.tm.getBuff(this.pOp1, this.F.n8*2);
-            arr.set(res, offset);
-        } else {
-            throw new Error("invalid point size");
-        }
-    }
-
-    fromRprLEM(arr, offset) {
-        offset = offset || 0;
-        return arr.slice(offset, offset+this.F.n8*2);
-    }
-
-    toString(a, radix) {
-        if (a.byteLength == this.F.n8*3) {
-            const x = this.F.toString(a.slice(0, this.F.n8), radix);
-            const y = this.F.toString(a.slice(this.F.n8, this.F.n8*2), radix);
-            const z = this.F.toString(a.slice(this.F.n8*2), radix);
-            return `[ ${x}, ${y}, ${z} ]`;
-        } else if (a.byteLength == this.F.n8*2) {
-            const x = this.F.toString(a.slice(0, this.F.n8), radix);
-            const y = this.F.toString(a.slice(this.F.n8), radix);
-            return `[ ${x}, ${y} ]`;
-        } else {
-            throw new Error("invalid point size");
-        }
-    }
-
-    isValid(a) {
-        if (this.isZero(a)) return true;
-        const F = this.F;
-        const aa = this.toAffine(a);
-        const x = aa.slice(0, this.F.n8);
-        const y = aa.slice(this.F.n8, this.F.n8*2);
-        const x3b = F.add(F.mul(F.square(x),x), this.b);
-        const y2 = F.square(y);
-        return F.eq(x3b, y2);
-    }
-
-    fromRng(rng) {
-        const F = this.F;
-        let P = [];
-        let greatest;
-        let x3b;
-        do {
-            P[0] = F.fromRng(rng);
-            greatest = rng.nextBool();
-            x3b = F.add(F.mul(F.square(P[0]), P[0]), this.b);
-        } while (!F.isSquare(x3b));
-
-        P[1] = F.sqrt(x3b);
-
-        const s = F.isNegative(P[1]);
-        if (greatest ^ s) P[1] = F.neg(P[1]);
-
-        let Pbuff = new Uint8Array(this.F.n8*2);
-        Pbuff.set(P[0]);
-        Pbuff.set(P[1], this.F.n8);
-
-        if (this.cofactor) {
-            Pbuff = this.timesScalar(Pbuff, this.cofactor);
-        }
-
-        return Pbuff;
-    }
-
-
-
-    toObject(a) {
-        if (this.isZero(a)) {
-            return [
-                this.F.toObject(this.F.zero),
-                this.F.toObject(this.F.one),
-                this.F.toObject(this.F.zero),
-            ];
-        }
-        const x = this.F.toObject(a.slice(0, this.F.n8));
-        const y = this.F.toObject(a.slice(this.F.n8, this.F.n8*2));
-        let z;
-        if (a.byteLength == this.F.n8*3) {
-            z = this.F.toObject(a.slice(this.F.n8*2, this.F.n8*3));
-        } else {
-            z = this.F.toObject(this.F.one);
-        }
-        return [x, y, z];
-    }
-
-    fromObject(a) {
-        const x = this.F.fromObject(a[0]);
-        const y = this.F.fromObject(a[1]);
-        let z;
-        if (a.length==3) {
-            z = this.F.fromObject(a[2]);
-        } else {
-            z = this.F.one;
-        }
-        if (this.F.isZero(z, this.F.one)) {
-            return this.zeroAffine;
-        } else if (this.F.eq(z, this.F.one)) {
-            const buff = new Uint8Array(this.F.n8*2);
-            buff.set(x);
-            buff.set(y, this.F.n8);
-            return buff;
-        } else {
-            const buff = new Uint8Array(this.F.n8*3);
-            buff.set(x);
-            buff.set(y, this.F.n8);
-            buff.set(z, this.F.n8*2);
-            return buff;
-        }
-    }
-
-    e(a) {
-        if (a instanceof Uint8Array) return a;
-        return this.fromObject(a);
-    }
-
-    x(a) {
-        const tmp = this.toAffine(a);
-        return tmp.slice(0, this.F.n8);
-    }
-
-    y(a) {
-        const tmp = this.toAffine(a);
-        return tmp.slice(this.F.n8);
-    }
-
-}
-
-/* global WebAssembly */
-
-function thread(self) {
-    const MAXMEM = 32767;
-    let instance;
-    let memory;
-
-    if (self) {
-        self.onmessage = function(e) {
-            let data;
-            if (e.data) {
-                data = e.data;
-            } else {
-                data = e;
-            }
-
-            if (data[0].cmd == "INIT") {
-                init(data[0]).then(function() {
-                    self.postMessage(data.result);
-                });
-            } else if (data[0].cmd == "TERMINATE") {
-                self.close();
-            } else {
-                const res = runTask(data);
-                self.postMessage(res);
-            }
-        };
-    }
-
-    async function init(data) {
-        const code = new Uint8Array(data.code);
-        const wasmModule = await WebAssembly.compile(code);
-        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
-
-        instance = await WebAssembly.instantiate(wasmModule, {
-            env: {
-                "memory": memory
-            }
-        });
-    }
-
-
-
-    function alloc(length) {
-        const u32 = new Uint32Array(memory.buffer, 0, 1);
-        while (u32[0] & 3) u32[0]++;  // Return always aligned pointers
-        const res = u32[0];
-        u32[0] += length;
-        if (u32[0] + length > memory.buffer.byteLength) {
-            const currentPages = memory.buffer.byteLength / 0x10000;
-            let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;
-            if (requiredPages>MAXMEM) requiredPages=MAXMEM;
-            memory.grow(requiredPages-currentPages);
-        }
-        return res;
-    }
-
-    function allocBuffer(buffer) {
-        const p = alloc(buffer.byteLength);
-        setBuffer(p, buffer);
-        return p;
-    }
-
-    function getBuffer(pointer, length) {
-        const u8 = new Uint8Array(memory.buffer);
-        return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);
-    }
-
-    function setBuffer(pointer, buffer) {
-        const u8 = new Uint8Array(memory.buffer);
-        u8.set(new Uint8Array(buffer), pointer);
-    }
-
-    function runTask(task) {
-        if (task[0].cmd == "INIT") {
-            return init(task[0]);
-        }
-        const ctx = {
-            vars: [],
-            out: []
-        };
-        const u32a = new Uint32Array(memory.buffer, 0, 1);
-        const oldAlloc = u32a[0];
-        for (let i=0; i<task.length; i++) {
-            switch (task[i].cmd) {
-            case "ALLOCSET":
-                ctx.vars[task[i].var] = allocBuffer(task[i].buff);
-                break;
-            case "ALLOC":
-                ctx.vars[task[i].var] = alloc(task[i].len);
-                break;
-            case "SET":
-                setBuffer(ctx.vars[task[i].var], task[i].buff);
-                break;
-            case "CALL": {
-                const params = [];
-                for (let j=0; j<task[i].params.length; j++) {
-                    const p = task[i].params[j];
-                    if (typeof p.var !== "undefined") {
-                        params.push(ctx.vars[p.var] + (p.offset || 0));
-                    } else if (typeof p.val != "undefined") {
-                        params.push(p.val);
-                    }
-                }
-                instance.exports[task[i].fnName](...params);
-                break;
-            }
-            case "GET":
-                ctx.out[task[i].out] = getBuffer(ctx.vars[task[i].var], task[i].len).slice();
-                break;
-            default:
-                throw new Error("Invalid cmd");
-            }
-        }
-        const u32b = new Uint32Array(memory.buffer, 0, 1);
-        u32b[0] = oldAlloc;
-        return ctx.out;
-    }
-
-
-    return runTask;
-}
-
-/*
-    Copyright 2019 0KIMS association.
-
-    This file is part of wasmsnark (Web Assembly zkSnark Prover).
-
-    wasmsnark is a free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    wasmsnark is distributed in the hope that it will be useful, but WITHOUT
-    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
-    License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with wasmsnark. If not, see <https://www.gnu.org/licenses/>.
-*/
-
-// const MEM_SIZE = 1000;  // Memory size in 64K Pakes (512Mb)
-const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
-
-class Deferred {
-    constructor() {
-        this.promise = new Promise((resolve, reject)=> {
-            this.reject = reject;
-            this.resolve = resolve;
-        });
-    }
-}
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-let workerSource;
-
-const threadStr = `(${"function thread(self) {\n    const MAXMEM = 32767;\n    let instance;\n    let memory;\n\n    if (self) {\n        self.onmessage = function(e) {\n            let data;\n            if (e.data) {\n                data = e.data;\n            } else {\n                data = e;\n            }\n\n            if (data[0].cmd == \"INIT\") {\n                init(data[0]).then(function() {\n                    self.postMessage(data.result);\n                });\n            } else if (data[0].cmd == \"TERMINATE\") {\n                self.close();\n            } else {\n                const res = runTask(data);\n                self.postMessage(res);\n            }\n        };\n    }\n\n    async function init(data) {\n        const code = new Uint8Array(data.code);\n        const wasmModule = await WebAssembly.compile(code);\n        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});\n\n        instance = await WebAssembly.instantiate(wasmModule, {\n            env: {\n                \"memory\": memory\n            }\n        });\n    }\n\n\n\n    function alloc(length) {\n        const u32 = new Uint32Array(memory.buffer, 0, 1);\n        while (u32[0] & 3) u32[0]++;  // Return always aligned pointers\n        const res = u32[0];\n        u32[0] += length;\n        if (u32[0] + length > memory.buffer.byteLength) {\n            const currentPages = memory.buffer.byteLength / 0x10000;\n            let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;\n            if (requiredPages>MAXMEM) requiredPages=MAXMEM;\n            memory.grow(requiredPages-currentPages);\n        }\n        return res;\n    }\n\n    function allocBuffer(buffer) {\n        const p = alloc(buffer.byteLength);\n        setBuffer(p, buffer);\n        return p;\n    }\n\n    function getBuffer(pointer, length) {\n        const u8 = new Uint8Array(memory.buffer);\n        return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);\n    }\n\n    function setBuffer(pointer, buffer) {\n        const u8 = new Uint8Array(memory.buffer);\n        u8.set(new Uint8Array(buffer), pointer);\n    }\n\n    function runTask(task) {\n        if (task[0].cmd == \"INIT\") {\n            return init(task[0]);\n        }\n        const ctx = {\n            vars: [],\n            out: []\n        };\n        const u32a = new Uint32Array(memory.buffer, 0, 1);\n        const oldAlloc = u32a[0];\n        for (let i=0; i<task.length; i++) {\n            switch (task[i].cmd) {\n            case \"ALLOCSET\":\n                ctx.vars[task[i].var] = allocBuffer(task[i].buff);\n                break;\n            case \"ALLOC\":\n                ctx.vars[task[i].var] = alloc(task[i].len);\n                break;\n            case \"SET\":\n                setBuffer(ctx.vars[task[i].var], task[i].buff);\n                break;\n            case \"CALL\": {\n                const params = [];\n                for (let j=0; j<task[i].params.length; j++) {\n                    const p = task[i].params[j];\n                    if (typeof p.var !== \"undefined\") {\n                        params.push(ctx.vars[p.var] + (p.offset || 0));\n                    } else if (typeof p.val != \"undefined\") {\n                        params.push(p.val);\n                    }\n                }\n                instance.exports[task[i].fnName](...params);\n                break;\n            }\n            case \"GET\":\n                ctx.out[task[i].out] = getBuffer(ctx.vars[task[i].var], task[i].len).slice();\n                break;\n            default:\n                throw new Error(\"Invalid cmd\");\n            }\n        }\n        const u32b = new Uint32Array(memory.buffer, 0, 1);\n        u32b[0] = oldAlloc;\n        return ctx.out;\n    }\n\n\n    return runTask;\n}"})(self)`;
-{
-    if(globalThis?.Blob) {
-        const threadBytes= new TextEncoder().encode(threadStr);
-        const workerBlob = new Blob([threadBytes], { type: "application/javascript" }) ;
-        workerSource = URL.createObjectURL(workerBlob);
-    } else {
-        workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
-    }
-}
-
-
-
-async function buildThreadManager(wasm, singleThread) {
-    const tm = new ThreadManager();
-
-    tm.memory = new WebAssembly.Memory({initial:MEM_SIZE});
-    tm.u8 = new Uint8Array(tm.memory.buffer);
-    tm.u32 = new Uint32Array(tm.memory.buffer);
-
-    const wasmModule = await WebAssembly.compile(wasm.code);
-
-    tm.instance = await WebAssembly.instantiate(wasmModule, {
-        env: {
-            "memory": tm.memory
-        }
-    });
-    
-    if(!globalThis?.Worker) {
-        singleThread = true;
-    }
-    
-    tm.singleThread = singleThread;
-    tm.initalPFree = tm.u32[0];   // Save the Pointer to free space.
-    tm.pq = wasm.pq;
-    tm.pr = wasm.pr;
-    tm.pG1gen = wasm.pG1gen;
-    tm.pG1zero = wasm.pG1zero;
-    tm.pG2gen = wasm.pG2gen;
-    tm.pG2zero = wasm.pG2zero;
-    tm.pOneT = wasm.pOneT;
-
-    //    tm.pTmp0 = tm.alloc(curve.G2.F.n8*3);
-    //    tm.pTmp1 = tm.alloc(curve.G2.F.n8*3);
-
-    if (singleThread) {
-        tm.code = wasm.code;
-        tm.taskManager = thread();
-        await tm.taskManager([{
-            cmd: "INIT",
-            init: MEM_SIZE,
-            code: tm.code.slice()
-        }]);
-        tm.concurrency  = 1;
-    } else {
-        tm.workers = [];
-        tm.pendingDeferreds = [];
-        tm.working = [];
-
-        let concurrency = 2;
-        {
-            if (typeof navigator === "object" && navigator.hardwareConcurrency) {
-                concurrency = navigator.hardwareConcurrency;
-            }
-        }
-
-        if(concurrency == 0){
-            concurrency = 2;
-        }
-
-        // Limit to 64 threads for memory reasons.
-        if (concurrency>64) concurrency=64;
-        tm.concurrency = concurrency;
-
-        for (let i = 0; i<concurrency; i++) {
-
-            tm.workers[i] = new Worker(workerSource);
-
-            tm.workers[i].addEventListener("message", getOnMsg(i));
-
-            tm.working[i]=false;
-        }
-
-        const initPromises = [];
-        for (let i=0; i<tm.workers.length;i++) {
-            const copyCode = wasm.code.slice();
-            initPromises.push(tm.postAction(i, [{
-                cmd: "INIT",
-                init: MEM_SIZE,
-                code: copyCode
-            }], [copyCode.buffer]));
-        }
-
-        await Promise.all(initPromises);
-
-    }
-    return tm;
-
-    function getOnMsg(i) {
-        return function(e) {
-            let data;
-            if ((e)&&(e.data)) {
-                data = e.data;
-            } else {
-                data = e;
-            }
-
-            tm.working[i]=false;
-            tm.pendingDeferreds[i].resolve(data);
-            tm.processWorks();
-        };
-    }
-
-}
-
-class ThreadManager {
-    constructor() {
-        this.actionQueue = [];
-        this.oldPFree = 0;
-    }
-
-    startSyncOp() {
-        if (this.oldPFree != 0) throw new Error("Sync operation in progress");
-        this.oldPFree = this.u32[0];
-    }
-
-    endSyncOp() {
-        if (this.oldPFree == 0) throw new Error("No sync operation in progress");
-        this.u32[0] = this.oldPFree;
-        this.oldPFree = 0;
-    }
-
-    postAction(workerId, e, transfers, _deferred) {
-        if (this.working[workerId]) {
-            throw new Error("Posting a job t a working worker");
-        }
-        this.working[workerId] = true;
-
-        this.pendingDeferreds[workerId] = _deferred ? _deferred : new Deferred();
-        this.workers[workerId].postMessage(e, transfers);
-
-        return this.pendingDeferreds[workerId].promise;
-    }
-
-    processWorks() {
-        for (let i=0; (i<this.workers.length)&&(this.actionQueue.length > 0); i++) {
-            if (this.working[i] == false) {
-                const work = this.actionQueue.shift();
-                this.postAction(i, work.data, work.transfers, work.deferred);
-            }
-        }
-    }
-
-    queueAction(actionData, transfers) {
-        const d = new Deferred();
-
-        if (this.singleThread) {
-            const res = this.taskManager(actionData);
-            d.resolve(res);
-        } else {
-            this.actionQueue.push({
-                data: actionData,
-                transfers: transfers,
-                deferred: d
-            });
-            this.processWorks();
-        }
-        return d.promise;
-    }
-
-    resetMemory() {
-        this.u32[0] = this.initalPFree;
-    }
-
-    allocBuff(buff) {
-        const pointer = this.alloc(buff.byteLength);
-        this.setBuff(pointer, buff);
-        return pointer;
-    }
-
-    getBuff(pointer, length) {
-        return this.u8.slice(pointer, pointer+ length);
-    }
-
-    setBuff(pointer, buffer) {
-        this.u8.set(new Uint8Array(buffer), pointer);
-    }
-
-    alloc(length) {
-        while (this.u32[0] & 3) this.u32[0]++;  // Return always aligned pointers
-        const res = this.u32[0];
-        this.u32[0] += length;
-        return res;
-    }
-
-    async terminate() {
-        for (let i=0; i<this.workers.length; i++) {
-            this.workers[i].postMessage([{cmd: "TERMINATE"}]);
-        }
-        await sleep(200);
-    }
-
-}
-
-function buildBatchApplyKey(curve, groupName) {
-    const G = curve[groupName];
-    const Fr = curve.Fr;
-    const tm = curve.tm;
-
-    curve[groupName].batchApplyKey = async function(buff, first, inc, inType, outType) {
-        inType = inType || "affine";
-        outType = outType || "affine";
-        let fnName, fnAffine;
-        let sGin, sGmid, sGout;
-        if (groupName == "G1") {
-            if (inType == "jacobian") {
-                sGin = G.F.n8*3;
-                fnName = "g1m_batchApplyKey";
-            } else {
-                sGin = G.F.n8*2;
-                fnName = "g1m_batchApplyKeyMixed";
-            }
-            sGmid = G.F.n8*3;
-            if (outType == "jacobian") {
-                sGout = G.F.n8*3;
-            } else {
-                fnAffine = "g1m_batchToAffine";
-                sGout = G.F.n8*2;
-            }
-        } else if (groupName == "G2") {
-            if (inType == "jacobian") {
-                sGin = G.F.n8*3;
-                fnName = "g2m_batchApplyKey";
-            } else {
-                sGin = G.F.n8*2;
-                fnName = "g2m_batchApplyKeyMixed";
-            }
-            sGmid = G.F.n8*3;
-            if (outType == "jacobian") {
-                sGout = G.F.n8*3;
-            } else {
-                fnAffine = "g2m_batchToAffine";
-                sGout = G.F.n8*2;
-            }
-        } else if (groupName == "Fr") {
-            fnName = "frm_batchApplyKey";
-            sGin = G.n8;
-            sGmid = G.n8;
-            sGout = G.n8;
-        } else {
-            throw new Error("Invalid group: " + groupName);
-        }
-        const nPoints = Math.floor(buff.byteLength / sGin);
-        const pointsPerChunk = Math.floor(nPoints/tm.concurrency);
-        const opPromises = [];
-        inc = Fr.e(inc);
-        let t = Fr.e(first);
-        for (let i=0; i<tm.concurrency; i++) {
-            let n;
-            if (i< tm.concurrency-1) {
-                n = pointsPerChunk;
-            } else {
-                n = nPoints - i*pointsPerChunk;
-            }
-            if (n==0) continue;
-
-            const task = [];
-
-            task.push({
-                cmd: "ALLOCSET",
-                var: 0,
-                buff: buff.slice(i*pointsPerChunk*sGin, i*pointsPerChunk*sGin + n*sGin)
-            });
-            task.push({cmd: "ALLOCSET", var: 1, buff: t});
-            task.push({cmd: "ALLOCSET", var: 2, buff: inc});
-            task.push({cmd: "ALLOC", var: 3, len: n*Math.max(sGmid, sGout)});
-            task.push({
-                cmd: "CALL",
-                fnName: fnName,
-                params: [
-                    {var: 0},
-                    {val: n},
-                    {var: 1},
-                    {var: 2},
-                    {var:3}
-                ]
-            });
-            if (fnAffine) {
-                task.push({
-                    cmd: "CALL",
-                    fnName: fnAffine,
-                    params: [
-                        {var: 3},
-                        {val: n},
-                        {var: 3},
-                    ]
-                });
-            }
-            task.push({cmd: "GET", out: 0, var: 3, len: n*sGout});
-
-            opPromises.push(tm.queueAction(task));
-            t = Fr.mul(t, Fr.exp(inc, n));
-        }
-
-        const result = await Promise.all(opPromises);
-
-        let outBuff;
-        if (buff instanceof BigBuffer) {
-            outBuff = new BigBuffer(nPoints*sGout);
-        } else {
-            outBuff = new Uint8Array(nPoints*sGout);
-        }
-
-        let p=0;
-        for (let i=0; i<result.length; i++) {
-            outBuff.set(result[i][0], p);
-            p += result[i][0].byteLength;
-        }
-
-        return outBuff;
-    };
-}
-
-function buildPairing(curve) {
-    const tm = curve.tm;
-    curve.pairing = function pairing(a, b) {
-
-        tm.startSyncOp();
-        const pA = tm.allocBuff(curve.G1.toJacobian(a));
-        const pB = tm.allocBuff(curve.G2.toJacobian(b));
-        const pRes = tm.alloc(curve.Gt.n8);
-        tm.instance.exports[curve.name + "_pairing"](pA, pB, pRes);
-
-        const res = tm.getBuff(pRes, curve.Gt.n8);
-
-        tm.endSyncOp();
-        return res;
-    };
-
-    curve.pairingEq = async function pairingEq() {
-        let  buffCt;
-        let nEqs;
-        if ((arguments.length % 2) == 1) {
-            buffCt = arguments[arguments.length-1];
-            nEqs = (arguments.length -1) /2;
-        } else {
-            buffCt = curve.Gt.one;
-            nEqs = arguments.length /2;
-        }
-
-        const opPromises = [];
-        for (let i=0; i<nEqs; i++) {
-
-            const task = [];
-
-            const g1Buff = curve.G1.toJacobian(arguments[i*2]);
-            task.push({cmd: "ALLOCSET", var: 0, buff: g1Buff});
-            task.push({cmd: "ALLOC", var: 1, len: curve.prePSize});
-
-            const g2Buff = curve.G2.toJacobian(arguments[i*2 +1]);
-            task.push({cmd: "ALLOCSET", var: 2, buff: g2Buff});
-            task.push({cmd: "ALLOC", var: 3, len: curve.preQSize});
-
-            task.push({cmd: "ALLOC", var: 4, len: curve.Gt.n8});
-
-            task.push({cmd: "CALL", fnName: curve.name + "_prepareG1", params: [
-                {var: 0},
-                {var: 1}
-            ]});
-
-            task.push({cmd: "CALL", fnName: curve.name + "_prepareG2", params: [
-                {var: 2},
-                {var: 3}
-            ]});
-
-            task.push({cmd: "CALL", fnName: curve.name + "_millerLoop", params: [
-                {var: 1},
-                {var: 3},
-                {var: 4}
-            ]});
-
-            task.push({cmd: "GET", out: 0, var: 4, len: curve.Gt.n8});
-
-            opPromises.push(
-                tm.queueAction(task)
-            );
-        }
-
-
-        const result = await Promise.all(opPromises);
-
-        tm.startSyncOp();
-        const pRes = tm.alloc(curve.Gt.n8);
-        tm.instance.exports.ftm_one(pRes);
-
-        for (let i=0; i<result.length; i++) {
-            const pMR = tm.allocBuff(result[i][0]);
-            tm.instance.exports.ftm_mul(pRes, pMR, pRes);
-        }
-        tm.instance.exports[curve.name + "_finalExponentiation"](pRes, pRes);
-
-        const pCt = tm.allocBuff(buffCt);
-
-        const r = !!tm.instance.exports.ftm_eq(pRes, pCt);
-
-        tm.endSyncOp();
-
-        return r;
-    };
-
-    curve.prepareG1 = function(p) {
-        this.tm.startSyncOp();
-        const pP = this.tm.allocBuff(p);
-        const pPrepP = this.tm.alloc(this.prePSize);
-        this.tm.instance.exports[this.name + "_prepareG1"](pP, pPrepP);
-        const res = this.tm.getBuff(pPrepP, this.prePSize);
-        this.tm.endSyncOp();
-        return res;
-    };
-
-    curve.prepareG2 = function(q) {
-        this.tm.startSyncOp();
-        const pQ = this.tm.allocBuff(q);
-        const pPrepQ = this.tm.alloc(this.preQSize);
-        this.tm.instance.exports[this.name + "_prepareG2"](pQ, pPrepQ);
-        const res = this.tm.getBuff(pPrepQ, this.preQSize);
-        this.tm.endSyncOp();
-        return res;
-    };
-
-    curve.millerLoop = function(preP, preQ) {
-        this.tm.startSyncOp();
-        const pPreP = this.tm.allocBuff(preP);
-        const pPreQ = this.tm.allocBuff(preQ);
-        const pRes = this.tm.alloc(this.Gt.n8);
-        this.tm.instance.exports[this.name + "_millerLoop"](pPreP, pPreQ, pRes);
-        const res = this.tm.getBuff(pRes, this.Gt.n8);
-        this.tm.endSyncOp();
-        return res;
-    };
-
-    curve.finalExponentiation = function(a) {
-        this.tm.startSyncOp();
-        const pA = this.tm.allocBuff(a);
-        const pRes = this.tm.alloc(this.Gt.n8);
-        this.tm.instance.exports[this.name + "_finalExponentiation"](pA, pRes);
-        const res = this.tm.getBuff(pRes, this.Gt.n8);
-        this.tm.endSyncOp();
-        return res;
-    };
-
-}
-
-const pTSizes = [
-    1 ,  1,  1,  1,    2,  3,  4,  5,
-    6 ,  7,  7,  8,    9, 10, 11, 12,
-    13, 13, 14, 15,   16, 16, 17, 17,
-    17, 17, 17, 17,   17, 17, 17, 17
-];
-
-function buildMultiexp(curve, groupName) {
-    const G = curve[groupName];
-    const tm = G.tm;
-    async function _multiExpChunk(buffBases, buffScalars, inType, logger, logText) {
-        if ( ! (buffBases instanceof Uint8Array) ) {
-            if (logger) logger.error(`${logText} _multiExpChunk buffBases is not Uint8Array`);
-            throw new Error(`${logText} _multiExpChunk buffBases is not Uint8Array`);
-        }
-        if ( ! (buffScalars instanceof Uint8Array) ) {
-            if (logger) logger.error(`${logText} _multiExpChunk buffScalars is not Uint8Array`);
-            throw new Error(`${logText} _multiExpChunk buffScalars is not Uint8Array`);
-        }
-        inType = inType || "affine";
-
-        let sGIn;
-        let fnName;
-        if (groupName == "G1") {
-            if (inType == "affine") {
-                fnName = "g1m_multiexpAffine_chunk";
-                sGIn = G.F.n8*2;
-            } else {
-                fnName = "g1m_multiexp_chunk";
-                sGIn = G.F.n8*3;
-            }
-        } else if (groupName == "G2") {
-            if (inType == "affine") {
-                fnName = "g2m_multiexpAffine_chunk";
-                sGIn = G.F.n8*2;
-            } else {
-                fnName = "g2m_multiexp_chunk";
-                sGIn = G.F.n8*3;
-            }
-        } else {
-            throw new Error("Invalid group");
-        }
-        const nPoints = Math.floor(buffBases.byteLength / sGIn);
-
-        if (nPoints == 0) return G.zero;
-        const sScalar = Math.floor(buffScalars.byteLength / nPoints);
-        if( sScalar * nPoints != buffScalars.byteLength) {
-            throw new Error("Scalar size does not match");
-        }
-
-        const bitChunkSize = pTSizes[log2(nPoints)];
-        const nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) +1;
-
-        const opPromises = [];
-        for (let i=0; i<nChunks; i++) {
-            const task = [
-                {cmd: "ALLOCSET", var: 0, buff: buffBases},
-                {cmd: "ALLOCSET", var: 1, buff: buffScalars},
-                {cmd: "ALLOC", var: 2, len: G.F.n8*3},
-                {cmd: "CALL", fnName: fnName, params: [
-                    {var: 0},
-                    {var: 1},
-                    {val: sScalar},
-                    {val: nPoints},
-                    {val: i*bitChunkSize},
-                    {val: Math.min(sScalar*8 - i*bitChunkSize, bitChunkSize)},
-                    {var: 2}
-                ]},
-                {cmd: "GET", out: 0, var: 2, len: G.F.n8*3}
-            ];
-            opPromises.push(
-                G.tm.queueAction(task)
-            );
-        }
-
-        const result = await Promise.all(opPromises);
-
-        let res = G.zero;
-        for (let i=result.length-1; i>=0; i--) {
-            if (!G.isZero(res)) {
-                for (let j=0; j<bitChunkSize; j++) res = G.double(res);
-            }
-            res = G.add(res, result[i][0]);
-        }
-
-        return res;
-    }
-
-    async function _multiExp(buffBases, buffScalars, inType, logger, logText) {
-        const MAX_CHUNK_SIZE = 1 << 22;
-        const MIN_CHUNK_SIZE = 1 << 10;
-        let sGIn;
-
-        if (groupName == "G1") {
-            if (inType == "affine") {
-                sGIn = G.F.n8*2;
-            } else {
-                sGIn = G.F.n8*3;
-            }
-        } else if (groupName == "G2") {
-            if (inType == "affine") {
-                sGIn = G.F.n8*2;
-            } else {
-                sGIn = G.F.n8*3;
-            }
-        } else {
-            throw new Error("Invalid group");
-        }
-
-        const nPoints = Math.floor(buffBases.byteLength / sGIn);
-        if (nPoints == 0) return G.zero;
-        const sScalar = Math.floor(buffScalars.byteLength / nPoints);
-        if( sScalar * nPoints != buffScalars.byteLength) {
-            throw new Error("Scalar size does not match");
-        }
-
-        const bitChunkSize = pTSizes[log2(nPoints)];
-        const nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) +1;
-
-        let chunkSize;
-        chunkSize = Math.floor(nPoints / (tm.concurrency /nChunks));
-        if (chunkSize>MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
-        if (chunkSize<MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
-
-        const opPromises = [];
-        for (let i=0; i<nPoints; i += chunkSize) {
-            if (logger) logger.debug(`Multiexp start: ${logText}: ${i}/${nPoints}`);
-            const n= Math.min(nPoints - i, chunkSize);
-            const buffBasesChunk = buffBases.slice(i*sGIn, (i+n)*sGIn);
-            const buffScalarsChunk = buffScalars.slice(i*sScalar, (i+n)*sScalar);
-            opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType, logger, logText).then( (r) => {
-                if (logger) logger.debug(`Multiexp end: ${logText}: ${i}/${nPoints}`);
-                return r;
-            }));
-        }
-
-        const result = await Promise.all(opPromises);
-
-        let res = G.zero;
-        for (let i=result.length-1; i>=0; i--) {
-            res = G.add(res, result[i]);
-        }
-
-        return res;
-    }
-
-    G.multiExp = async function multiExpAffine(buffBases, buffScalars, logger, logText) {
-        return await _multiExp(buffBases, buffScalars, "jacobian", logger, logText);
-    };
-    G.multiExpAffine = async function multiExpAffine(buffBases, buffScalars, logger, logText) {
-        return await _multiExp(buffBases, buffScalars, "affine", logger, logText);
-    };
-}
-
-function buildFFT(curve, groupName) {
-    const G = curve[groupName];
-    const Fr = curve.Fr;
-    const tm = G.tm;
-    async function _fft(buff, inverse, inType, outType, logger, loggerTxt) {
-
-        inType = inType || "affine";
-        outType = outType || "affine";
-        const MAX_BITS_THREAD = 14;
-
-        let sIn, sMid, sOut, fnIn2Mid, fnMid2Out, fnFFTMix, fnFFTJoin, fnFFTFinal;
-        if (groupName == "G1") {
-            if (inType == "affine") {
-                sIn = G.F.n8*2;
-                fnIn2Mid = "g1m_batchToJacobian";
-            } else {
-                sIn = G.F.n8*3;
-            }
-            sMid = G.F.n8*3;
-            if (inverse) {
-                fnFFTFinal = "g1m_fftFinal";
-            }
-            fnFFTJoin = "g1m_fftJoin";
-            fnFFTMix = "g1m_fftMix";
-
-            if (outType == "affine") {
-                sOut = G.F.n8*2;
-                fnMid2Out = "g1m_batchToAffine";
-            } else {
-                sOut = G.F.n8*3;
-            }
-
-        } else if (groupName == "G2") {
-            if (inType == "affine") {
-                sIn = G.F.n8*2;
-                fnIn2Mid = "g2m_batchToJacobian";
-            } else {
-                sIn = G.F.n8*3;
-            }
-            sMid = G.F.n8*3;
-            if (inverse) {
-                fnFFTFinal = "g2m_fftFinal";
-            }
-            fnFFTJoin = "g2m_fftJoin";
-            fnFFTMix = "g2m_fftMix";
-            if (outType == "affine") {
-                sOut = G.F.n8*2;
-                fnMid2Out = "g2m_batchToAffine";
-            } else {
-                sOut = G.F.n8*3;
-            }
-        } else if (groupName == "Fr") {
-            sIn = G.n8;
-            sMid = G.n8;
-            sOut = G.n8;
-            if (inverse) {
-                fnFFTFinal = "frm_fftFinal";
-            }
-            fnFFTMix = "frm_fftMix";
-            fnFFTJoin = "frm_fftJoin";
-        }
-
-
-        let returnArray = false;
-        if (Array.isArray(buff)) {
-            buff = array2buffer(buff, sIn);
-            returnArray = true;
-        } else {
-            buff = buff.slice(0, buff.byteLength);
-        }
-
-        const nPoints = buff.byteLength / sIn;
-        const bits = log2(nPoints);
-
-        if  ((1 << bits) != nPoints) {
-            throw new Error("fft must be multiple of 2" );
-        }
-
-        if (bits == Fr.s +1) {
-            let buffOut;
-
-            if (inverse) {
-                buffOut =  await _fftExtInv(buff, inType, outType, logger, loggerTxt);
-            } else {
-                buffOut =  await _fftExt(buff, inType, outType, logger, loggerTxt);
-            }
-
-            if (returnArray) {
-                return buffer2array(buffOut, sOut);
-            } else {
-                return buffOut;
-            }
-        }
-
-        let inv;
-        if (inverse) {
-            inv = Fr.inv(Fr.e(nPoints));
-        }
-
-        let buffOut;
-
-        buffReverseBits(buff, sIn);
-
-        let chunks;
-        let pointsInChunk = Math.min(1 << MAX_BITS_THREAD, nPoints);
-        let nChunks = nPoints / pointsInChunk;
-
-        while ((nChunks < tm.concurrency)&&(pointsInChunk>=16)) {
-            nChunks *= 2;
-            pointsInChunk /= 2;
-        }
-
-        const l2Chunk = log2(pointsInChunk);
-
-        const promises = [];
-        for (let i = 0; i< nChunks; i++) {
-            if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix start: ${i}/${nChunks}`);
-            const task = [];
-            task.push({cmd: "ALLOC", var: 0, len: sMid*pointsInChunk});
-            const buffChunk = buff.slice( (pointsInChunk * i)*sIn, (pointsInChunk * (i+1))*sIn);
-            task.push({cmd: "SET", var: 0, buff: buffChunk});
-            if (fnIn2Mid) {
-                task.push({cmd: "CALL", fnName:fnIn2Mid, params: [{var:0}, {val: pointsInChunk}, {var: 0}]});
-            }
-            for (let j=1; j<=l2Chunk;j++) {
-                task.push({cmd: "CALL", fnName:fnFFTMix, params: [{var:0}, {val: pointsInChunk}, {val: j}]});
-            }
-
-            if (l2Chunk==bits) {
-                if (fnFFTFinal) {
-                    task.push({cmd: "ALLOCSET", var: 1, buff: inv});
-                    task.push({cmd: "CALL", fnName: fnFFTFinal,  params:[
-                        {var: 0},
-                        {val: pointsInChunk},
-                        {var: 1},
-                    ]});
-                }
-                if (fnMid2Out) {
-                    task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:0}, {val: pointsInChunk}, {var: 0}]});
-                }
-                task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sOut});
-            } else {
-                task.push({cmd: "GET", out:0, var: 0, len: sMid*pointsInChunk});
-            }
-            promises.push(tm.queueAction(task).then( (r) => {
-                if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix end: ${i}/${nChunks}`);
-                return r;
-            }));
-        }
-
-        chunks = await Promise.all(promises);
-        for (let i = 0; i< nChunks; i++) chunks[i] = chunks[i][0];
-
-        for (let i = l2Chunk+1;   i<=bits; i++) {
-            if (logger) logger.debug(`${loggerTxt}: fft  ${bits}  join: ${i}/${bits}`);
-            const nGroups = 1 << (bits - i);
-            const nChunksPerGroup = nChunks / nGroups;
-            const opPromises = [];
-            for (let j=0; j<nGroups; j++) {
-                for (let k=0; k <nChunksPerGroup/2; k++) {
-                    const first = Fr.exp( Fr.w[i], k*pointsInChunk);
-                    const inc = Fr.w[i];
-                    const o1 = j*nChunksPerGroup + k;
-                    const o2 = j*nChunksPerGroup + k + nChunksPerGroup/2;
-
-                    const task = [];
-                    task.push({cmd: "ALLOCSET", var: 0, buff: chunks[o1]});
-                    task.push({cmd: "ALLOCSET", var: 1, buff: chunks[o2]});
-                    task.push({cmd: "ALLOCSET", var: 2, buff: first});
-                    task.push({cmd: "ALLOCSET", var: 3, buff: inc});
-                    task.push({cmd: "CALL", fnName: fnFFTJoin,  params:[
-                        {var: 0},
-                        {var: 1},
-                        {val: pointsInChunk},
-                        {var: 2},
-                        {var: 3}
-                    ]});
-                    if (i==bits) {
-                        if (fnFFTFinal) {
-                            task.push({cmd: "ALLOCSET", var: 4, buff: inv});
-                            task.push({cmd: "CALL", fnName: fnFFTFinal,  params:[
-                                {var: 0},
-                                {val: pointsInChunk},
-                                {var: 4},
-                            ]});
-                            task.push({cmd: "CALL", fnName: fnFFTFinal,  params:[
-                                {var: 1},
-                                {val: pointsInChunk},
-                                {var: 4},
-                            ]});
-                        }
-                        if (fnMid2Out) {
-                            task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:0}, {val: pointsInChunk}, {var: 0}]});
-                            task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:1}, {val: pointsInChunk}, {var: 1}]});
-                        }
-                        task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sOut});
-                        task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sOut});
-                    } else {
-                        task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sMid});
-                        task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sMid});
-                    }
-                    opPromises.push(tm.queueAction(task).then( (r) => {
-                        if (logger) logger.debug(`${loggerTxt}: fft ${bits} join  ${i}/${bits}  ${j+1}/${nGroups} ${k}/${nChunksPerGroup/2}`);
-                        return r;
-                    }));
-                }
-            }
-
-            const res = await Promise.all(opPromises);
-            for (let j=0; j<nGroups; j++) {
-                for (let k=0; k <nChunksPerGroup/2; k++) {
-                    const o1 = j*nChunksPerGroup + k;
-                    const o2 = j*nChunksPerGroup + k + nChunksPerGroup/2;
-                    const resChunk = res.shift();
-                    chunks[o1] = resChunk[0];
-                    chunks[o2] = resChunk[1];
-                }
-            }
-        }
-
-        if (buff instanceof BigBuffer) {
-            buffOut = new BigBuffer(nPoints*sOut);
-        } else {
-            buffOut = new Uint8Array(nPoints*sOut);
-        }
-        if (inverse) {
-            buffOut.set(chunks[0].slice((pointsInChunk-1)*sOut));
-            let p= sOut;
-            for (let i=nChunks-1; i>0; i--) {
-                buffOut.set(chunks[i], p);
-                p += pointsInChunk*sOut;
-                delete chunks[i];  // Liberate mem
-            }
-            buffOut.set(chunks[0].slice(0, (pointsInChunk-1)*sOut), p);
-            delete chunks[0];
-        } else {
-            for (let i=0; i<nChunks; i++) {
-                buffOut.set(chunks[i], pointsInChunk*sOut*i);
-                delete chunks[i];
-            }
-        }
-
-        if (returnArray) {
-            return buffer2array(buffOut, sOut);
-        } else {
-            return buffOut;
-        }
-    }
-
-    async function _fftExt(buff, inType, outType, logger, loggerTxt) {
-        let b1, b2;
-        b1 = buff.slice( 0 , buff.byteLength/2);
-        b2 = buff.slice( buff.byteLength/2, buff.byteLength);
-
-        const promises = [];
-
-        [b1, b2] = await _fftJoinExt(b1, b2, "fftJoinExt", Fr.one, Fr.shift, inType, "jacobian", logger, loggerTxt);
-
-        promises.push( _fft(b1, false, "jacobian", outType, logger, loggerTxt));
-        promises.push( _fft(b2, false, "jacobian", outType, logger, loggerTxt));
-
-        const res1 = await Promise.all(promises);
-
-        let buffOut;
-        if (res1[0].byteLength > (1<<28)) {
-            buffOut = new BigBuffer(res1[0].byteLength*2);
-        } else {
-            buffOut = new Uint8Array(res1[0].byteLength*2);
-        }
-
-        buffOut.set(res1[0]);
-        buffOut.set(res1[1], res1[0].byteLength);
-
-        return buffOut;
-    }
-
-    async function _fftExtInv(buff, inType, outType, logger, loggerTxt) {
-        let b1, b2;
-        b1 = buff.slice( 0 , buff.byteLength/2);
-        b2 = buff.slice( buff.byteLength/2, buff.byteLength);
-
-        const promises = [];
-
-        promises.push( _fft(b1, true, inType, "jacobian", logger, loggerTxt));
-        promises.push( _fft(b2, true, inType, "jacobian", logger, loggerTxt));
-
-        [b1, b2] = await Promise.all(promises);
-
-        const res1 = await _fftJoinExt(b1, b2, "fftJoinExtInv", Fr.one, Fr.shiftInv, "jacobian", outType, logger, loggerTxt);
-
-        let buffOut;
-        if (res1[0].byteLength > (1<<28)) {
-            buffOut = new BigBuffer(res1[0].byteLength*2);
-        } else {
-            buffOut = new Uint8Array(res1[0].byteLength*2);
-        }
-
-        buffOut.set(res1[0]);
-        buffOut.set(res1[1], res1[0].byteLength);
-
-        return buffOut;
-    }
-
-
-    async function _fftJoinExt(buff1, buff2, fn, first, inc, inType, outType, logger, loggerTxt) {
-        const MAX_CHUNK_SIZE = 1<<16;
-        const MIN_CHUNK_SIZE = 1<<4;
-
-        let fnName;
-        let fnIn2Mid, fnMid2Out;
-        let sOut, sIn, sMid;
-
-        if (groupName == "G1") {
-            if (inType == "affine") {
-                sIn = G.F.n8*2;
-                fnIn2Mid = "g1m_batchToJacobian";
-            } else {
-                sIn = G.F.n8*3;
-            }
-            sMid = G.F.n8*3;
-            fnName = "g1m_"+fn;
-            if (outType == "affine") {
-                fnMid2Out = "g1m_batchToAffine";
-                sOut = G.F.n8*2;
-            } else {
-                sOut = G.F.n8*3;
-            }
-        } else if (groupName == "G2") {
-            if (inType == "affine") {
-                sIn = G.F.n8*2;
-                fnIn2Mid = "g2m_batchToJacobian";
-            } else {
-                sIn = G.F.n8*3;
-            }
-            fnName = "g2m_"+fn;
-            sMid = G.F.n8*3;
-            if (outType == "affine") {
-                fnMid2Out = "g2m_batchToAffine";
-                sOut = G.F.n8*2;
-            } else {
-                sOut = G.F.n8*3;
-            }
-        } else if (groupName == "Fr") {
-            sIn = Fr.n8;
-            sOut = Fr.n8;
-            sMid = Fr.n8;
-            fnName = "frm_" + fn;
-        } else {
-            throw new Error("Invalid group");
-        }
-
-        if (buff1.byteLength != buff2.byteLength) {
-            throw new Error("Invalid buffer size");
-        }
-        const nPoints = Math.floor(buff1.byteLength / sIn);
-        if (nPoints != 1 << log2(nPoints)) {
-            throw new Error("Invalid number of points");
-        }
-
-        let chunkSize = Math.floor(nPoints /tm.concurrency);
-        if (chunkSize < MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
-        if (chunkSize > MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
-
-        const opPromises = [];
-
-        for (let i=0; i<nPoints; i += chunkSize) {
-            if (logger) logger.debug(`${loggerTxt}: fftJoinExt Start: ${i}/${nPoints}`);
-            const n= Math.min(nPoints - i, chunkSize);
-
-            const firstChunk = Fr.mul(first, Fr.exp( inc, i));
-            const task = [];
-
-            const b1 = buff1.slice(i*sIn, (i+n)*sIn);
-            const b2 = buff2.slice(i*sIn, (i+n)*sIn);
-
-            task.push({cmd: "ALLOC", var: 0, len: sMid*n});
-            task.push({cmd: "SET", var: 0, buff: b1});
-            task.push({cmd: "ALLOC", var: 1, len: sMid*n});
-            task.push({cmd: "SET", var: 1, buff: b2});
-            task.push({cmd: "ALLOCSET", var: 2, buff: firstChunk});
-            task.push({cmd: "ALLOCSET", var: 3, buff: inc});
-            if (fnIn2Mid) {
-                task.push({cmd: "CALL", fnName:fnIn2Mid, params: [{var:0}, {val: n}, {var: 0}]});
-                task.push({cmd: "CALL", fnName:fnIn2Mid, params: [{var:1}, {val: n}, {var: 1}]});
-            }
-            task.push({cmd: "CALL", fnName: fnName, params: [
-                {var: 0},
-                {var: 1},
-                {val: n},
-                {var: 2},
-                {var: 3},
-                {val: Fr.s},
-            ]});
-            if (fnMid2Out) {
-                task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:0}, {val: n}, {var: 0}]});
-                task.push({cmd: "CALL", fnName:fnMid2Out, params: [{var:1}, {val: n}, {var: 1}]});
-            }
-            task.push({cmd: "GET", out: 0, var: 0, len: n*sOut});
-            task.push({cmd: "GET", out: 1, var: 1, len: n*sOut});
-            opPromises.push(
-                tm.queueAction(task).then( (r) => {
-                    if (logger) logger.debug(`${loggerTxt}: fftJoinExt End: ${i}/${nPoints}`);
-                    return r;
-                })
-            );
-        }
-
-        const result = await Promise.all(opPromises);
-
-        let fullBuffOut1;
-        let fullBuffOut2;
-        if (nPoints * sOut > 1<<28) {
-            fullBuffOut1 = new BigBuffer(nPoints*sOut);
-            fullBuffOut2 = new BigBuffer(nPoints*sOut);
-        } else {
-            fullBuffOut1 = new Uint8Array(nPoints*sOut);
-            fullBuffOut2 = new Uint8Array(nPoints*sOut);
-        }
-
-        let p =0;
-        for (let i=0; i<result.length; i++) {
-            fullBuffOut1.set(result[i][0], p);
-            fullBuffOut2.set(result[i][1], p);
-            p+=result[i][0].byteLength;
-        }
-
-        return [fullBuffOut1, fullBuffOut2];
-    }
-
-
-    G.fft = async function(buff, inType, outType, logger, loggerTxt) {
-        return await _fft(buff, false, inType, outType, logger, loggerTxt);
-    };
-
-    G.ifft = async function(buff, inType, outType, logger, loggerTxt) {
-        return await _fft(buff, true, inType, outType, logger, loggerTxt);
-    };
-
-    G.lagrangeEvaluations = async function (buff, inType, outType, logger, loggerTxt) {
-        inType = inType || "affine";
-        outType = outType || "affine";
-
-        let sIn;
-        if (groupName == "G1") {
-            if (inType == "affine") {
-                sIn = G.F.n8*2;
-            } else {
-                sIn = G.F.n8*3;
-            }
-        } else if (groupName == "G2") {
-            if (inType == "affine") {
-                sIn = G.F.n8*2;
-            } else {
-                sIn = G.F.n8*3;
-            }
-        } else if (groupName == "Fr") {
-            sIn = Fr.n8;
-        } else {
-            throw new Error("Invalid group");
-        }
-
-        const nPoints = buff.byteLength /sIn;
-        const bits = log2(nPoints);
-
-        if ((2 ** bits)*sIn != buff.byteLength) {
-            if (logger) logger.error("lagrangeEvaluations iinvalid input size");
-            throw new Error("lagrangeEvaluations invalid Input size");
-        }
-
-        if (bits <= Fr.s) {
-            return await G.ifft(buff, inType, outType, logger, loggerTxt);
-        }
-
-        if (bits > Fr.s+1) {
-            if (logger) logger.error("lagrangeEvaluations input too big");
-            throw new Error("lagrangeEvaluations input too big");
-        }
-
-        let t0 = buff.slice(0, buff.byteLength/2);
-        let t1 = buff.slice(buff.byteLength/2, buff.byteLength);
-
-
-        const shiftToSmallM = Fr.exp(Fr.shift, nPoints/2);
-        const sConst = Fr.inv( Fr.sub(Fr.one, shiftToSmallM));
-
-        [t0, t1] = await _fftJoinExt(t0, t1, "prepareLagrangeEvaluation", sConst, Fr.shiftInv, inType, "jacobian", logger, loggerTxt + " prep");
-
-        const promises = [];
-
-        promises.push( _fft(t0, true, "jacobian", outType, logger, loggerTxt + " t0"));
-        promises.push( _fft(t1, true, "jacobian", outType, logger, loggerTxt + " t1"));
-
-        [t0, t1] = await Promise.all(promises);
-
-        let buffOut;
-        if (t0.byteLength > (1<<28)) {
-            buffOut = new BigBuffer(t0.byteLength*2);
-        } else {
-            buffOut = new Uint8Array(t0.byteLength*2);
-        }
-
-        buffOut.set(t0);
-        buffOut.set(t1, t0.byteLength);
-
-        return buffOut;
-    };
-
-    G.fftMix = async function fftMix(buff) {
-        const sG = G.F.n8*3;
-        let fnName, fnFFTJoin;
-        if (groupName == "G1") {
-            fnName = "g1m_fftMix";
-            fnFFTJoin = "g1m_fftJoin";
-        } else if (groupName == "G2") {
-            fnName = "g2m_fftMix";
-            fnFFTJoin = "g2m_fftJoin";
-        } else if (groupName == "Fr") {
-            fnName = "frm_fftMix";
-            fnFFTJoin = "frm_fftJoin";
-        } else {
-            throw new Error("Invalid group");
-        }
-
-        const nPoints = Math.floor(buff.byteLength / sG);
-        const power = log2(nPoints);
-
-        let nChunks = 1 << log2(tm.concurrency);
-
-        if (nPoints <= nChunks*2) nChunks = 1;
-
-        const pointsPerChunk = nPoints / nChunks;
-
-        const powerChunk = log2(pointsPerChunk);
-
-        const opPromises = [];
-        for (let i=0; i<nChunks; i++) {
-            const task = [];
-            const b = buff.slice((i* pointsPerChunk)*sG, ((i+1)* pointsPerChunk)*sG);
-            task.push({cmd: "ALLOCSET", var: 0, buff: b});
-            for (let j=1; j<=powerChunk; j++) {
-                task.push({cmd: "CALL", fnName: fnName, params: [
-                    {var: 0},
-                    {val: pointsPerChunk},
-                    {val: j}
-                ]});
-            }
-            task.push({cmd: "GET", out: 0, var: 0, len: pointsPerChunk*sG});
-            opPromises.push(
-                tm.queueAction(task)
-            );
-        }
-
-        const result = await Promise.all(opPromises);
-
-        const chunks = [];
-        for (let i=0; i<result.length; i++) chunks[i] = result[i][0];
-
-
-        for (let i = powerChunk+1; i<=power; i++) {
-            const nGroups = 1 << (power - i);
-            const nChunksPerGroup = nChunks / nGroups;
-            const opPromises = [];
-            for (let j=0; j<nGroups; j++) {
-                for (let k=0; k <nChunksPerGroup/2; k++) {
-                    const first = Fr.exp( Fr.w[i], k*pointsPerChunk);
-                    const inc = Fr.w[i];
-                    const o1 = j*nChunksPerGroup + k;
-                    const o2 = j*nChunksPerGroup + k + nChunksPerGroup/2;
-
-                    const task = [];
-                    task.push({cmd: "ALLOCSET", var: 0, buff: chunks[o1]});
-                    task.push({cmd: "ALLOCSET", var: 1, buff: chunks[o2]});
-                    task.push({cmd: "ALLOCSET", var: 2, buff: first});
-                    task.push({cmd: "ALLOCSET", var: 3, buff: inc});
-                    task.push({cmd: "CALL", fnName: fnFFTJoin,  params:[
-                        {var: 0},
-                        {var: 1},
-                        {val: pointsPerChunk},
-                        {var: 2},
-                        {var: 3}
-                    ]});
-                    task.push({cmd: "GET", out: 0, var: 0, len: pointsPerChunk*sG});
-                    task.push({cmd: "GET", out: 1, var: 1, len: pointsPerChunk*sG});
-                    opPromises.push(tm.queueAction(task));
-                }
-            }
-
-            const res = await Promise.all(opPromises);
-            for (let j=0; j<nGroups; j++) {
-                for (let k=0; k <nChunksPerGroup/2; k++) {
-                    const o1 = j*nChunksPerGroup + k;
-                    const o2 = j*nChunksPerGroup + k + nChunksPerGroup/2;
-                    const resChunk = res.shift();
-                    chunks[o1] = resChunk[0];
-                    chunks[o2] = resChunk[1];
-                }
-            }
-        }
-
-        let fullBuffOut;
-        if (buff instanceof BigBuffer) {
-            fullBuffOut = new BigBuffer(nPoints*sG);
-        } else {
-            fullBuffOut = new Uint8Array(nPoints*sG);
-        }
-        let p =0;
-        for (let i=0; i<nChunks; i++) {
-            fullBuffOut.set(chunks[i], p);
-            p+=chunks[i].byteLength;
-        }
-
-        return fullBuffOut;
-    };
-
-    G.fftJoin = async function fftJoin(buff1, buff2, first, inc) {
-        const sG = G.F.n8*3;
-        let fnName;
-        if (groupName == "G1") {
-            fnName = "g1m_fftJoin";
-        } else if (groupName == "G2") {
-            fnName = "g2m_fftJoin";
-        } else if (groupName == "Fr") {
-            fnName = "frm_fftJoin";
-        } else {
-            throw new Error("Invalid group");
-        }
-
-        if (buff1.byteLength != buff2.byteLength) {
-            throw new Error("Invalid buffer size");
-        }
-        const nPoints = Math.floor(buff1.byteLength / sG);
-        if (nPoints != 1 << log2(nPoints)) {
-            throw new Error("Invalid number of points");
-        }
-
-        let nChunks = 1 << log2(tm.concurrency);
-        if (nPoints <= nChunks*2) nChunks = 1;
-
-        const pointsPerChunk = nPoints / nChunks;
-
-
-        const opPromises = [];
-        for (let i=0; i<nChunks; i++) {
-            const task = [];
-
-            const firstChunk = Fr.mul(first, Fr.exp(inc, i*pointsPerChunk));
-            const b1 = buff1.slice((i* pointsPerChunk)*sG, ((i+1)* pointsPerChunk)*sG);
-            const b2 = buff2.slice((i* pointsPerChunk)*sG, ((i+1)* pointsPerChunk)*sG);
-            task.push({cmd: "ALLOCSET", var: 0, buff: b1});
-            task.push({cmd: "ALLOCSET", var: 1, buff: b2});
-            task.push({cmd: "ALLOCSET", var: 2, buff: firstChunk});
-            task.push({cmd: "ALLOCSET", var: 3, buff: inc});
-            task.push({cmd: "CALL", fnName: fnName, params: [
-                {var: 0},
-                {var: 1},
-                {val: pointsPerChunk},
-                {var: 2},
-                {var: 3}
-            ]});
-            task.push({cmd: "GET", out: 0, var: 0, len: pointsPerChunk*sG});
-            task.push({cmd: "GET", out: 1, var: 1, len: pointsPerChunk*sG});
-            opPromises.push(
-                tm.queueAction(task)
-            );
-
-        }
-
-
-        const result = await Promise.all(opPromises);
-
-        let fullBuffOut1;
-        let fullBuffOut2;
-        if (buff1 instanceof BigBuffer) {
-            fullBuffOut1 = new BigBuffer(nPoints*sG);
-            fullBuffOut2 = new BigBuffer(nPoints*sG);
-        } else {
-            fullBuffOut1 = new Uint8Array(nPoints*sG);
-            fullBuffOut2 = new Uint8Array(nPoints*sG);
-        }
-
-        let p =0;
-        for (let i=0; i<result.length; i++) {
-            fullBuffOut1.set(result[i][0], p);
-            fullBuffOut2.set(result[i][1], p);
-            p+=result[i][0].byteLength;
-        }
-
-        return [fullBuffOut1, fullBuffOut2];
-    };
-
-
-
-    G.fftFinal =  async function fftFinal(buff, factor) {
-        const sG = G.F.n8*3;
-        const sGout = G.F.n8*2;
-        let fnName, fnToAffine;
-        if (groupName == "G1") {
-            fnName = "g1m_fftFinal";
-            fnToAffine = "g1m_batchToAffine";
-        } else if (groupName == "G2") {
-            fnName = "g2m_fftFinal";
-            fnToAffine = "g2m_batchToAffine";
-        } else {
-            throw new Error("Invalid group");
-        }
-
-        const nPoints = Math.floor(buff.byteLength / sG);
-        if (nPoints != 1 << log2(nPoints)) {
-            throw new Error("Invalid number of points");
-        }
-
-        const pointsPerChunk = Math.floor(nPoints / tm.concurrency);
-
-        const opPromises = [];
-        for (let i=0; i<tm.concurrency; i++) {
-            let n;
-            if (i< tm.concurrency-1) {
-                n = pointsPerChunk;
-            } else {
-                n = nPoints - i*pointsPerChunk;
-            }
-            if (n==0) continue;
-            const task = [];
-            const b = buff.slice((i* pointsPerChunk)*sG, (i*pointsPerChunk+n)*sG);
-            task.push({cmd: "ALLOCSET", var: 0, buff: b});
-            task.push({cmd: "ALLOCSET", var: 1, buff: factor});
-            task.push({cmd: "CALL", fnName: fnName, params: [
-                {var: 0},
-                {val: n},
-                {var: 1},
-            ]});
-            task.push({cmd: "CALL", fnName: fnToAffine, params: [
-                {var: 0},
-                {val: n},
-                {var: 0},
-            ]});
-            task.push({cmd: "GET", out: 0, var: 0, len: n*sGout});
-            opPromises.push(
-                tm.queueAction(task)
-            );
-
-        }
-
-        const result = await Promise.all(opPromises);
-
-        let fullBuffOut;
-        if (buff instanceof BigBuffer) {
-            fullBuffOut = new BigBuffer(nPoints*sGout);
-        } else {
-            fullBuffOut = new Uint8Array(nPoints*sGout);
-        }
-
-        let p =0;
-        for (let i=result.length-1; i>=0; i--) {
-            fullBuffOut.set(result[i][0], p);
-            p+=result[i][0].byteLength;
-        }
-
-        return fullBuffOut;
-    };
-}
-
-async function buildEngine(params) {
-
-    const tm = await buildThreadManager(params.wasm, params.singleThread);
-
-
-    const curve = {};
-
-    curve.q = e(params.wasm.q.toString());
-    curve.r = e(params.wasm.r.toString());
-    curve.name = params.name;
-    curve.tm = tm;
-    curve.prePSize = params.wasm.prePSize;
-    curve.preQSize = params.wasm.preQSize;
-    curve.Fr = new WasmField1(tm, "frm", params.n8r, params.r);
-    curve.F1 = new WasmField1(tm, "f1m", params.n8q, params.q);
-    curve.F2 = new WasmField2(tm, "f2m", curve.F1);
-    curve.G1 = new WasmCurve(tm, "g1m", curve.F1, params.wasm.pG1gen, params.wasm.pG1b, params.cofactorG1);
-    curve.G2 = new WasmCurve(tm, "g2m", curve.F2, params.wasm.pG2gen, params.wasm.pG2b, params.cofactorG2);
-    curve.F6 = new WasmField3(tm, "f6m", curve.F2);
-    curve.F12 = new WasmField2(tm, "ftm", curve.F6);
-
-    curve.Gt = curve.F12;
-
-    buildBatchApplyKey(curve, "G1");
-    buildBatchApplyKey(curve, "G2");
-    buildBatchApplyKey(curve, "Fr");
-
-    buildMultiexp(curve, "G1");
-    buildMultiexp(curve, "G2");
-
-    buildFFT(curve, "G1");
-    buildFFT(curve, "G2");
-    buildFFT(curve, "Fr");
-
-    buildPairing(curve);
-
-    curve.array2buffer = function(arr, sG) {
-        const buff = new Uint8Array(sG*arr.length);
-
-        for (let i=0; i<arr.length; i++) {
-            buff.set(arr[i], i*sG);
-        }
-
-        return buff;
-    };
-
-    curve.buffer2array = function(buff , sG) {
-        const n= buff.byteLength / sG;
-        const arr = new Array(n);
-        for (let i=0; i<n; i++) {
-            arr[i] = buff.slice(i*sG, i*sG+sG);
-        }
-        return arr;
-    };
-
-    return curve;
-}
 
 /*
     Copyright 2019 0KIMS association.
@@ -18026,169 +18489,28 @@ class ModuleBuilder {
 
 }
 
-globalThis.curve_bn128 = null;
+/*
+    Copyright 2019 0KIMS association.
 
-async function buildBn128(singleThread, plugins) {
-    if ((!singleThread) && (globalThis.curve_bn128)) return globalThis.curve_bn128;
+    This file is part of wasmbuilder
 
-    const moduleBuilder = new ModuleBuilder();
-    moduleBuilder.setMemory(25);
-    buildBn128$1(moduleBuilder);
+    wasmbuilder is a free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
 
-    if (plugins) plugins(moduleBuilder);
+    wasmbuilder is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+    License for more details.
 
-    const bn128wasm = {};
+    You should have received a copy of the GNU General Public License
+    along with wasmbuilder. If not, see <https://www.gnu.org/licenses/>.
+*/
 
-    bn128wasm.code = moduleBuilder.build();
-    bn128wasm.pq = moduleBuilder.modules.f1m.pq;
-    bn128wasm.pr = moduleBuilder.modules.frm.pq;
-    bn128wasm.pG1gen = moduleBuilder.modules.bn128.pG1gen;
-    bn128wasm.pG1zero = moduleBuilder.modules.bn128.pG1zero;
-    bn128wasm.pG1b = moduleBuilder.modules.bn128.pG1b;
-    bn128wasm.pG2gen = moduleBuilder.modules.bn128.pG2gen;
-    bn128wasm.pG2zero = moduleBuilder.modules.bn128.pG2zero;
-    bn128wasm.pG2b = moduleBuilder.modules.bn128.pG2b;
-    bn128wasm.pOneT = moduleBuilder.modules.bn128.pOneT;
-    bn128wasm.prePSize = moduleBuilder.modules.bn128.prePSize;
-    bn128wasm.preQSize = moduleBuilder.modules.bn128.preQSize;
-    bn128wasm.n8q = 32;
-    bn128wasm.n8r = 32;
-    bn128wasm.q = moduleBuilder.modules.bn128.q;
-    bn128wasm.r = moduleBuilder.modules.bn128.r;
+var main = /*#__PURE__*/Object.freeze({
+    __proto__: null,
+    ModuleBuilder: ModuleBuilder
+});
 
-    const params = {
-        name: "bn128",
-        wasm: bn128wasm,
-        q: e("21888242871839275222246405745257275088696311157297823662689037894645226208583"),
-        r: e("21888242871839275222246405745257275088548364400416034343698204186575808495617"),
-        n8q: 32,
-        n8r: 32,
-        cofactorG2: e("30644e72e131a029b85045b68181585e06ceecda572a2489345f2299c0f9fa8d", 16),
-        singleThread: singleThread ? true : false
-    };
-
-    const curve = await buildEngine(params);
-    curve.terminate = async function () {
-        if (!params.singleThread) {
-            globalThis.curve_bn128 = null;
-            await this.tm.terminate();
-        }
-    };
-
-    if (!singleThread) {
-        globalThis.curve_bn128 = curve;
-    }
-
-    return curve;
-}
-
-globalThis.curve_bls12381 = null;
-
-async function buildBls12381(singleThread, plugins) {
-    if ((!singleThread) && (globalThis.curve_bls12381)) return globalThis.curve_bls12381;
-
-    const moduleBuilder = new ModuleBuilder();
-    moduleBuilder.setMemory(25);
-    buildBls12381$1(moduleBuilder);
-
-    if (plugins) plugins(moduleBuilder);
-
-    const bls12381wasm = {};
-
-    bls12381wasm.code = moduleBuilder.build();
-    bls12381wasm.pq = moduleBuilder.modules.f1m.pq;
-    bls12381wasm.pr = moduleBuilder.modules.frm.pq;
-    bls12381wasm.pG1gen = moduleBuilder.modules.bls12381.pG1gen;
-    bls12381wasm.pG1zero = moduleBuilder.modules.bls12381.pG1zero;
-    bls12381wasm.pG1b = moduleBuilder.modules.bls12381.pG1b;
-    bls12381wasm.pG2gen = moduleBuilder.modules.bls12381.pG2gen;
-    bls12381wasm.pG2zero = moduleBuilder.modules.bls12381.pG2zero;
-    bls12381wasm.pG2b = moduleBuilder.modules.bls12381.pG2b;
-    bls12381wasm.pOneT = moduleBuilder.modules.bls12381.pOneT;
-    bls12381wasm.prePSize = moduleBuilder.modules.bls12381.prePSize;
-    bls12381wasm.preQSize = moduleBuilder.modules.bls12381.preQSize;
-    bls12381wasm.n8q = 48;
-    bls12381wasm.n8r = 32;
-    bls12381wasm.q = moduleBuilder.modules.bls12381.q;
-    bls12381wasm.r = moduleBuilder.modules.bls12381.r;
-
-
-    const params = {
-        name: "bls12381",
-        wasm: bls12381wasm,
-        q: e("1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab", 16),
-        r: e("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001", 16),
-        n8q: 48,
-        n8r: 32,
-        cofactorG1: e("0x396c8c005555e1568c00aaab0000aaab", 16),
-        cofactorG2: e("0x5d543a95414e7f1091d50792876a202cd91de4547085abaa68a205b2e5a7ddfa628f1cb4d9e82ef21537e293a6691ae1616ec6e786f0c70cf1c38e31c7238e5", 16),
-        singleThread: singleThread ? true : false
-    };
-
-    const curve = await buildEngine(params);
-    curve.terminate = async function () {
-        if (!params.singleThread) {
-            globalThis.curve_bls12381 = null;
-            await this.tm.terminate();
-        }
-    };
-
-    if (!singleThread) {
-        globalThis.curve_bls12381 = curve;
-    }
-
-    return curve;
-}
-
-const bls12381r = e("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001", 16);
-const bn128r = e("21888242871839275222246405745257275088548364400416034343698204186575808495617");
-
-const bls12381q = e("1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab", 16);
-const bn128q = e("21888242871839275222246405745257275088696311157297823662689037894645226208583");
-
-async function getCurveFromR(r, singleThread, plugins) {
-    let curve;
-    if (eq(r, bn128r)) {
-        curve = await buildBn128(singleThread, plugins);
-    } else if (eq(r, bls12381r)) {
-        curve = await buildBls12381(singleThread, plugins);
-    } else {
-        throw new Error(`Curve not supported: ${toString(r)}`);
-    }
-    return curve;
-}
-
-async function getCurveFromQ(q, singleThread, plugins) {
-    let curve;
-    if (eq(q, bn128q)) {
-        curve = await buildBn128(singleThread, plugins);
-    } else if (eq(q, bls12381q)) {
-        curve = await buildBls12381(singleThread, plugins);
-    } else {
-        throw new Error(`Curve not supported: ${toString(q, 16)}`);
-    }
-    return curve;
-}
-
-async function getCurveFromName(name, singleThread, plugins) {
-    let curve;
-    const normName = normalizeName(name);
-    if (["BN128", "BN254", "ALTBN128"].indexOf(normName) >= 0) {
-        curve = await buildBn128(singleThread, plugins);
-    } else if (["BLS12381"].indexOf(normName) >= 0) {
-        curve = await buildBls12381(singleThread, plugins);
-    } else {
-        throw new Error(`Curve not supported: ${name}`);
-    }
-    return curve;
-
-    function normalizeName(n) {
-        return n.toUpperCase().match(/[A-Za-z0-9]+/g).join("");
-    }
-
-}
-
-const Scalar=_Scalar;
-const utils = _utils;
-
-export { BigBuffer, ChaCha, EC, ZqField as F1Field, F2Field, F3Field, PolField, Scalar, ZqField, buildBls12381, buildBn128, getCurveFromName, getCurveFromQ, getCurveFromR, utils };
+export { BigBuffer, ChaCha, EC, ZqField as F1Field, F2Field, F3Field, PolField, Scalar, ZqField, buildBls12381$1 as buildBls12381, buildBn128$1 as buildBn128, getCurveFromName, getCurveFromQ, getCurveFromR, utils$6 as utils };

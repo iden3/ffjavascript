@@ -12,7 +12,7 @@ export default function buildFFT(curve, groupName) {
         outType = outType || "affine";
         const MAX_BITS_THREAD = 14;
 
-        let sIn, sMid, sOut, fnIn2Mid, fnMid2Out, fnFFTMix, fnFFTJoin, fnFFTFinal;
+        let sIn, sMid, sOut, fnIn2Mid, fnMid2Out, fnFFTMix, fnFFTJoin, fnFFTFinal, fnReversePermutation;
         if (groupName == "G1") {
             if (inType == "affine") {
                 sIn = G.F.n8*2;
@@ -26,6 +26,7 @@ export default function buildFFT(curve, groupName) {
             }
             fnFFTJoin = "g1m_fftJoin";
             fnFFTMix = "g1m_fftMix";
+            fnReversePermutation = "g1m__reversePermutation";
 
             if (outType == "affine") {
                 sOut = G.F.n8*2;
@@ -47,6 +48,7 @@ export default function buildFFT(curve, groupName) {
             }
             fnFFTJoin = "g2m_fftJoin";
             fnFFTMix = "g2m_fftMix";
+            fnReversePermutation = "g2m__reversePermutation";
             if (outType == "affine") {
                 sOut = G.F.n8*2;
                 fnMid2Out = "g2m_batchToAffine";
@@ -62,6 +64,7 @@ export default function buildFFT(curve, groupName) {
             }
             fnFFTMix = "frm_fftMix";
             fnFFTJoin = "frm_fftJoin";
+            fnReversePermutation = "frm__reversePermutation";
         }
 
 
@@ -73,8 +76,12 @@ export default function buildFFT(curve, groupName) {
             buff = buff.slice(0, buff.byteLength);
         }
 
+        console.log("FFT input size:", buff.byteLength, " bytes");
+
         const nPoints = buff.byteLength / sIn;
         const bits = log2(nPoints);
+
+        console.log("FFT points:", nPoints, " bits:", bits);
 
         if  ((1 << bits) != nPoints) {
             throw new Error("fft must be multiple of 2" );
@@ -103,7 +110,26 @@ export default function buildFFT(curve, groupName) {
 
         let buffOut;
 
-        buffReverseBits(buff, sIn);
+        // TODO: optimize. Move to wasm
+        // buffReverseBits(buff, sIn);
+
+        console.log("fnReversePermutation:", fnReversePermutation);
+
+        // TODO: try to do reversing for each batch separately and inside of the task
+        const task = [];
+        task.push({cmd: "ALLOCSET", var: 0, buff: buff});
+        task.push({cmd: "CALL", fnName: fnReversePermutation, params: [{var:0}, {val: bits}]});
+        task.push({cmd: "GET", out:0, var: 0, len: nPoints*sOut});
+        const reversedBuff = await tm.queueAction(task, [buff.buffer]);
+        //const reversedBuff = await tm.queueAction(task, []);
+
+        //console.log("wasm buffReverseBits:", reversedBuff[0]);
+        //buffReverseBits(buff, sIn);
+        //console.log("js buffReverseBits:", buff);
+
+        //exit(1);
+
+        buff = reversedBuff[0];
 
         let chunks;
         let pointsInChunk = Math.min(1 << MAX_BITS_THREAD, nPoints);
@@ -117,8 +143,8 @@ export default function buildFFT(curve, groupName) {
         const l2Chunk = log2(pointsInChunk);
 
         const promises = [];
+        if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix start: ${nChunks}`);
         for (let i = 0; i< nChunks; i++) {
-            if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix start: ${i}/${nChunks}`);
             const task = [];
             task.push({cmd: "ALLOC", var: 0, len: sMid*pointsInChunk});
             const buffChunk = buff.slice( (pointsInChunk * i)*sIn, (pointsInChunk * (i+1))*sIn);
@@ -146,17 +172,15 @@ export default function buildFFT(curve, groupName) {
             } else {
                 task.push({cmd: "GET", out:0, var: 0, len: sMid*pointsInChunk});
             }
-            promises.push(tm.queueAction(task, [buffChunk.buffer]).then( (r) => {
-                if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix end: ${i}/${nChunks}`);
-                return r;
-            }));
+            promises.push(tm.queueAction(task, [buffChunk.buffer]));
         }
 
         chunks = await Promise.all(promises);
+        if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix end: ${nChunks}`);
         for (let i = 0; i< nChunks; i++) chunks[i] = chunks[i][0];
 
         for (let i = l2Chunk+1;   i<=bits; i++) {
-            if (logger) logger.debug(`${loggerTxt}: fft  ${bits}  join: ${i}/${bits}`);
+            if (logger) logger.debug(`${loggerTxt}: fft ${bits} join: ${i}/${bits}`);
             const nGroups = 1 << (bits - i);
             const nChunksPerGroup = nChunks / nGroups;
             const opPromises = [];
@@ -203,10 +227,7 @@ export default function buildFFT(curve, groupName) {
                         task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sMid});
                         task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sMid});
                     }
-                    opPromises.push(tm.queueAction(task, [chunks[o1].buffer, chunks[o2].buffer, first.buffer ]).then( (r) => {
-                        if (logger) logger.debug(`${loggerTxt}: fft ${bits} join  ${i}/${bits}  ${j+1}/${nGroups} ${k}/${nChunksPerGroup/2}`);
-                        return r;
-                    }));
+                    opPromises.push(tm.queueAction(task, [chunks[o1].buffer, chunks[o2].buffer, first.buffer ]));
                 }
             }
 
