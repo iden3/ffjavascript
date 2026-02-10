@@ -1,5 +1,5 @@
 
-const PAGE_SIZE = 1<<30;
+const PAGE_SIZE = ( typeof Buffer !== "undefined" && Buffer.constants && Buffer.constants.MAX_LENGTH ) ? Buffer.constants.MAX_LENGTH : (1 << 30);
 
 export default class BigBuffer {
 

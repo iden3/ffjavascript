@@ -1,10 +1,8 @@
 'use strict';
 
 var crypto = require('crypto');
-var wasmcurves = require('wasmcurves');
 var os = require('os');
 var Worker = require('web-worker');
-var wasmbuilder = require('wasmbuilder');
 
 /* global BigInt */
 const hexLen = [ 0, 1, 2, 2, 3, 3, 3, 3, 4 ,4 ,4 ,4 ,4 ,4 ,4 ,4];
@@ -3034,7 +3032,7 @@ var _utils = /*#__PURE__*/Object.freeze({
     unstringifyFElements: unstringifyFElements
 });
 
-const PAGE_SIZE = 1<<30;
+const PAGE_SIZE = ( typeof Buffer !== "undefined" && Buffer.constants && Buffer.constants.MAX_LENGTH ) ? Buffer.constants.MAX_LENGTH : (1 << 30);
 
 class BigBuffer {
 
@@ -3044,7 +3042,11 @@ class BigBuffer {
         for (let i=0; i<size; i+= PAGE_SIZE) {
             const n = Math.min(size-i, PAGE_SIZE);
             this.buffers.push(new Uint8Array(n));
+            //this.buffers.push(new Uint8Array(new SharedArrayBuffer(n)));
         }
+        // if (this.buffers.length === 1) {
+        //     this.buffer = this.buffers[0];
+        // }
 
     }
 
@@ -3151,7 +3153,7 @@ function buildBatchConvert(tm, fnName, sIn, sOut) {
                 {cmd: "GET", out: 0, var: 1, len:sOut * n},
             ];
             opPromises.push(
-                tm.queueAction(task)
+                tm.queueAction(task, [buffChunk.buffer])
             );
         }
 
@@ -3451,7 +3453,7 @@ class WasmField1 {
                 {cmd: "GET", out: 0, var: 1, len:sOut * n},
             ];
             opPromises.push(
-                this.tm.queueAction(task)
+                this.tm.queueAction(task, [buffChunk.buffer])
             );
         }
 
@@ -4252,6 +4254,8 @@ function thread(self) {
     const MAXMEM = 32767;
     let instance;
     let memory;
+    let terminationTimeout = 500; // milliseconds
+    let terminationTimer;
 
     if (self) {
         self.onmessage = function(e) {
@@ -4262,29 +4266,81 @@ function thread(self) {
                 data = e;
             }
 
-            if (data[0].cmd == "INIT") {
-                init(data[0]).then(function() {
-                    self.postMessage(data.result);
-                });
-            } else if (data[0].cmd == "TERMINATE") {
-                self.close();
-            } else {
-                const res = runTask(data);
-                self.postMessage(res);
+            try {
+                if (data[0].cmd === "INIT") {
+                    init(data[0]).then(function() {
+                        console.log("INIT DONE");
+                        self.postMessage({status: "initialized"});
+                    });
+                } else if (data[0].cmd === "TERMINATE") {
+                    terminate();
+                } else {
+                    let terminateAfterTask = false;
+                    if (data[data.length-1].cmd === "TERMINATE") {
+                        terminateAfterTask = true;
+                        data.pop();
+                        //terminationTimeout = 1;
+                    }
+                    const res = runTask(data);
+                    //self.postMessage(res);
+                    let transfers = [];
+                    for (let i=0; i<res.length; i++) {
+                        if (res[i] instanceof Uint8Array) {
+                            transfers.push(res[i].buffer);
+                            console.log("transfer buffer", res[i].byteLength);
+                        }
+                    }
+                    for (let i=0; i<data.length; i++) {
+                        if (data[i].cmd === "CALL") {
+                            console.log(data[i].fnName);
+                        }
+                    }
+                    //console.log("transfers", transfers);
+                    self.postMessage(res, transfers);
+                    //self.postMessage(res);
+                    if (terminateAfterTask) {
+                        //terminate();
+                    }
+                }
+            } catch (err) {
+                // Catch any error and send it back to main thread
+                self.postMessage({error: err.message});
             }
         };
+
+        // self.onerror = function (e) {
+        //     console.error("Worker caught an error:", e.message);
+        //     // Prevent the default behavior (which would terminate the worker)
+        //     return true;
+        // };
     }
 
     async function init(data) {
-        const code = new Uint8Array(data.code);
-        const wasmModule = await WebAssembly.compile(code);
+        let wasmModule;
+        if (data.code instanceof WebAssembly.Module) {
+            console.log("Using precompiled WebAssembly.Module");
+            wasmModule = data.code;
+        } else {
+            console.log("Compiling WebAssembly.Module");
+            const code = new Uint8Array(data.code);
+            wasmModule = await WebAssembly.compile(code);
+        }
         memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
+
+        console.log("Initialized thread with memory", memory.buffer.byteLength / 1024 / 1024, "MB");
 
         instance = await WebAssembly.instantiate(wasmModule, {
             env: {
                 "memory": memory
             }
         });
+
+        if (data.terminationTimeout) {
+            terminationTimeout = data.terminationTimeout;
+        }
+        console.log("init done!");
+
+        scheduleTermination();
     }
 
 
@@ -4299,6 +4355,7 @@ function thread(self) {
             let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;
             if (requiredPages>MAXMEM) requiredPages=MAXMEM;
             memory.grow(requiredPages-currentPages);
+            console.log("Growing memory to", memory.buffer.byteLength / 1024 / 1024, "MB");
         }
         return res;
     }
@@ -4310,8 +4367,9 @@ function thread(self) {
     }
 
     function getBuffer(pointer, length) {
-        const u8 = new Uint8Array(memory.buffer);
-        return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);
+        // const u8 = new Uint8Array(memory.buffer);
+        // return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);
+        return new Uint8Array(memory.buffer, pointer, length);
     }
 
     function setBuffer(pointer, buffer) {
@@ -4320,7 +4378,8 @@ function thread(self) {
     }
 
     function runTask(task) {
-        if (task[0].cmd == "INIT") {
+        clearTimeout(terminationTimer);
+        if (task[0].cmd === "INIT") {
             return init(task[0]);
         }
         const ctx = {
@@ -4362,9 +4421,31 @@ function thread(self) {
         }
         const u32b = new Uint32Array(memory.buffer, 0, 1);
         u32b[0] = oldAlloc;
+
+        //console.log(ctx.out);
+
         return ctx.out;
     }
 
+    function scheduleTermination() {
+        if (terminationTimeout>0) {
+            terminationTimer = setTimeout( () => {
+                console.log("Shutting down thread due to inactivity");
+                terminate();
+            }, terminationTimeout);
+        }
+    }
+
+    function terminate() {
+        clearTimeout(terminationTimer);
+        instance = null;
+        memory = null;
+        if (self) {
+            console.log("TERMINATE");
+            self.postMessage({status: "terminated"});
+            self.close();
+        }
+    }
 
     return runTask;
 }
@@ -4400,10 +4481,6 @@ class Deferred {
     }
 }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 let workerSource;
 
 const threadStr = `(${thread.toString()})(self)`;
@@ -4435,7 +4512,7 @@ async function buildThreadManager(wasm, singleThread) {
             "memory": tm.memory
         }
     });
-    
+
     if(process.browser && !globalThis?.Worker) {
         singleThread = true;
     }
@@ -4450,11 +4527,13 @@ async function buildThreadManager(wasm, singleThread) {
     tm.pG2zero = wasm.pG2zero;
     tm.pOneT = wasm.pOneT;
 
+    tm.code = wasm.code;
+    tm.wasmModule = wasmModule;
+
     //    tm.pTmp0 = tm.alloc(curve.G2.F.n8*3);
     //    tm.pTmp1 = tm.alloc(curve.G2.F.n8*3);
 
     if (singleThread) {
-        tm.code = wasm.code;
         tm.taskManager = thread();
         await tm.taskManager([{
             cmd: "INIT",
@@ -4466,6 +4545,8 @@ async function buildThreadManager(wasm, singleThread) {
         tm.workers = [];
         tm.pendingDeferreds = [];
         tm.working = [];
+        tm.initialized = [];
+        tm.initializing = [];
 
         let concurrency = 2;
         if (process.browser) {
@@ -4476,52 +4557,58 @@ async function buildThreadManager(wasm, singleThread) {
             concurrency = os.cpus().length;
         }
 
-        if(concurrency == 0){
+        if(concurrency === 0){
             concurrency = 2;
         }
+
+        //concurrency = 10; // For testing
 
         // Limit to 64 threads for memory reasons.
         if (concurrency>64) concurrency=64;
         tm.concurrency = concurrency;
 
-        for (let i = 0; i<concurrency; i++) {
+        // for (let i = 0; i<1; i++) {
+        //
+        //     tm.workers[i] = new Worker(workerSource);
+        //
+        //     tm.workers[i].addEventListener("message", getOnMsg(i));
+        //     //tm.workers[i].addEventListener("error", getOnError(i));
+        //
+        //     tm.working[i]=false;
+        // }
+        //
+        // const initPromises = [];
+        // for (let i=0; i<tm.workers.length;i++) {
+        //     const copyCode = wasm.code.slice();
+        //     initPromises.push(tm.postAction(i, [{
+        //         cmd: "INIT",
+        //         init: MEM_SIZE,
+        //         code: copyCode
+        //     }], [copyCode.buffer]));
+        // }
+        //
+        // // for (let i=0; i<tm.workers.length;i++) {
+        // //     //const copyCode = wasm.code.slice();
+        // //     initPromises.push(tm.postAction(i, [{
+        // //         cmd: "INIT",
+        // //         init: MEM_SIZE,
+        // //         code: wasmModule
+        // //     }]//, [copyCode.buffer]
+        // //     ));
+        // // }
+        //
+        // await Promise.all(initPromises);
 
-            tm.workers[i] = new Worker(workerSource);
-
-            tm.workers[i].addEventListener("message", getOnMsg(i));
-
-            tm.working[i]=false;
-        }
-
-        const initPromises = [];
-        for (let i=0; i<tm.workers.length;i++) {
-            const copyCode = wasm.code.slice();
-            initPromises.push(tm.postAction(i, [{
-                cmd: "INIT",
-                init: MEM_SIZE,
-                code: copyCode
-            }], [copyCode.buffer]));
-        }
-
-        await Promise.all(initPromises);
+        // const initPromises = [];
+        // for (let i = 0; i < tm.concurrency; i++) {
+        //     initPromises.push(tm.startWorker(i));
+        // }
+        // await Promise.all(initPromises);
 
     }
     return tm;
 
-    function getOnMsg(i) {
-        return function(e) {
-            let data;
-            if ((e)&&(e.data)) {
-                data = e.data;
-            } else {
-                data = e;
-            }
 
-            tm.working[i]=false;
-            tm.pendingDeferreds[i].resolve(data);
-            tm.processWorks();
-        };
-    }
 
 }
 
@@ -4531,34 +4618,130 @@ class ThreadManager {
         this.oldPFree = 0;
     }
 
+    getOnMsg(i) {
+        const tm = this;
+        return function(e) {
+            let data;
+            if ((e)&&(e.data)) {
+                data = e.data;
+            } else {
+                data = e;
+            }
+
+            // handle errors
+            if (data.error) {
+                tm.working[i]=false;
+                tm.pendingDeferreds[i].reject("Worker error: " + data.error);
+                if (tm.initializing[i]) {
+                    tm.initializing[i]=false;
+                    tm.workers[i]=null;
+                } else {
+                    tm.workers[i].postMessage([{cmd: "TERMINATE"}]);
+                }
+                throw new Error("Worker error: " + data.error);
+            }
+
+            // handle status messages
+            if (data.status) {
+                if (data.status === "initialized") {
+                    // Initialization successful message
+                    tm.initializing[i]=false;
+                    tm.initialized[i]=true;
+                } else if (data.status === "terminated") {
+                    // Termination successful message
+                    tm.initialized[i]=false;
+                    tm.initializing[i]=false;
+                    tm.workers[i]=null;
+                }
+            }
+
+            tm.working[i]=false;
+            tm.pendingDeferreds[i].resolve(data);
+            tm.processWorks();
+        };
+    }
+
+    getOnError(i) {
+        const tm = this;
+        return function(e) {
+            tm.working[i]=false;
+            tm.pendingDeferreds[i].reject(e.message);
+            throw new Error("Worker error: " + e.message);
+        };
+    }
+
+    startWorker(i){
+        this.workers[i] = new Worker(workerSource);
+
+        this.workers[i].addEventListener("message", this.getOnMsg(i));
+        //tm.workers[i].addEventListener("error", this.getOnError(i));
+
+        //this.working[i]=true;
+        this.initializing[i] = true;
+
+        // const copyCode = this.code.slice();
+        // await this.postAction(i, [{
+        //     cmd: "INIT",
+        //     init: MEM_SIZE,
+        //     code: copyCode
+        // }], [copyCode.buffer]);
+
+        //     //const copyCode = wasm.code.slice();
+        this.postAction(i, [{
+            cmd: "INIT",
+            init: MEM_SIZE,
+            code: this.wasmModule
+        }]).then(() => {
+            this.initialized[i] = true;
+        });
+    }
+
     startSyncOp() {
-        if (this.oldPFree != 0) throw new Error("Sync operation in progress");
+        if (this.oldPFree !== 0) throw new Error("Sync operation in progress");
         this.oldPFree = this.u32[0];
     }
 
     endSyncOp() {
-        if (this.oldPFree == 0) throw new Error("No sync operation in progress");
+        if (this.oldPFree === 0) throw new Error("No sync operation in progress");
         this.u32[0] = this.oldPFree;
         this.oldPFree = 0;
     }
 
-    postAction(workerId, e, transfers, _deferred) {
+    async postAction(workerId, e, transfers, _deferred) {
         if (this.working[workerId]) {
-            throw new Error("Posting a job t a working worker");
+            throw new Error("Posting a job to a working worker");
         }
         this.working[workerId] = true;
 
         this.pendingDeferreds[workerId] = _deferred ? _deferred : new Deferred();
-        this.workers[workerId].postMessage(e, transfers);
+        await this.workers[workerId].postMessage(e, transfers);
 
         return this.pendingDeferreds[workerId].promise;
     }
 
-    processWorks() {
-        for (let i=0; (i<this.workers.length)&&(this.actionQueue.length > 0); i++) {
-            if (this.working[i] == false) {
+    async processWorks() {
+        for (let i=0; (i<this.concurrency)&&(this.actionQueue.length > 0); i++) {
+            if (this.workers[i] && this.initialized[i] && !this.working[i]) {
                 const work = this.actionQueue.shift();
                 this.postAction(i, work.data, work.transfers, work.deferred);
+            }
+        }
+
+        // Initialize more workers if needed
+        if (this.actionQueue.length > 0) {
+            // Find a worker that is not initialized yet
+            let initializingCount = 0;
+            for (let i=0; i<this.concurrency; i++) {
+                initializingCount += this.initializing[i];
+                if (this.initialized[i]) continue;
+                if (this.initializing[i]) continue;
+                if (initializingCount >= this.actionQueue.length) break;
+
+                // Initialize this worker
+                console.log(`Worker ${i} not initialized yet. Initializing...`);
+                initializingCount++;
+                await this.startWorker(i);
+                //this.startWorker(i);
             }
         }
     }
@@ -4606,10 +4789,12 @@ class ThreadManager {
     }
 
     async terminate() {
+        console.log("terminate!!!");
         for (let i=0; i<this.workers.length; i++) {
             this.workers[i].postMessage([{cmd: "TERMINATE"}]);
         }
-        await sleep(200);
+        // Give some time to the workers to terminate
+        //await sleep(200);
     }
 
 }
@@ -4678,10 +4863,12 @@ function buildBatchApplyKey(curve, groupName) {
 
             const task = [];
 
+            const b = buff.slice(i*pointsPerChunk*sGin, i*pointsPerChunk*sGin + n*sGin);
+
             task.push({
                 cmd: "ALLOCSET",
                 var: 0,
-                buff: buff.slice(i*pointsPerChunk*sGin, i*pointsPerChunk*sGin + n*sGin)
+                buff: b
             });
             task.push({cmd: "ALLOCSET", var: 1, buff: t});
             task.push({cmd: "ALLOCSET", var: 2, buff: inc});
@@ -4710,7 +4897,7 @@ function buildBatchApplyKey(curve, groupName) {
             }
             task.push({cmd: "GET", out: 0, var: 3, len: n*sGout});
 
-            opPromises.push(tm.queueAction(task));
+            opPromises.push(tm.queueAction(task, [b.buffer]));
             t = Fr.mul(t, Fr.exp(inc, n));
         }
 
@@ -4794,7 +4981,7 @@ function buildPairing(curve) {
             task.push({cmd: "GET", out: 0, var: 4, len: curve.Gt.n8});
 
             opPromises.push(
-                tm.queueAction(task)
+                tm.queueAction(task, [g1Buff.buffer, g2Buff.buffer])
             );
         }
 
@@ -4863,6 +5050,8 @@ function buildPairing(curve) {
 
 }
 
+/* eslint-disable indent */
+
 const pTSizes = [
     1 ,  1,  1,  1,    2,  3,  4,  5,
     6 ,  7,  7,  8,    9, 10, 11, 12,
@@ -4873,6 +5062,7 @@ const pTSizes = [
 function buildMultiexp(curve, groupName) {
     const G = curve[groupName];
     const tm = G.tm;
+
     async function _multiExpChunk(buffBases, buffScalars, inType, logger, logText) {
         if ( ! (buffBases instanceof Uint8Array) ) {
             if (logger) logger.error(`${logText} _multiExpChunk buffBases is not Uint8Array`);
@@ -4886,20 +5076,20 @@ function buildMultiexp(curve, groupName) {
 
         let sGIn;
         let fnName;
-        if (groupName == "G1") {
-            if (inType == "affine") {
-                fnName = "g1m_multiexpAffine_chunk";
+        if (groupName === "G1") {
+            if (inType === "affine") {
+                fnName = "g1m_multiexpAffine";
                 sGIn = G.F.n8*2;
             } else {
-                fnName = "g1m_multiexp_chunk";
+                fnName = "g1m_multiexp";
                 sGIn = G.F.n8*3;
             }
-        } else if (groupName == "G2") {
-            if (inType == "affine") {
-                fnName = "g2m_multiexpAffine_chunk";
+        } else if (groupName === "G2") {
+            if (inType === "affine") {
+                fnName = "g2m_multiexpAffine";
                 sGIn = G.F.n8*2;
             } else {
-                fnName = "g2m_multiexp_chunk";
+                fnName = "g2m_multiexp";
                 sGIn = G.F.n8*3;
             }
         } else {
@@ -4907,36 +5097,33 @@ function buildMultiexp(curve, groupName) {
         }
         const nPoints = Math.floor(buffBases.byteLength / sGIn);
 
-        if (nPoints == 0) return G.zero;
+        if (nPoints === 0) return G.zero;
         const sScalar = Math.floor(buffScalars.byteLength / nPoints);
-        if( sScalar * nPoints != buffScalars.byteLength) {
+        if( sScalar * nPoints !== buffScalars.byteLength) {
             throw new Error("Scalar size does not match");
         }
 
         const bitChunkSize = pTSizes[log2(nPoints)];
-        const nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) +1;
 
         const opPromises = [];
-        for (let i=0; i<nChunks; i++) {
-            const task = [
-                {cmd: "ALLOCSET", var: 0, buff: buffBases},
-                {cmd: "ALLOCSET", var: 1, buff: buffScalars},
-                {cmd: "ALLOC", var: 2, len: G.F.n8*3},
-                {cmd: "CALL", fnName: fnName, params: [
-                    {var: 0},
-                    {var: 1},
-                    {val: sScalar},
-                    {val: nPoints},
-                    {val: i*bitChunkSize},
-                    {val: Math.min(sScalar*8 - i*bitChunkSize, bitChunkSize)},
-                    {var: 2}
-                ]},
-                {cmd: "GET", out: 0, var: 2, len: G.F.n8*3}
-            ];
-            opPromises.push(
-                G.tm.queueAction(task)
-            );
-        }
+
+        const task = [
+            {cmd: "ALLOCSET", var: 0, buff: buffBases},
+            {cmd: "ALLOCSET", var: 1, buff: buffScalars},
+            {cmd: "ALLOC", var: 2, len: G.F.n8*3},
+            {cmd: "CALL", fnName: fnName, params: [
+                {var: 0}, //pBases
+                {var: 1}, // pScalars
+                {val: sScalar}, // scalarSize
+                {val: nPoints}, // nPoints
+                {var: 2} // pr
+            ]},
+            {cmd: "GET", out: 0, var: 2, len: G.F.n8*3}
+        ];
+        opPromises.push(
+            // transfer ownership of the buffers to the worker thread
+            G.tm.queueAction(task, [buffBases.buffer, buffScalars.buffer])
+        );
 
         const result = await Promise.all(opPromises);
 
@@ -4953,17 +5140,17 @@ function buildMultiexp(curve, groupName) {
 
     async function _multiExp(buffBases, buffScalars, inType, logger, logText) {
         const MAX_CHUNK_SIZE = 1 << 22;
-        const MIN_CHUNK_SIZE = 1 << 10;
+        const MIN_CHUNK_SIZE = 1 << 12;
         let sGIn;
 
-        if (groupName == "G1") {
-            if (inType == "affine") {
+        if (groupName === "G1") {
+            if (inType === "affine") {
                 sGIn = G.F.n8*2;
             } else {
                 sGIn = G.F.n8*3;
             }
-        } else if (groupName == "G2") {
-            if (inType == "affine") {
+        } else if (groupName === "G2") {
+            if (inType === "affine") {
                 sGIn = G.F.n8*2;
             } else {
                 sGIn = G.F.n8*3;
@@ -4973,33 +5160,54 @@ function buildMultiexp(curve, groupName) {
         }
 
         const nPoints = Math.floor(buffBases.byteLength / sGIn);
-        if (nPoints == 0) return G.zero;
+        if (nPoints === 0) return G.zero;
         const sScalar = Math.floor(buffScalars.byteLength / nPoints);
-        if( sScalar * nPoints != buffScalars.byteLength) {
+        if( sScalar * nPoints !== buffScalars.byteLength) {
             throw new Error("Scalar size does not match");
         }
 
+        //console.log("buffBases.buffer instanceof SharedArrayBuffer", buffBases.buffer instanceof SharedArrayBuffer);
+        //console.log("buffScalars.buffer instanceof SharedArrayBuffer", buffScalars.buffer instanceof SharedArrayBuffer);
+
+        //let result = [];
+        const opPromises = [];
         const bitChunkSize = pTSizes[log2(nPoints)];
-        const nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) +1;
+        let nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) +1;
+
+        if (groupName === "G2") {
+            // G2 has bigger points, so we reduce chunk size to optimize memory usage
+            nChunks *= 2;
+        }
 
         let chunkSize;
-        chunkSize = Math.floor(nPoints / (tm.concurrency /nChunks));
+        //chunkSize = Math.floor(nPoints / tm.concurrency) + 1;
+
+        console.log("nChunks_0", nChunks);
+
+        // make nChunks multiple of tm.concurrency for optimal load balancing
+        nChunks = (Math.floor((nChunks-1) / tm.concurrency) + 1) * tm.concurrency;
+        chunkSize = Math.floor(nPoints / nChunks) + 1;
+
         if (chunkSize>MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
         if (chunkSize<MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
 
-        const opPromises = [];
+        console.log("nChunks", nChunks);
+        console.log("effective nChunks", nPoints / chunkSize);
+
         for (let i=0; i<nPoints; i += chunkSize) {
             if (logger) logger.debug(`Multiexp start: ${logText}: ${i}/${nPoints}`);
-            const n= Math.min(nPoints - i, chunkSize);
+            const n = Math.min(nPoints - i, chunkSize);
+
             const buffBasesChunk = buffBases.slice(i*sGIn, (i+n)*sGIn);
             const buffScalarsChunk = buffScalars.slice(i*sScalar, (i+n)*sScalar);
-            opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType, logger, logText).then( (r) => {
+
+            opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType, logger, logText).then((r) => {
                 if (logger) logger.debug(`Multiexp end: ${logText}: ${i}/${nPoints}`);
                 return r;
             }));
         }
 
-        const result = await Promise.all(opPromises);
+        let result = await Promise.all(opPromises);
 
         let res = G.zero;
         for (let i=result.length-1; i>=0; i--) {
@@ -5027,7 +5235,7 @@ function buildFFT(curve, groupName) {
         outType = outType || "affine";
         const MAX_BITS_THREAD = 14;
 
-        let sIn, sMid, sOut, fnIn2Mid, fnMid2Out, fnFFTMix, fnFFTJoin, fnFFTFinal;
+        let sIn, sMid, sOut, fnIn2Mid, fnMid2Out, fnFFTMix, fnFFTJoin, fnFFTFinal, fnReversePermutation;
         if (groupName == "G1") {
             if (inType == "affine") {
                 sIn = G.F.n8*2;
@@ -5041,6 +5249,7 @@ function buildFFT(curve, groupName) {
             }
             fnFFTJoin = "g1m_fftJoin";
             fnFFTMix = "g1m_fftMix";
+            fnReversePermutation = "g1m_reversePermutation";
 
             if (outType == "affine") {
                 sOut = G.F.n8*2;
@@ -5062,6 +5271,7 @@ function buildFFT(curve, groupName) {
             }
             fnFFTJoin = "g2m_fftJoin";
             fnFFTMix = "g2m_fftMix";
+            fnReversePermutation = "g2m_reversePermutation";
             if (outType == "affine") {
                 sOut = G.F.n8*2;
                 fnMid2Out = "g2m_batchToAffine";
@@ -5077,6 +5287,7 @@ function buildFFT(curve, groupName) {
             }
             fnFFTMix = "frm_fftMix";
             fnFFTJoin = "frm_fftJoin";
+            fnReversePermutation = "frm_fftReversePermutation";
         }
 
 
@@ -5088,8 +5299,12 @@ function buildFFT(curve, groupName) {
             buff = buff.slice(0, buff.byteLength);
         }
 
+        console.log("FFT input size:", buff.byteLength, " bytes");
+
         const nPoints = buff.byteLength / sIn;
         const bits = log2(nPoints);
+
+        console.log("FFT points:", nPoints, " bits:", bits);
 
         if  ((1 << bits) != nPoints) {
             throw new Error("fft must be multiple of 2" );
@@ -5118,7 +5333,19 @@ function buildFFT(curve, groupName) {
 
         let buffOut;
 
-        buffReverseBits(buff, sIn);
+        // TODO: optimize. Move to wasm?
+        //buffReverseBits(buff, sIn);
+
+        console.log("fnReversePermutation:", fnReversePermutation);
+
+        const task = [];
+        task.push({cmd: "ALLOC", var: 0, len: buff.byteLength});
+        task.push({cmd: "SET", var: 0, buff: buff});
+        task.push({cmd: "CALL", fnName: fnReversePermutation, params: [{var:0}, {val: bits}, {var: 0}]});
+        task.push({cmd: "GET", out:0, var: 0, len: buff.byteLength});
+        const res = await tm.queueAction(task, [buff.buffer]);
+
+        buff.set(res[0]);
 
         let chunks;
         let pointsInChunk = Math.min(1 << MAX_BITS_THREAD, nPoints);
@@ -5161,7 +5388,7 @@ function buildFFT(curve, groupName) {
             } else {
                 task.push({cmd: "GET", out:0, var: 0, len: sMid*pointsInChunk});
             }
-            promises.push(tm.queueAction(task).then( (r) => {
+            promises.push(tm.queueAction(task, [buffChunk.buffer]).then( (r) => {
                 if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix end: ${i}/${nChunks}`);
                 return r;
             }));
@@ -5218,7 +5445,7 @@ function buildFFT(curve, groupName) {
                         task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sMid});
                         task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sMid});
                     }
-                    opPromises.push(tm.queueAction(task).then( (r) => {
+                    opPromises.push(tm.queueAction(task, [chunks[o1].buffer, chunks[o2].buffer, first.buffer ]).then( (r) => {
                         if (logger) logger.debug(`${loggerTxt}: fft ${bits} join  ${i}/${bits}  ${j+1}/${nGroups} ${k}/${nChunksPerGroup/2}`);
                         return r;
                     }));
@@ -5417,7 +5644,7 @@ function buildFFT(curve, groupName) {
             task.push({cmd: "GET", out: 0, var: 0, len: n*sOut});
             task.push({cmd: "GET", out: 1, var: 1, len: n*sOut});
             opPromises.push(
-                tm.queueAction(task).then( (r) => {
+                tm.queueAction(task, [b1.buffer, b2.buffer, firstChunk.buffer]).then((r) => {
                     if (logger) logger.debug(`${loggerTxt}: fftJoinExt End: ${i}/${nPoints}`);
                     return r;
                 })
@@ -5565,7 +5792,7 @@ function buildFFT(curve, groupName) {
             }
             task.push({cmd: "GET", out: 0, var: 0, len: pointsPerChunk*sG});
             opPromises.push(
-                tm.queueAction(task)
+                tm.queueAction(task, [b.buffer])
             );
         }
 
@@ -5600,7 +5827,7 @@ function buildFFT(curve, groupName) {
                     ]});
                     task.push({cmd: "GET", out: 0, var: 0, len: pointsPerChunk*sG});
                     task.push({cmd: "GET", out: 1, var: 1, len: pointsPerChunk*sG});
-                    opPromises.push(tm.queueAction(task));
+                    opPromises.push(tm.queueAction(task, [chunks[o1].buffer, chunks[o2].buffer, first.buffer]));
                 }
             }
 
@@ -5679,7 +5906,7 @@ function buildFFT(curve, groupName) {
             task.push({cmd: "GET", out: 0, var: 0, len: pointsPerChunk*sG});
             task.push({cmd: "GET", out: 1, var: 1, len: pointsPerChunk*sG});
             opPromises.push(
-                tm.queueAction(task)
+                tm.queueAction(task, [b1.buffer, b2.buffer, firstChunk.buffer])
             );
 
         }
@@ -5755,7 +5982,7 @@ function buildFFT(curve, groupName) {
             ]});
             task.push({cmd: "GET", out: 0, var: 0, len: n*sGout});
             opPromises.push(
-                tm.queueAction(task)
+                tm.queueAction(task, [b.buffer])
             );
 
         }
@@ -5837,35 +6064,79 @@ async function buildEngine(params) {
     return curve;
 }
 
+//import { bn128_wasm_gzip as bn128wasmPrebuilt } from "wasmcurves";
+
 globalThis.curve_bn128 = null;
 
 async function buildBn128(singleThread, plugins) {
     if ((!singleThread) && (globalThis.curve_bn128)) return globalThis.curve_bn128;
 
-    const moduleBuilder = new wasmbuilder.ModuleBuilder();
-    moduleBuilder.setMemory(25);
-    wasmcurves.buildBn128(moduleBuilder);
+    let bn128wasm = {};
 
-    if (plugins) plugins(moduleBuilder);
+    if (!plugins) {
 
-    const bn128wasm = {};
+        console.log("Using prebuilt bn128 wasm");
 
-    bn128wasm.code = moduleBuilder.build();
-    bn128wasm.pq = moduleBuilder.modules.f1m.pq;
-    bn128wasm.pr = moduleBuilder.modules.frm.pq;
-    bn128wasm.pG1gen = moduleBuilder.modules.bn128.pG1gen;
-    bn128wasm.pG1zero = moduleBuilder.modules.bn128.pG1zero;
-    bn128wasm.pG1b = moduleBuilder.modules.bn128.pG1b;
-    bn128wasm.pG2gen = moduleBuilder.modules.bn128.pG2gen;
-    bn128wasm.pG2zero = moduleBuilder.modules.bn128.pG2zero;
-    bn128wasm.pG2b = moduleBuilder.modules.bn128.pG2b;
-    bn128wasm.pOneT = moduleBuilder.modules.bn128.pOneT;
-    bn128wasm.prePSize = moduleBuilder.modules.bn128.prePSize;
-    bn128wasm.preQSize = moduleBuilder.modules.bn128.preQSize;
-    bn128wasm.n8q = 32;
-    bn128wasm.n8r = 32;
-    bn128wasm.q = moduleBuilder.modules.bn128.q;
-    bn128wasm.r = moduleBuilder.modules.bn128.r;
+        //import { bn128_wasm_gzip as bn128wasmPrebuilt } from "wasmcurves";
+        const { bn128_wasm_gzip: bn128wasmPrebuilt } = await import('wasmcurves');
+        //const { default: bn128wasmPrebuilt } = await import("wasmcurves/build/bn128_wasm_gzip.js");
+
+        //console.log(bn128wasmPrebuilt);
+        bn128wasm.pq = bn128wasmPrebuilt.pq;
+        bn128wasm.pr = bn128wasmPrebuilt.pq;
+        bn128wasm.pG1gen = bn128wasmPrebuilt.pG1gen;
+        bn128wasm.pG1zero = bn128wasmPrebuilt.pG1zero;
+        bn128wasm.pG1b = bn128wasmPrebuilt.pG1b;
+        bn128wasm.pG2gen = bn128wasmPrebuilt.pG2gen;
+        bn128wasm.pG2zero = bn128wasmPrebuilt.pG2zero;
+        bn128wasm.pG2b = bn128wasmPrebuilt.pG2b;
+        bn128wasm.pOneT = bn128wasmPrebuilt.pOneT;
+        bn128wasm.prePSize = bn128wasmPrebuilt.prePSize;
+        bn128wasm.preQSize = bn128wasmPrebuilt.preQSize;
+        bn128wasm.n8q = 32;
+        bn128wasm.n8r = 32;
+        bn128wasm.q = bn128wasmPrebuilt.q;
+        bn128wasm.r = bn128wasmPrebuilt.r;
+
+        const compressedCode = new Uint8Array(Buffer.from(bn128wasmPrebuilt.gzipCode, "base64"));
+        const blob = new Blob([compressedCode]);
+
+        const ds = new DecompressionStream("gzip");
+        const decompressedStream = blob.stream().pipeThrough(ds);
+
+        bn128wasm.code = await new Response(decompressedStream).bytes();
+    } else {
+
+        //import { ModuleBuilder } from "wasmbuilder";
+        //import { buildBn128 as buildBn128wasm } from "wasmcurves";
+        const { ModuleBuilder } = await import('wasmbuilder');
+        const { buildBn128: buildBn128wasm } = await import('wasmcurves');
+
+        const moduleBuilder = new ModuleBuilder();
+        moduleBuilder.setMemory(25);
+        buildBn128wasm(moduleBuilder);
+
+        if (plugins) plugins(moduleBuilder);
+
+        bn128wasm.code = moduleBuilder.build();
+        bn128wasm.pq = moduleBuilder.modules.f1m.pq;
+        bn128wasm.pr = moduleBuilder.modules.frm.pq;
+        bn128wasm.pG1gen = moduleBuilder.modules.bn128.pG1gen;
+        bn128wasm.pG1zero = moduleBuilder.modules.bn128.pG1zero;
+        bn128wasm.pG1b = moduleBuilder.modules.bn128.pG1b;
+        bn128wasm.pG2gen = moduleBuilder.modules.bn128.pG2gen;
+        bn128wasm.pG2zero = moduleBuilder.modules.bn128.pG2zero;
+        bn128wasm.pG2b = moduleBuilder.modules.bn128.pG2b;
+        bn128wasm.pOneT = moduleBuilder.modules.bn128.pOneT;
+        bn128wasm.prePSize = moduleBuilder.modules.bn128.prePSize;
+        bn128wasm.preQSize = moduleBuilder.modules.bn128.preQSize;
+        bn128wasm.n8q = 32;
+        bn128wasm.n8r = 32;
+        bn128wasm.q = moduleBuilder.modules.bn128.q;
+        bn128wasm.r = moduleBuilder.modules.bn128.r;
+    }
+
+    //console.log("bn128wasm:", bn128wasm);
 
     const params = {
         name: "bn128",
@@ -5898,9 +6169,12 @@ globalThis.curve_bls12381 = null;
 async function buildBls12381(singleThread, plugins) {
     if ((!singleThread) && (globalThis.curve_bls12381)) return globalThis.curve_bls12381;
 
-    const moduleBuilder = new wasmbuilder.ModuleBuilder();
+    const { ModuleBuilder } = await import('wasmbuilder');
+    const { buildBls12381: buildBls12381wasm } = await import('wasmcurves');
+
+    const moduleBuilder = new ModuleBuilder();
     moduleBuilder.setMemory(25);
-    wasmcurves.buildBls12381(moduleBuilder);
+    buildBls12381wasm(moduleBuilder);
 
     if (plugins) plugins(moduleBuilder);
 

@@ -4,6 +4,8 @@ export default function thread(self) {
     const MAXMEM = 32767;
     let instance;
     let memory;
+    let terminationTimeout = 1000; // milliseconds
+    let terminationTimer;
 
     if (self) {
         self.onmessage = function(e) {
@@ -14,29 +16,83 @@ export default function thread(self) {
                 data = e;
             }
 
-            if (data[0].cmd == "INIT") {
-                init(data[0]).then(function() {
-                    self.postMessage(data.result);
-                });
-            } else if (data[0].cmd == "TERMINATE") {
-                self.close();
-            } else {
-                const res = runTask(data);
-                self.postMessage(res);
+            try {
+                if (data[0].cmd === "INIT") {
+                    init(data[0]).then(function() {
+                        console.log("INIT DONE");
+                        self.postMessage({status: "initialized"});
+                    });
+                } else if (data[0].cmd === "TERMINATE") {
+                    terminate();
+                } else {
+                    let terminateAfterTask = false;
+                    if (data[data.length-1].cmd === "TERMINATE") {
+                        terminateAfterTask = true;
+                        data.pop();
+                        //terminationTimeout = 1;
+                    }
+                    const res = runTask(data);
+                    //self.postMessage(res);
+                    let transfers = [];
+                    for (let i=0; i<res.length; i++) {
+                        if (res[i] instanceof Uint8Array) {
+                            transfers.push(res[i].buffer);
+                            //console.log("transfer buffer", res[i].byteLength);
+                        }
+                    }
+                    for (let i=0; i<data.length; i++) {
+                        if (data[i].cmd === "CALL") {
+                            //console.log(data[i].fnName);
+                        }
+                    }
+                    //console.log("transfers", transfers);
+                    self.postMessage(res, transfers);
+                    //self.postMessage(res);
+                    if (terminateAfterTask) {
+                        //self.postMessage({status: "graceful_termination"});
+                        terminate();
+                    }
+                }
+            } catch (err) {
+                // Catch any error and send it back to main thread
+                self.postMessage({error: err.message});
             }
+            scheduleTermination();
         };
+
+        // self.onerror = function (e) {
+        //     console.error("Worker caught an error:", e.message);
+        //     // Prevent the default behavior (which would terminate the worker)
+        //     return true;
+        // };
     }
 
     async function init(data) {
-        const code = new Uint8Array(data.code);
-        const wasmModule = await WebAssembly.compile(code);
+        let wasmModule;
+        if (data.code instanceof WebAssembly.Module) {
+            console.log("Using precompiled WebAssembly.Module");
+            wasmModule = data.code;
+        } else {
+            console.log("Compiling WebAssembly.Module");
+            const code = new Uint8Array(data.code);
+            wasmModule = await WebAssembly.compile(code);
+        }
         memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
+
+        console.log("Initialized thread with memory", memory.buffer.byteLength / 1024 / 1024, "MB");
 
         instance = await WebAssembly.instantiate(wasmModule, {
             env: {
                 "memory": memory
             }
         });
+
+        if (data.terminationTimeout) {
+            terminationTimeout = data.terminationTimeout;
+        }
+        console.log("init done!");
+
+        scheduleTermination();
     }
 
 
@@ -51,6 +107,7 @@ export default function thread(self) {
             let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;
             if (requiredPages>MAXMEM) requiredPages=MAXMEM;
             memory.grow(requiredPages-currentPages);
+            console.log("Growing memory to", memory.buffer.byteLength / 1024 / 1024, "MB");
         }
         return res;
     }
@@ -62,8 +119,9 @@ export default function thread(self) {
     }
 
     function getBuffer(pointer, length) {
-        const u8 = new Uint8Array(memory.buffer);
-        return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);
+        // const u8 = new Uint8Array(memory.buffer);
+        // return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);
+        return new Uint8Array(memory.buffer, pointer, length);
     }
 
     function setBuffer(pointer, buffer) {
@@ -72,7 +130,8 @@ export default function thread(self) {
     }
 
     function runTask(task) {
-        if (task[0].cmd == "INIT") {
+        clearTimeout(terminationTimer);
+        if (task[0].cmd === "INIT") {
             return init(task[0]);
         }
         const ctx = {
@@ -84,9 +143,17 @@ export default function thread(self) {
         for (let i=0; i<task.length; i++) {
             switch (task[i].cmd) {
             case "ALLOCSET":
+                if (task[i].len / 1024 / 1024 > 25) {
+                    console.log("tasks", task);
+                    console.trace();
+                }
                 ctx.vars[task[i].var] = allocBuffer(task[i].buff);
                 break;
             case "ALLOC":
+                if (task[i].len / 1024 / 1024 > 25) {
+                    console.log("tasks", task);
+                    console.trace();
+                }
                 ctx.vars[task[i].var] = alloc(task[i].len);
                 break;
             case "SET":
@@ -114,9 +181,32 @@ export default function thread(self) {
         }
         const u32b = new Uint32Array(memory.buffer, 0, 1);
         u32b[0] = oldAlloc;
+
+        //console.log(ctx.out);
+
         return ctx.out;
     }
 
+    function scheduleTermination() {
+        clearTimeout(terminationTimer);
+        if (terminationTimeout>0) {
+            terminationTimer = setTimeout( () => {
+                console.log("Shutting down thread due to inactivity");
+                terminate();
+            }, terminationTimeout);
+        }
+    }
+
+    function terminate() {
+        clearTimeout(terminationTimer);
+        //instance = null;
+        //memory = null;
+        if (self) {
+            console.log("TERMINATE");
+            self.postMessage({status: "terminated"});
+            self.close();
+        }
+    }
 
     return runTask;
 }

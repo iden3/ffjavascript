@@ -282,7 +282,7 @@ export default class WasmField1 {
                 {cmd: "GET", out: 0, var: 1, len:sOut * n},
             ];
             opPromises.push(
-                this.tm.queueAction(task)
+                this.tm.queueAction(task, [buffChunk.buffer])
             );
         }
 
