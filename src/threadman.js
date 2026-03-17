@@ -42,7 +42,7 @@ let workerSource;
 
 const threadStr = `(${thread.toString()})(self)`;
 if(process.browser) {
-    if(globalThis?.Blob) {
+    if(globalThis?.Blob && URL?.createObjectURL) {
         const threadBytes= new TextEncoder().encode(threadStr);
         const workerBlob = new Blob([threadBytes], { type: "application/javascript" }) ;
         workerSource = URL.createObjectURL(workerBlob);
