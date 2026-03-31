@@ -1,6 +1,7 @@
 import os from "os";
 import { fileURLToPath } from "url";
-import { resolve } from "path";
+
+/* global __BUILD_WORKER_PATH__ */
 
 export function getConcurrency() {
     return os.cpus().length || 2;
@@ -16,10 +17,12 @@ export function supportsWorkers() {
 }
 
 export function getWorkerSource() {
-    if (typeof __dirname !== "undefined") {
-        // CJS bundle (build/main.cjs): __dirname is inlined at build time to the
-        // build/ directory, so the compiled worker lives right alongside it.
-        return resolve(__dirname, "threadman_worker.cjs");
+    // __BUILD_WORKER_PATH__ is a string literal injected only during `vite build`
+    // (via the inject-worker-path plugin with apply:"build").  It is never set by
+    // vitest, which also injects a __dirname shim that would otherwise confuse the
+    // old __dirname-based detection.
+    if (typeof __BUILD_WORKER_PATH__ !== "undefined") {
+        return __BUILD_WORKER_PATH__;
     }
     // Node ESM (main.js / vitest): use the ESM source worker directly.
     // Node.js loads it as ESM because the package declares "type": "module".

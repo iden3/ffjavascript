@@ -234,9 +234,6 @@ export default defineConfig(({ mode }) => {
                 formats: ["cjs"],
                 fileName: (_format, alias) => `${alias}.cjs`,
             },
-            define: {
-                __dirname: JSON.stringify(path.dirname(fileURLToPath(import.meta.url)))
-            },
             minify: false,
             outDir: "build",
             // Only wipe the node build outputs (main.cjs, threadman_*.cjs),\n            // not build/browser/ which is produced by the separate build:browser step.
@@ -251,7 +248,26 @@ export default defineConfig(({ mode }) => {
                 },
             },
         },
-        plugins: [cleanNodeBuildPlugin],
+        plugins: [
+            cleanNodeBuildPlugin,
+            // Inject __dirname only during `vite build` (not vitest).
+            // Without `apply: 'build'`, Vite would also define __dirname during
+            // vitest runs, causing getWorkerSource() to return the wrong .cjs
+            // path instead of the ESM source worker.
+            {
+                name: "inject-worker-path",
+                apply: "build",
+                config: () => ({
+                    define: {
+                        // Injected only during `vite build` (apply:"build" excludes vitest).
+                        // Points to the compiled worker that lands next to main.cjs in build/.
+                        __BUILD_WORKER_PATH__: JSON.stringify(
+                            resolve(path.dirname(fileURLToPath(import.meta.url)), "build", "threadman_worker.cjs")
+                        ),
+                    },
+                }),
+            },
+        ],
         test: {
             projects: [
                 // ------------------------------------------------------------
