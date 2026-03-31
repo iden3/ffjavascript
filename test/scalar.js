@@ -1,10 +1,9 @@
-import * as chai from "chai";
 import * as Scalar from "../src/scalar.js";
+import { describe, it, assert } from "vitest";
 
-const assert = chai.assert;
 
-describe("Basic scalar convertions", () => {
-    it("Should convertion Native", () => {
+describe("Basic scalar conversions", () => {
+    it("Should conversion Native", () => {
         assert(Scalar.eq(Scalar.e("0x12"), 18));
         assert(Scalar.eq(Scalar.e("0x12", 16), 18));
         assert(Scalar.eq(Scalar.e("12", 16), 18));

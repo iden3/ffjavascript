@@ -1,4 +1,3 @@
-/* global BigInt */
 import * as Scalar from "./scalar.js";
 import * as futils from "./futils.js";
 import buildSqrt from "./fsqrt.js";

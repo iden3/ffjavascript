@@ -17,21 +17,20 @@
     zksnark JavaScript library. If not, see <https://www.gnu.org/licenses/>.
 */
 
-import * as chai from "chai";
 
 import * as Scalar from "../src/scalar.js";
 import buildBn128 from "../src/bn128.js";
 import F1Field from "../src/f1field.js";
+import { describe, it, beforeAll, afterAll, assert } from "vitest";
 
-const assert = chai.assert;
 
 
 describe("Sqrt testing", () => {
     let bn128;
-    before( async() => {
+    beforeAll(async () => {
         bn128 = await buildBn128();
     });
-    after( async() => {
+    afterAll(async () => {
         bn128.terminate();
     });
 
@@ -54,11 +53,11 @@ describe("Sqrt testing", () => {
     it("Should compute sqrt p%4 = 1", () => {
         const F = new F1Field(bn128.r);
         const e = Scalar.div(Scalar.pow(F.p, F.m), 2);
-        for (let i=0; i<100; i++) {
+        for (let i = 0; i < 100; i++) {
             const x2 = F.random();
             const x = F.sqrt(x2);
-            if (x==null) {
-                assert(F.eq( F.pow(x2, e), F.negone));
+            if (x == null) {
+                assert(F.eq(F.pow(x2, e), F.negone));
             } else {
                 assert(F.eq(F.square(x), x2));
             }
@@ -67,11 +66,11 @@ describe("Sqrt testing", () => {
     it("Should compute sqrt p%4 = 3", () => {
         const F = new F1Field(bn128.q);
         const e = Scalar.div(Scalar.pow(F.p, F.m), 2);
-        for (let i=0; i<100; i++) {
+        for (let i = 0; i < 100; i++) {
             const x2 = F.random();
             const x = F.sqrt(x2);
-            if (x==null) {
-                assert(F.eq( F.pow(x2, e), F.negone));
+            if (x == null) {
+                assert(F.eq(F.pow(x2, e), F.negone));
             } else {
                 assert(F.eq(F.square(x), x2));
             }
@@ -80,10 +79,10 @@ describe("Sqrt testing", () => {
     it("Should compute sqrt m=2 p%4 = 3", () => {
         const F = bn128.F2;
         const e = Scalar.div(Scalar.exp(F.F.p, F.m), 2);
-        for (let i=0; i<100; i++) {
+        for (let i = 0; i < 100; i++) {
             const x2 = F.random();
             if (!F.isSquare(x2)) {
-                assert(F.eq( F.exp(x2, e), F.negone));
+                assert(F.eq(F.exp(x2, e), F.negone));
             } else {
                 const x = F.sqrt(x2);
                 assert(F.eq(F.square(x), x2));

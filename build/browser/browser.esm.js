@@ -1,14 +1,42 @@
-console.log("node cjs");
-Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
-const require_threadman_thread = require("./threadman_thread.cjs");
-let workerpool = require("workerpool");
-workerpool = require_threadman_thread.__toESM(workerpool);
-let os = require("os");
-os = require_threadman_thread.__toESM(os);
-let url = require("url");
-let path = require("path");
+console.log("browser esm");
+//#region \0rolldown/runtime.js
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __commonJSMin = (cb, mod) => () => (mod || cb((mod = { exports: {} }).exports, mod), mod.exports);
+var __exportAll = (all, no_symbols) => {
+	let target = {};
+	for (var name in all) __defProp(target, name, {
+		get: all[name],
+		enumerable: true
+	});
+	if (!no_symbols) __defProp(target, Symbol.toStringTag, { value: "Module" });
+	return target;
+};
+var __copyProps = (to, from, except, desc) => {
+	if (from && typeof from === "object" || typeof from === "function") for (var keys = __getOwnPropNames(from), i = 0, n = keys.length, key; i < n; i++) {
+		key = keys[i];
+		if (!__hasOwnProp.call(to, key) && key !== except) __defProp(to, key, {
+			get: ((k) => from[k]).bind(null, key),
+			enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
+		});
+	}
+	return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", {
+	value: mod,
+	enumerable: true
+}) : target, mod));
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, { get: (a, b) => (typeof require !== "undefined" ? require : a)[b] }) : x)(function(x) {
+	if (typeof require !== "undefined") return require.apply(this, arguments);
+	throw Error("Calling `require` for \"" + x + "\" in an environment that doesn't expose the `require` function. See https://rolldown.rs/in-depth/bundling-cjs#require-external-modules for more details.");
+});
+//#endregion
 //#region src/scalar.js
-var scalar_exports = /* @__PURE__ */ require_threadman_thread.__exportAll({
+var scalar_exports = /* @__PURE__ */ __exportAll({
 	abs: () => abs,
 	add: () => add,
 	band: () => band,
@@ -853,11 +881,16 @@ var ChaCha = class {
 	}
 };
 //#endregion
+//#region __vite-browser-external
+var require___vite_browser_external = /* @__PURE__ */ __commonJSMin(((exports, module) => {
+	module.exports = {};
+}));
+//#endregion
 //#region src/random.js
 function getRandomBytes(n) {
 	let array = new Uint8Array(n);
 	if (typeof globalThis.crypto !== "undefined") globalThis.crypto.getRandomValues(array);
-	else if (typeof require === "function") require("crypto").randomFillSync(array);
+	else if (typeof __require === "function") require___vite_browser_external().randomFillSync(array);
 	else throw new Error("No cryptographically secure random source available.");
 	return array;
 }
@@ -1853,7 +1886,7 @@ var EC = class {
 };
 //#endregion
 //#region src/utils.js
-var utils_exports = /* @__PURE__ */ require_threadman_thread.__exportAll({
+var utils_exports = /* @__PURE__ */ __exportAll({
 	array2buffer: () => array2buffer,
 	beBuff2int: () => beBuff2int,
 	beInt2Buff: () => beInt2Buff,
@@ -2937,19 +2970,1987 @@ var WasmCurve = class {
 	}
 };
 //#endregion
-//#region src/threadman.node.js
+//#region src/threadman_thread.js
+/**
+* Worker task logic used by workerpool.
+*
+* This module exports a plain function that encapsulates all wasm helper
+* utilities (alloc, runTask, init).  The function can be:
+*   1. Called directly in single-thread mode (returns the runTask function).
+*   2. Stringified and embedded into a workerpool worker script for
+*      multi-thread mode (browser or Node.js).
+*
+* The exported function accepts no arguments when used as factory and returns
+* the runTask function, which can then be registered with workerpool.worker().
+*/
+function thread() {
+	const MAXMEM = 32767;
+	let instance;
+	let memory;
+	let _u32 = null;
+	let _u8 = null;
+	function getU32() {
+		if (_u32 === null || _u32.buffer !== memory.buffer) _u32 = new Uint32Array(memory.buffer, 0, 1);
+		return _u32;
+	}
+	function getU8() {
+		if (_u8 === null || _u8.buffer !== memory.buffer) _u8 = new Uint8Array(memory.buffer);
+		return _u8;
+	}
+	async function init(data) {
+		let wasmModule;
+		if (data.code instanceof WebAssembly.Module) wasmModule = data.code;
+		else wasmModule = await WebAssembly.compile(new Uint8Array(data.code));
+		memory = new WebAssembly.Memory({
+			initial: data.init,
+			maximum: MAXMEM
+		});
+		_u32 = null;
+		_u8 = null;
+		instance = await WebAssembly.instantiate(wasmModule, { env: { memory } });
+	}
+	function alloc(length) {
+		const u32 = getU32();
+		u32[0] = u32[0] + 3 & -4;
+		const res = u32[0];
+		u32[0] += length;
+		if (u32[0] + length > memory.buffer.byteLength) {
+			const currentPages = memory.buffer.byteLength / 65536;
+			let requiredPages = Math.floor((u32[0] + length) / 65536) + 1;
+			if (requiredPages > MAXMEM) requiredPages = MAXMEM;
+			memory.grow(requiredPages - currentPages);
+		}
+		return res;
+	}
+	function allocBuffer(buffer) {
+		const src = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+		const p = alloc(src.byteLength);
+		getU8().set(src, p);
+		return p;
+	}
+	function getBuffer(pointer, length) {
+		return new Uint8Array(memory.buffer, pointer, length);
+	}
+	function setBuffer(pointer, buffer) {
+		getU8().set(buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer), pointer);
+	}
+	function runTask(task) {
+		if (task[0].cmd === "INIT") return init(task[0]);
+		const vars = [];
+		const out = [];
+		const oldAlloc = getU32()[0];
+		for (let i = 0; i < task.length; i++) {
+			const step = task[i];
+			switch (step.cmd) {
+				case "ALLOCSET":
+					vars[step.var] = allocBuffer(step.buff);
+					break;
+				case "ALLOC":
+					vars[step.var] = alloc(step.len);
+					break;
+				case "SET":
+					setBuffer(vars[step.var], step.buff);
+					break;
+				case "CALL": {
+					const paramDefs = step.params;
+					const params = new Array(paramDefs.length);
+					for (let j = 0; j < paramDefs.length; j++) {
+						const p = paramDefs[j];
+						params[j] = p.var !== void 0 ? vars[p.var] + (p.offset || 0) : p.val;
+					}
+					instance.exports[step.fnName](...params);
+					break;
+				}
+				case "GET":
+					out[step.out] = getBuffer(vars[step.var], step.len).slice();
+					break;
+				default: throw new Error("Invalid cmd: " + step.cmd);
+			}
+		}
+		getU32()[0] = oldAlloc;
+		return out;
+	}
+	return runTask;
+}
+//#endregion
+//#region \0virtual:worker-script
+var import_workerpool = /* @__PURE__ */ __toESM((/* @__PURE__ */ __commonJSMin(((exports, module) => {
+	/**
+	* workerpool.js
+	* https://github.com/josdejong/workerpool
+	*
+	* Offload tasks to a pool of workers on node.js and in the browser.
+	*
+	* @version 10.0.1
+	* @date    2025-11-19
+	*
+	* @license
+	* Copyright (C) 2014-2022 Jos de Jong <wjosdejong@gmail.com>
+	*
+	* Licensed under the Apache License, Version 2.0 (the "License"); you may not
+	* use this file except in compliance with the License. You may obtain a copy
+	* of the License at
+	*
+	* http://www.apache.org/licenses/LICENSE-2.0
+	*
+	* Unless required by applicable law or agreed to in writing, software
+	* distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+	* WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+	* License for the specific language governing permissions and limitations under
+	* the License.
+	*/
+	(function(global, factory) {
+		typeof exports === "object" && typeof module !== "undefined" ? factory(exports) : typeof define === "function" && define.amd ? define(["exports"], factory) : (global = typeof globalThis !== "undefined" ? globalThis : global || self, factory(global.workerpool = {}));
+	})(exports, (function(exports$2) {
+		"use strict";
+		var src = {};
+		var environment$1 = { exports: {} };
+		(function(module$1) {
+			var isNode = function isNode(nodeProcess) {
+				return typeof nodeProcess !== "undefined" && nodeProcess.versions != null && nodeProcess.versions.node != null && nodeProcess + "" === "[object process]";
+			};
+			module$1.exports.isNode = isNode;
+			module$1.exports.platform = typeof process !== "undefined" && isNode(process) ? "node" : "browser";
+			var worker_threads = module$1.exports.platform === "node" && require___vite_browser_external();
+			module$1.exports.isMainThread = module$1.exports.platform === "node" ? (!worker_threads || worker_threads.isMainThread) && !process.connected : typeof Window !== "undefined";
+			module$1.exports.cpus = module$1.exports.platform === "browser" ? self.navigator.hardwareConcurrency : require___vite_browser_external().cpus().length;
+		})(environment$1);
+		var environmentExports = environment$1.exports;
+		function _arrayLikeToArray(r, a) {
+			(null == a || a > r.length) && (a = r.length);
+			for (var e = 0, n = Array(a); e < a; e++) n[e] = r[e];
+			return n;
+		}
+		function _assertThisInitialized(e) {
+			if (void 0 === e) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
+			return e;
+		}
+		function _callSuper(t, o, e) {
+			return o = _getPrototypeOf(o), _possibleConstructorReturn(t, _isNativeReflectConstruct() ? Reflect.construct(o, e || [], _getPrototypeOf(t).constructor) : o.apply(t, e));
+		}
+		function _classCallCheck(a, n) {
+			if (!(a instanceof n)) throw new TypeError("Cannot call a class as a function");
+		}
+		function _construct(t, e, r) {
+			if (_isNativeReflectConstruct()) return Reflect.construct.apply(null, arguments);
+			var o = [null];
+			o.push.apply(o, e);
+			var p = new (t.bind.apply(t, o))();
+			return r && _setPrototypeOf(p, r.prototype), p;
+		}
+		function _createClass(e, r, t) {
+			return Object.defineProperty(e, "prototype", { writable: false }), e;
+		}
+		function _createForOfIteratorHelper(r, e) {
+			var t = "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"];
+			if (!t) {
+				if (Array.isArray(r) || (t = _unsupportedIterableToArray(r)) || e) {
+					t && (r = t);
+					var n = 0, F = function() {};
+					return {
+						s: F,
+						n: function() {
+							return n >= r.length ? { done: true } : {
+								done: false,
+								value: r[n++]
+							};
+						},
+						e: function(r) {
+							throw r;
+						},
+						f: F
+					};
+				}
+				throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+			}
+			var o, a = true, u = false;
+			return {
+				s: function() {
+					t = t.call(r);
+				},
+				n: function() {
+					var r = t.next();
+					return a = r.done, r;
+				},
+				e: function(r) {
+					u = true, o = r;
+				},
+				f: function() {
+					try {
+						a || null == t.return || t.return();
+					} finally {
+						if (u) throw o;
+					}
+				}
+			};
+		}
+		function _defineProperty(e, r, t) {
+			return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, {
+				value: t,
+				enumerable: true,
+				configurable: true,
+				writable: true
+			}) : e[r] = t, e;
+		}
+		function _getPrototypeOf(t) {
+			return _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(t) {
+				return t.__proto__ || Object.getPrototypeOf(t);
+			}, _getPrototypeOf(t);
+		}
+		function _inherits(t, e) {
+			if ("function" != typeof e && null !== e) throw new TypeError("Super expression must either be null or a function");
+			t.prototype = Object.create(e && e.prototype, { constructor: {
+				value: t,
+				writable: true,
+				configurable: true
+			} }), Object.defineProperty(t, "prototype", { writable: false }), e && _setPrototypeOf(t, e);
+		}
+		function _isNativeFunction(t) {
+			try {
+				return -1 !== Function.toString.call(t).indexOf("[native code]");
+			} catch (n) {
+				return "function" == typeof t;
+			}
+		}
+		function _isNativeReflectConstruct() {
+			try {
+				var t = !Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {}));
+			} catch (t) {}
+			return (_isNativeReflectConstruct = function() {
+				return !!t;
+			})();
+		}
+		function ownKeys(e, r) {
+			var t = Object.keys(e);
+			if (Object.getOwnPropertySymbols) {
+				var o = Object.getOwnPropertySymbols(e);
+				r && (o = o.filter(function(r) {
+					return Object.getOwnPropertyDescriptor(e, r).enumerable;
+				})), t.push.apply(t, o);
+			}
+			return t;
+		}
+		function _objectSpread2(e) {
+			for (var r = 1; r < arguments.length; r++) {
+				var t = null != arguments[r] ? arguments[r] : {};
+				r % 2 ? ownKeys(Object(t), true).forEach(function(r) {
+					_defineProperty(e, r, t[r]);
+				}) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function(r) {
+					Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r));
+				});
+			}
+			return e;
+		}
+		function _possibleConstructorReturn(t, e) {
+			if (e && ("object" == typeof e || "function" == typeof e)) return e;
+			if (void 0 !== e) throw new TypeError("Derived constructors may only return object or undefined");
+			return _assertThisInitialized(t);
+		}
+		function _setPrototypeOf(t, e) {
+			return _setPrototypeOf = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(t, e) {
+				return t.__proto__ = e, t;
+			}, _setPrototypeOf(t, e);
+		}
+		function _toPrimitive(t, r) {
+			if ("object" != typeof t || !t) return t;
+			var e = t[Symbol.toPrimitive];
+			if (void 0 !== e) {
+				var i = e.call(t, r);
+				if ("object" != typeof i) return i;
+				throw new TypeError("@@toPrimitive must return a primitive value.");
+			}
+			return ("string" === r ? String : Number)(t);
+		}
+		function _toPropertyKey(t) {
+			var i = _toPrimitive(t, "string");
+			return "symbol" == typeof i ? i : i + "";
+		}
+		function _typeof(o) {
+			"@babel/helpers - typeof";
+			return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o) {
+				return typeof o;
+			} : function(o) {
+				return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
+			}, _typeof(o);
+		}
+		function _unsupportedIterableToArray(r, a) {
+			if (r) {
+				if ("string" == typeof r) return _arrayLikeToArray(r, a);
+				var t = {}.toString.call(r).slice(8, -1);
+				return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray(r, a) : void 0;
+			}
+		}
+		function _wrapNativeSuper(t) {
+			var r = "function" == typeof Map ? /* @__PURE__ */ new Map() : void 0;
+			return _wrapNativeSuper = function(t) {
+				if (null === t || !_isNativeFunction(t)) return t;
+				if ("function" != typeof t) throw new TypeError("Super expression must either be null or a function");
+				if (void 0 !== r) {
+					if (r.has(t)) return r.get(t);
+					r.set(t, Wrapper);
+				}
+				function Wrapper() {
+					return _construct(t, arguments, _getPrototypeOf(this).constructor);
+				}
+				return Wrapper.prototype = Object.create(t.prototype, { constructor: {
+					value: Wrapper,
+					enumerable: false,
+					writable: true,
+					configurable: true
+				} }), _setPrototypeOf(Wrapper, t);
+			}, _wrapNativeSuper(t);
+		}
+		var WorkerHandler$1 = { exports: {} };
+		var _Promise$1 = {};
+		var hasRequired_Promise;
+		function require_Promise() {
+			if (hasRequired_Promise) return _Promise$1;
+			hasRequired_Promise = 1;
+			/**
+			* Promise
+			*
+			* Inspired by https://gist.github.com/RubaXa/8501359 from RubaXa <trash@rubaxa.org>
+			* @template T
+			* @template [E=Error]
+			* @param {Function} handler   Called as handler(resolve: Function, reject: Function)
+			* @param {Promise} [parent]   Parent promise for propagation of cancel and timeout
+			*/
+			function Promise(handler, parent) {
+				var me = this;
+				if (!(this instanceof Promise)) throw new SyntaxError("Constructor must be called with the new operator");
+				if (typeof handler !== "function") throw new SyntaxError("Function parameter handler(resolve, reject) missing");
+				var _onSuccess = [];
+				var _onFail = [];
+				/**
+				* @readonly
+				*/
+				this.resolved = false;
+				/**
+				* @readonly
+				*/
+				this.rejected = false;
+				/**
+				* @readonly
+				*/
+				this.pending = true;
+				/**
+				* @readonly
+				*/
+				this[Symbol.toStringTag] = "Promise";
+				/**
+				* Process onSuccess and onFail callbacks: add them to the queue.
+				* Once the promise is resolved, the function _promise is replace.
+				* @param {Function} onSuccess
+				* @param {Function} onFail
+				* @private
+				*/
+				var _process = function _process(onSuccess, onFail) {
+					_onSuccess.push(onSuccess);
+					_onFail.push(onFail);
+				};
+				/**
+				* Add an onSuccess callback and optionally an onFail callback to the Promise
+				* @template TT
+				* @template [TE=never]
+				* @param {(r: T) => TT | PromiseLike<TT>} onSuccess
+				* @param {(r: E) => TE | PromiseLike<TE>} [onFail]
+				* @returns {Promise<TT | TE, any>} promise
+				*/
+				this.then = function(onSuccess, onFail) {
+					return new Promise(function(resolve, reject) {
+						var s = onSuccess ? _then(onSuccess, resolve, reject) : resolve;
+						var f = onFail ? _then(onFail, resolve, reject) : reject;
+						_process(s, f);
+					}, me);
+				};
+				/**
+				* Resolve the promise
+				* @param {*} result
+				* @type {Function}
+				*/
+				var _resolve2 = function _resolve(result) {
+					me.resolved = true;
+					me.rejected = false;
+					me.pending = false;
+					_onSuccess.forEach(function(fn) {
+						fn(result);
+					});
+					_process = function _process(onSuccess, onFail) {
+						onSuccess(result);
+					};
+					_resolve2 = _reject2 = function _reject() {};
+					return me;
+				};
+				/**
+				* Reject the promise
+				* @param {Error} error
+				* @type {Function}
+				*/
+				var _reject2 = function _reject(error) {
+					me.resolved = false;
+					me.rejected = true;
+					me.pending = false;
+					_onFail.forEach(function(fn) {
+						fn(error);
+					});
+					_process = function _process(onSuccess, onFail) {
+						onFail(error);
+					};
+					_resolve2 = _reject2 = function _reject() {};
+					return me;
+				};
+				/**
+				* Cancel the promise. This will reject the promise with a CancellationError
+				* @returns {this} self
+				*/
+				this.cancel = function() {
+					if (parent) parent.cancel();
+					else _reject2(new CancellationError());
+					return me;
+				};
+				/**
+				* Set a timeout for the promise. If the promise is not resolved within
+				* the time, the promise will be cancelled and a TimeoutError is thrown.
+				* If the promise is resolved in time, the timeout is removed.
+				* @param {number} delay     Delay in milliseconds
+				* @returns {this} self
+				*/
+				this.timeout = function(delay) {
+					if (parent) parent.timeout(delay);
+					else {
+						var timer = setTimeout(function() {
+							_reject2(new TimeoutError("Promise timed out after " + delay + " ms"));
+						}, delay);
+						me.always(function() {
+							clearTimeout(timer);
+						});
+					}
+					return me;
+				};
+				handler(function(result) {
+					_resolve2(result);
+				}, function(error) {
+					_reject2(error);
+				});
+			}
+			/**
+			* Execute given callback, then call resolve/reject based on the returned result
+			* @param {Function} callback
+			* @param {Function} resolve
+			* @param {Function} reject
+			* @returns {Function}
+			* @private
+			*/
+			function _then(callback, resolve, reject) {
+				return function(result) {
+					try {
+						var res = callback(result);
+						if (res && typeof res.then === "function" && typeof res["catch"] === "function") res.then(resolve, reject);
+						else resolve(res);
+					} catch (error) {
+						reject(error);
+					}
+				};
+			}
+			/**
+			* Add an onFail callback to the Promise
+			* @template TT
+			* @param {(error: E) => TT | PromiseLike<TT>} onFail
+			* @returns {Promise<T | TT>} promise
+			*/
+			Promise.prototype["catch"] = function(onFail) {
+				return this.then(null, onFail);
+			};
+			/**
+			* Execute given callback when the promise either resolves or rejects.
+			* @template TT
+			* @param {() => Promise<TT>} fn
+			* @returns {Promise<TT>} promise
+			*/
+			Promise.prototype.always = function(fn) {
+				return this.then(fn, fn);
+			};
+			/**
+			* Execute given callback when the promise either resolves or rejects.
+			* Same semantics as Node's Promise.finally()
+			* @param {Function | null | undefined} [fn]
+			* @returns {Promise} promise
+			*/
+			Promise.prototype.finally = function(fn) {
+				var me = this;
+				var final = function final() {
+					return new Promise(function(resolve) {
+						return resolve();
+					}).then(fn).then(function() {
+						return me;
+					});
+				};
+				return this.then(final, final);
+			};
+			/**
+			* Create a promise which resolves when all provided promises are resolved,
+			* and fails when any of the promises resolves.
+			* @param {Promise[]} promises
+			* @returns {Promise<any[], any>} promise
+			*/
+			Promise.all = function(promises) {
+				return new Promise(function(resolve, reject) {
+					var remaining = promises.length, results = [];
+					if (remaining) promises.forEach(function(p, i) {
+						p.then(function(result) {
+							results[i] = result;
+							remaining--;
+							if (remaining == 0) resolve(results);
+						}, function(error) {
+							remaining = 0;
+							reject(error);
+						});
+					});
+					else resolve(results);
+				});
+			};
+			/**
+			* Create a promise resolver
+			* @returns {import('./types.js').Resolver} resolver
+			*/
+			Promise.defer = function() {
+				var resolver = {};
+				resolver.promise = new Promise(function(resolve, reject) {
+					resolver.resolve = resolve;
+					resolver.reject = reject;
+				});
+				return resolver;
+			};
+			/**
+			* Create a cancellation error
+			* @param {String} [message]
+			* @extends Error
+			*/
+			function CancellationError(message) {
+				this.message = message || "promise cancelled";
+				this.stack = (/* @__PURE__ */ new Error()).stack;
+			}
+			CancellationError.prototype = /* @__PURE__ */ new Error();
+			CancellationError.prototype.constructor = Error;
+			CancellationError.prototype.name = "CancellationError";
+			Promise.CancellationError = CancellationError;
+			/**
+			* Create a timeout error
+			* @param {String} [message]
+			* @extends Error
+			*/
+			function TimeoutError(message) {
+				this.message = message || "timeout exceeded";
+				this.stack = (/* @__PURE__ */ new Error()).stack;
+			}
+			TimeoutError.prototype = /* @__PURE__ */ new Error();
+			TimeoutError.prototype.constructor = Error;
+			TimeoutError.prototype.name = "TimeoutError";
+			Promise.TimeoutError = TimeoutError;
+			_Promise$1.Promise = Promise;
+			return _Promise$1;
+		}
+		var validateOptions$1 = {};
+		/**
+		* Validate that the object only contains known option names
+		* - Throws an error when unknown options are detected
+		* - Throws an error when some of the allowed options are attached
+		* @param {Object | undefined} options
+		* @param {string[]} allowedOptionNames
+		* @param {string} objectName
+		* @retrun {Object} Returns the original options
+		*/
+		validateOptions$1.validateOptions = function validateOptions(options, allowedOptionNames, objectName) {
+			if (!options) return;
+			var optionNames = options ? Object.keys(options) : [];
+			var unknownOptionName = optionNames.find(function(optionName) {
+				return !allowedOptionNames.includes(optionName);
+			});
+			if (unknownOptionName) throw new Error("Object \"" + objectName + "\" contains an unknown option \"" + unknownOptionName + "\"");
+			var illegalOptionName = allowedOptionNames.find(function(allowedOptionName) {
+				return Object.prototype[allowedOptionName] && !optionNames.includes(allowedOptionName);
+			});
+			if (illegalOptionName) throw new Error("Object \"" + objectName + "\" contains an inherited option \"" + illegalOptionName + "\" which is not defined in the object itself but in its prototype. Only plain objects are allowed. Please remove the option from the prototype or override it with a value \"undefined\".");
+			return options;
+		};
+		validateOptions$1.workerOptsNames = [
+			"credentials",
+			"name",
+			"type"
+		];
+		validateOptions$1.forkOptsNames = [
+			"cwd",
+			"detached",
+			"env",
+			"execPath",
+			"execArgv",
+			"gid",
+			"serialization",
+			"signal",
+			"killSignal",
+			"silent",
+			"stdio",
+			"uid",
+			"windowsVerbatimArguments",
+			"timeout"
+		];
+		validateOptions$1.workerThreadOptsNames = [
+			"argv",
+			"env",
+			"eval",
+			"execArgv",
+			"stdin",
+			"stdout",
+			"stderr",
+			"workerData",
+			"trackUnmanagedFds",
+			"transferList",
+			"resourceLimits",
+			"name"
+		];
+		/**
+		* embeddedWorker.js contains an embedded version of worker.js.
+		* This file is automatically generated,
+		* changes made in this file will be overwritten.
+		*/
+		var embeddedWorker;
+		var hasRequiredEmbeddedWorker;
+		function requireEmbeddedWorker() {
+			if (hasRequiredEmbeddedWorker) return embeddedWorker;
+			hasRequiredEmbeddedWorker = 1;
+			embeddedWorker = "!function(e,n){\"object\"==typeof exports&&\"undefined\"!=typeof module?module.exports=n():\"function\"==typeof define&&define.amd?define(n):(e=\"undefined\"!=typeof globalThis?globalThis:e||self).worker=n()}(this,(function(){\"use strict\";function e(n){return e=\"function\"==typeof Symbol&&\"symbol\"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&\"function\"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?\"symbol\":typeof e},e(n)}function n(e){return e&&e.__esModule&&Object.prototype.hasOwnProperty.call(e,\"default\")?e.default:e}var t={};var r=function(e,n){this.message=e,this.transfer=n},o={};function i(e,n){var t=this;if(!(this instanceof i))throw new SyntaxError(\"Constructor must be called with the new operator\");if(\"function\"!=typeof e)throw new SyntaxError(\"Function parameter handler(resolve, reject) missing\");var r=[],o=[];this.resolved=!1,this.rejected=!1,this.pending=!0,this[Symbol.toStringTag]=\"Promise\";var a=function(e,n){r.push(e),o.push(n)};this.then=function(e,n){return new i((function(t,r){var o=e?s(e,t,r):t,i=n?s(n,t,r):r;a(o,i)}),t)};var f=function(e){return t.resolved=!0,t.rejected=!1,t.pending=!1,r.forEach((function(n){n(e)})),a=function(n,t){n(e)},f=d=function(){},t},d=function(e){return t.resolved=!1,t.rejected=!0,t.pending=!1,o.forEach((function(n){n(e)})),a=function(n,t){t(e)},f=d=function(){},t};this.cancel=function(){return n?n.cancel():d(new u),t},this.timeout=function(e){if(n)n.timeout(e);else{var r=setTimeout((function(){d(new c(\"Promise timed out after \"+e+\" ms\"))}),e);t.always((function(){clearTimeout(r)}))}return t},e((function(e){f(e)}),(function(e){d(e)}))}function s(e,n,t){return function(r){try{var o=e(r);o&&\"function\"==typeof o.then&&\"function\"==typeof o.catch?o.then(n,t):n(o)}catch(e){t(e)}}}function u(e){this.message=e||\"promise cancelled\",this.stack=(new Error).stack}function c(e){this.message=e||\"timeout exceeded\",this.stack=(new Error).stack}return i.prototype.catch=function(e){return this.then(null,e)},i.prototype.always=function(e){return this.then(e,e)},i.prototype.finally=function(e){var n=this,t=function(){return new i((function(e){return e()})).then(e).then((function(){return n}))};return this.then(t,t)},i.all=function(e){return new i((function(n,t){var r=e.length,o=[];r?e.forEach((function(e,i){e.then((function(e){o[i]=e,0==--r&&n(o)}),(function(e){r=0,t(e)}))})):n(o)}))},i.defer=function(){var e={};return e.promise=new i((function(n,t){e.resolve=n,e.reject=t})),e},u.prototype=new Error,u.prototype.constructor=Error,u.prototype.name=\"CancellationError\",i.CancellationError=u,c.prototype=new Error,c.prototype.constructor=Error,c.prototype.name=\"TimeoutError\",i.TimeoutError=c,o.Promise=i,function(n){var t=r,i=o.Promise,s=\"__workerpool-cleanup__\",u={exit:function(){}},c={addAbortListener:function(e){u.abortListeners.push(e)},emit:u.emit};if(\"undefined\"!=typeof self&&\"function\"==typeof postMessage&&\"function\"==typeof addEventListener)u.on=function(e,n){addEventListener(e,(function(e){n(e.data)}))},u.send=function(e,n){n?postMessage(e,n):postMessage(e)};else{if(\"undefined\"==typeof process)throw new Error(\"Script must be executed as a worker\");var a;try{a=require(\"worker_threads\")}catch(n){if(\"object\"!==e(n)||null===n||\"MODULE_NOT_FOUND\"!==n.code)throw n}if(a&&null!==a.parentPort){var f=a.parentPort;u.send=f.postMessage.bind(f),u.on=f.on.bind(f),u.exit=process.exit.bind(process)}else u.on=process.on.bind(process),u.send=function(e){process.send(e)},u.on(\"disconnect\",(function(){process.exit(1)})),u.exit=process.exit.bind(process)}function d(e){return e&&e.toJSON?JSON.parse(JSON.stringify(e)):JSON.parse(JSON.stringify(e,Object.getOwnPropertyNames(e)))}function l(e){return e&&\"function\"==typeof e.then&&\"function\"==typeof e.catch}u.methods={},u.methods.run=function(e,n){var t=new Function(\"return (\"+e+\").apply(this, arguments);\");return t.worker=c,t.apply(t,n)},u.methods.methods=function(){return Object.keys(u.methods)},u.terminationHandler=void 0,u.abortListenerTimeout=1e3,u.abortListeners=[],u.terminateAndExit=function(e){var n=function(){u.exit(e)};if(!u.terminationHandler)return n();var t=u.terminationHandler(e);return l(t)?(t.then(n,n),t):(n(),new i((function(e,n){n(new Error(\"Worker terminating\"))})))},u.cleanup=function(e){if(!u.abortListeners.length)return u.send({id:e,method:s,error:d(new Error(\"Worker terminating\"))}),new i((function(e){e()}));var n,t=u.abortListeners.map((function(e){return e()})),r=new i((function(e,t){n=setTimeout((function(){t(new Error(\"Timeout occured waiting for abort handler, killing worker\"))}),u.abortListenerTimeout)})),o=i.all(t).then((function(){clearTimeout(n),u.abortListeners.length||(u.abortListeners=[])}),(function(){clearTimeout(n),u.exit()}));return new i((function(e,n){o.then(e,n),r.then(e,n)})).then((function(){u.send({id:e,method:s,error:null})}),(function(n){u.send({id:e,method:s,error:n?d(n):null})}))};var p=null;u.on(\"message\",(function(e){if(\"__workerpool-terminate__\"===e)return u.terminateAndExit(0);if(e.method===s)return u.cleanup(e.id);try{var n=u.methods[e.method];if(!n)throw new Error('Unknown method \"'+e.method+'\"');p=e.id;var r=n.apply(n,e.params);l(r)?r.then((function(n){n instanceof t?u.send({id:e.id,result:n.message,error:null},n.transfer):u.send({id:e.id,result:n,error:null}),p=null})).catch((function(n){u.send({id:e.id,result:null,error:d(n)}),p=null})):(r instanceof t?u.send({id:e.id,result:r.message,error:null},r.transfer):u.send({id:e.id,result:r,error:null}),p=null)}catch(n){u.send({id:e.id,result:null,error:d(n)})}})),u.register=function(e,n){if(e)for(var t in e)e.hasOwnProperty(t)&&(u.methods[t]=e[t],u.methods[t].worker=c);n&&(u.terminationHandler=n.onTerminate,u.abortListenerTimeout=n.abortListenerTimeout||1e3),u.send(\"ready\")},u.emit=function(e){if(p){if(e instanceof t)return void u.send({id:p,isEvent:!0,payload:e.message},e.transfer);u.send({id:p,isEvent:!0,payload:e})}},n.add=u.register,n.emit=u.emit}(t),n(t)}));\n\n";
+			return embeddedWorker;
+		}
+		var Promise$2 = require_Promise().Promise;
+		var environment = environmentExports;
+		var validateOptions = validateOptions$1.validateOptions, forkOptsNames = validateOptions$1.forkOptsNames, workerThreadOptsNames = validateOptions$1.workerThreadOptsNames, workerOptsNames = validateOptions$1.workerOptsNames;
+		/**
+		* Special message sent by parent which causes a child process worker to terminate itself.
+		* Not a "message object"; this string is the entire message.
+		*/
+		var TERMINATE_METHOD_ID = "__workerpool-terminate__";
+		/**
+		* Special message by parent which causes a child process worker to perform cleaup
+		* steps before determining if the child process worker should be terminated.
+		*/
+		var CLEANUP_METHOD_ID = "__workerpool-cleanup__";
+		function ensureWorkerThreads() {
+			var WorkerThreads = tryRequireWorkerThreads();
+			if (!WorkerThreads) throw new Error("WorkerPool: workerType = 'thread' is not supported, Node >= 11.7.0 required");
+			return WorkerThreads;
+		}
+		function ensureWebWorker() {
+			if (typeof Worker !== "function" && ((typeof Worker === "undefined" ? "undefined" : _typeof(Worker)) !== "object" || typeof Worker.prototype.constructor !== "function")) throw new Error("WorkerPool: Web Workers not supported");
+		}
+		function tryRequireWorkerThreads() {
+			try {
+				return require___vite_browser_external();
+			} catch (error) {
+				if (_typeof(error) === "object" && error !== null && error.code === "MODULE_NOT_FOUND") return null;
+				else throw error;
+			}
+		}
+		function getDefaultWorker() {
+			if (environment.platform === "browser") {
+				if (typeof Blob === "undefined") throw new Error("Blob not supported by the browser");
+				if (!window.URL || typeof window.URL.createObjectURL !== "function") throw new Error("URL.createObjectURL not supported by the browser");
+				var blob = new Blob([requireEmbeddedWorker()], { type: "text/javascript" });
+				return window.URL.createObjectURL(blob);
+			} else return __dirname + "/worker.js";
+		}
+		function setupWorker(script, options) {
+			if (options.workerType === "web") {
+				ensureWebWorker();
+				return setupBrowserWorker(script, options.workerOpts, Worker);
+			} else if (options.workerType === "thread") {
+				WorkerThreads = ensureWorkerThreads();
+				return setupWorkerThreadWorker(script, WorkerThreads, options);
+			} else if (options.workerType === "process" || !options.workerType) return setupProcessWorker(script, resolveForkOptions(options), require___vite_browser_external());
+			else if (environment.platform === "browser") {
+				ensureWebWorker();
+				return setupBrowserWorker(script, options.workerOpts, Worker);
+			} else {
+				var WorkerThreads = tryRequireWorkerThreads();
+				if (WorkerThreads) return setupWorkerThreadWorker(script, WorkerThreads, options);
+				else return setupProcessWorker(script, resolveForkOptions(options), require___vite_browser_external());
+			}
+		}
+		function setupBrowserWorker(script, workerOpts, Worker) {
+			validateOptions(workerOpts, workerOptsNames, "workerOpts");
+			var worker = new Worker(script, workerOpts);
+			worker.isBrowserWorker = true;
+			worker.on = function(event, callback) {
+				this.addEventListener(event, function(message) {
+					callback(message.data);
+				});
+			};
+			worker.send = function(message, transfer) {
+				this.postMessage(message, transfer);
+			};
+			return worker;
+		}
+		function setupWorkerThreadWorker(script, WorkerThreads, options) {
+			var _options$emitStdStrea, _options$emitStdStrea2;
+			validateOptions(options === null || options === void 0 ? void 0 : options.workerThreadOpts, workerThreadOptsNames, "workerThreadOpts");
+			var worker = new WorkerThreads.Worker(script, _objectSpread2({
+				stdout: (_options$emitStdStrea = options === null || options === void 0 ? void 0 : options.emitStdStreams) !== null && _options$emitStdStrea !== void 0 ? _options$emitStdStrea : false,
+				stderr: (_options$emitStdStrea2 = options === null || options === void 0 ? void 0 : options.emitStdStreams) !== null && _options$emitStdStrea2 !== void 0 ? _options$emitStdStrea2 : false
+			}, options === null || options === void 0 ? void 0 : options.workerThreadOpts));
+			worker.isWorkerThread = true;
+			worker.send = function(message, transfer) {
+				this.postMessage(message, transfer);
+			};
+			worker.kill = function() {
+				this.terminate();
+				return true;
+			};
+			worker.disconnect = function() {
+				this.terminate();
+			};
+			if (options !== null && options !== void 0 && options.emitStdStreams) {
+				worker.stdout.on("data", function(data) {
+					return worker.emit("stdout", data);
+				});
+				worker.stderr.on("data", function(data) {
+					return worker.emit("stderr", data);
+				});
+			}
+			return worker;
+		}
+		function setupProcessWorker(script, options, child_process) {
+			validateOptions(options.forkOpts, forkOptsNames, "forkOpts");
+			var worker = child_process.fork(script, options.forkArgs, options.forkOpts);
+			var send = worker.send;
+			worker.send = function(message) {
+				return send.call(worker, message);
+			};
+			if (options.emitStdStreams) {
+				worker.stdout.on("data", function(data) {
+					return worker.emit("stdout", data);
+				});
+				worker.stderr.on("data", function(data) {
+					return worker.emit("stderr", data);
+				});
+			}
+			worker.isChildProcess = true;
+			return worker;
+		}
+		function resolveForkOptions(opts) {
+			opts = opts || {};
+			var processExecArgv = process.execArgv.join(" ");
+			var inspectorActive = processExecArgv.indexOf("--inspect") !== -1;
+			var debugBrk = processExecArgv.indexOf("--debug-brk") !== -1;
+			var execArgv = [];
+			if (inspectorActive) {
+				execArgv.push("--inspect=" + opts.debugPort);
+				if (debugBrk) execArgv.push("--debug-brk");
+			}
+			process.execArgv.forEach(function(arg) {
+				if (arg.indexOf("--max-old-space-size") > -1) execArgv.push(arg);
+			});
+			return Object.assign({}, opts, {
+				forkArgs: opts.forkArgs,
+				forkOpts: Object.assign({}, opts.forkOpts, {
+					execArgv: (opts.forkOpts && opts.forkOpts.execArgv || []).concat(execArgv),
+					stdio: opts.emitStdStreams ? "pipe" : void 0
+				})
+			});
+		}
+		/**
+		* Converts a serialized error to Error
+		* @param {Object} obj Error that has been serialized and parsed to object
+		* @return {Error} The equivalent Error.
+		*/
+		function objectToError(obj) {
+			var temp = /* @__PURE__ */ new Error("");
+			var props = Object.keys(obj);
+			for (var i = 0; i < props.length; i++) temp[props[i]] = obj[props[i]];
+			return temp;
+		}
+		function handleEmittedStdPayload(handler, payload) {
+			Object.values(handler.processing).forEach(function(task) {
+				var _task$options;
+				return task === null || task === void 0 || (_task$options = task.options) === null || _task$options === void 0 ? void 0 : _task$options.on(payload);
+			});
+			Object.values(handler.tracking).forEach(function(task) {
+				var _task$options2;
+				return task === null || task === void 0 || (_task$options2 = task.options) === null || _task$options2 === void 0 ? void 0 : _task$options2.on(payload);
+			});
+		}
+		/**
+		* A WorkerHandler controls a single worker. This worker can be a child process
+		* on node.js or a WebWorker in a browser environment.
+		* @param {String} [script] If no script is provided, a default worker with a
+		*                          function run will be created.
+		* @param {import('./types.js').WorkerPoolOptions} [_options] See docs
+		* @constructor
+		*/
+		function WorkerHandler(script, _options) {
+			var me = this;
+			var options = _options || {};
+			this.script = script || getDefaultWorker();
+			this.worker = setupWorker(this.script, options);
+			this.debugPort = options.debugPort;
+			this.forkOpts = options.forkOpts;
+			this.forkArgs = options.forkArgs;
+			this.workerOpts = options.workerOpts;
+			this.workerThreadOpts = options.workerThreadOpts;
+			this.workerTerminateTimeout = options.workerTerminateTimeout;
+			if (!script) this.worker.ready = true;
+			this.requestQueue = [];
+			this.worker.on("stdout", function(data) {
+				handleEmittedStdPayload(me, { "stdout": data.toString() });
+			});
+			this.worker.on("stderr", function(data) {
+				handleEmittedStdPayload(me, { "stderr": data.toString() });
+			});
+			this.worker.on("message", function(response) {
+				if (me.terminated) return;
+				if (typeof response === "string" && response === "ready") {
+					me.worker.ready = true;
+					dispatchQueuedRequests();
+				} else {
+					var id = response.id;
+					var task = me.processing[id];
+					if (task !== void 0) if (response.isEvent) {
+						if (task.options && typeof task.options.on === "function") task.options.on(response.payload);
+					} else {
+						delete me.processing[id];
+						if (me.terminating === true) me.terminate();
+						if (response.error) task.resolver.reject(objectToError(response.error));
+						else task.resolver.resolve(response.result);
+					}
+					else {
+						var task = me.tracking[id];
+						if (task !== void 0) {
+							if (response.isEvent) {
+								if (task.options && typeof task.options.on === "function") task.options.on(response.payload);
+							}
+						}
+					}
+					if (response.method === CLEANUP_METHOD_ID) {
+						var trackedTask = me.tracking[response.id];
+						if (trackedTask !== void 0) if (response.error) {
+							clearTimeout(trackedTask.timeoutId);
+							trackedTask.resolver.reject(objectToError(response.error));
+						} else {
+							me.tracking && clearTimeout(trackedTask.timeoutId);
+							trackedTask.resolver.reject(new WrappedTimeoutError(trackedTask.error));
+						}
+						delete me.tracking[id];
+					}
+				}
+			});
+			function onError(error) {
+				me.terminated = true;
+				for (var id in me.processing) if (me.processing[id] !== void 0) me.processing[id].resolver.reject(error);
+				me.processing = Object.create(null);
+			}
+			function dispatchQueuedRequests() {
+				var _iterator = _createForOfIteratorHelper(me.requestQueue.splice(0)), _step;
+				try {
+					for (_iterator.s(); !(_step = _iterator.n()).done;) {
+						var request = _step.value;
+						me.worker.send(request.message, request.transfer);
+					}
+				} catch (err) {
+					_iterator.e(err);
+				} finally {
+					_iterator.f();
+				}
+			}
+			var worker = this.worker;
+			this.worker.on("error", function(error) {
+				onError(new TerminateError$1("Workerpool Worker error: " + (error && error.message ? error.message : String(error || "Unknown worker error")), error));
+			});
+			this.worker.on("exit", function(exitCode, signalCode) {
+				var message = "Workerpool Worker terminated Unexpectedly\n";
+				message += "    exitCode: `" + exitCode + "`\n";
+				message += "    signalCode: `" + signalCode + "`\n";
+				message += "    workerpool.script: `" + me.script + "`\n";
+				message += "    spawnArgs: `" + worker.spawnargs + "`\n";
+				message += "    spawnfile: `" + worker.spawnfile + "`\n";
+				message += "    stdout: `" + worker.stdout + "`\n";
+				message += "    stderr: `" + worker.stderr + "`\n";
+				onError(new TerminateError$1(message));
+			});
+			this.processing = Object.create(null);
+			this.tracking = Object.create(null);
+			this.terminating = false;
+			this.terminated = false;
+			this.cleaning = false;
+			this.terminationHandler = null;
+			this.lastId = 0;
+		}
+		/**
+		* Get a list with methods available on the worker.
+		* @return {Promise.<String[], Error>} methods
+		*/
+		WorkerHandler.prototype.methods = function() {
+			return this.exec("methods");
+		};
+		/**
+		* Execute a method with given parameters on the worker
+		* @param {String} method
+		* @param {Array} [params]
+		* @param {{resolve: Function, reject: Function}} [resolver]
+		* @param {import('./types.js').ExecOptions}  [options]
+		* @return {Promise.<*, Error>} result
+		*/
+		WorkerHandler.prototype.exec = function(method, params, resolver, options) {
+			if (!resolver) resolver = Promise$2.defer();
+			var id = ++this.lastId;
+			this.processing[id] = {
+				id,
+				resolver,
+				options
+			};
+			var request = {
+				message: {
+					id,
+					method,
+					params
+				},
+				transfer: options && options.transfer
+			};
+			if (this.terminated) resolver.reject(new TerminateError$1("Worker is terminated"));
+			else if (this.worker.ready) this.worker.send(request.message, request.transfer);
+			else this.requestQueue.push(request);
+			var me = this;
+			return resolver.promise.catch(function(error) {
+				if (error instanceof Promise$2.CancellationError || error instanceof Promise$2.TimeoutError) {
+					me.tracking[id] = {
+						id,
+						resolver: Promise$2.defer(),
+						options,
+						error
+					};
+					delete me.processing[id];
+					me.tracking[id].resolver.promise = me.tracking[id].resolver.promise.catch(function(err) {
+						delete me.tracking[id];
+						if (err instanceof WrappedTimeoutError) throw err.error;
+						return me.terminateAndNotify(true).then(function() {
+							throw err;
+						}, function(err) {
+							throw err;
+						});
+					});
+					me.worker.send({
+						id,
+						method: CLEANUP_METHOD_ID
+					});
+					/**
+					* Sets a timeout to reject the cleanup operation if the message sent to the worker
+					* does not receive a response. see worker.tryCleanup for worker cleanup operations.
+					* Here we use the workerTerminateTimeout as the worker will be terminated if the timeout does invoke.
+					* 
+					* We need this timeout in either case of a Timeout or Cancellation Error as if
+					* the worker does not send a message we still need to give a window of time for a response.
+					* 
+					* The workerTermniateTimeout is used here if this promise is rejected the worker cleanup
+					* operations will occure.
+					*/
+					me.tracking[id].timeoutId = setTimeout(function() {
+						me.tracking[id].resolver.reject(error);
+					}, me.workerTerminateTimeout);
+					return me.tracking[id].resolver.promise;
+				} else throw error;
+			});
+		};
+		/**
+		* Test whether the worker is processing any tasks or cleaning up before termination.
+		* @return {boolean} Returns true if the worker is busy
+		*/
+		WorkerHandler.prototype.busy = function() {
+			return this.cleaning || Object.keys(this.processing).length > 0;
+		};
+		/**
+		* Terminate the worker.
+		* @param {boolean} [force=false]   If false (default), the worker is terminated
+		*                                  after finishing all tasks currently in
+		*                                  progress. If true, the worker will be
+		*                                  terminated immediately.
+		* @param {function} [callback=null] If provided, will be called when process terminates.
+		*/
+		WorkerHandler.prototype.terminate = function(force, callback) {
+			var me = this;
+			if (force) {
+				for (var id in this.processing) if (this.processing[id] !== void 0) this.processing[id].resolver.reject(/* @__PURE__ */ new Error("Worker terminated"));
+				this.processing = Object.create(null);
+			}
+			for (var _i = 0, _Object$values = Object.values(me.tracking); _i < _Object$values.length; _i++) {
+				var task = _Object$values[_i];
+				clearTimeout(task.timeoutId);
+				task.resolver.reject(/* @__PURE__ */ new Error("Worker Terminating"));
+			}
+			me.tracking = Object.create(null);
+			if (typeof callback === "function") this.terminationHandler = callback;
+			if (!this.busy()) {
+				var cleanup = function cleanup(err) {
+					me.terminated = true;
+					me.cleaning = false;
+					if (me.worker != null && me.worker.removeAllListeners) me.worker.removeAllListeners("message");
+					me.worker = null;
+					me.terminating = false;
+					if (me.terminationHandler) me.terminationHandler(err, me);
+					else if (err) throw err;
+				};
+				if (this.worker) if (typeof this.worker.kill === "function") {
+					if (this.worker.killed) {
+						cleanup(/* @__PURE__ */ new Error("worker already killed!"));
+						return;
+					}
+					var cleanExitTimeout = setTimeout(function() {
+						if (me.worker) me.worker.kill();
+					}, this.workerTerminateTimeout);
+					this.worker.once("exit", function() {
+						clearTimeout(cleanExitTimeout);
+						if (me.worker) me.worker.killed = true;
+						cleanup();
+					});
+					if (this.worker.ready) this.worker.send(TERMINATE_METHOD_ID);
+					else this.requestQueue.push({ message: TERMINATE_METHOD_ID });
+					this.cleaning = true;
+					return;
+				} else if (typeof this.worker.terminate === "function") {
+					this.worker.terminate();
+					this.worker.killed = true;
+				} else throw new Error("Failed to terminate worker");
+				cleanup();
+			} else this.terminating = true;
+		};
+		/**
+		* Terminate the worker, returning a Promise that resolves when the termination has been done.
+		* @param {boolean} [force=false]   If false (default), the worker is terminated
+		*                                  after finishing all tasks currently in
+		*                                  progress. If true, the worker will be
+		*                                  terminated immediately.
+		* @param {number} [timeout]        If provided and non-zero, worker termination promise will be rejected
+		*                                  after timeout if worker process has not been terminated.
+		* @return {Promise.<WorkerHandler, Error>}
+		*/
+		WorkerHandler.prototype.terminateAndNotify = function(force, timeout) {
+			var resolver = Promise$2.defer();
+			if (timeout) resolver.promise.timeout(timeout);
+			this.terminate(force, function(err, worker) {
+				if (err) resolver.reject(err);
+				else resolver.resolve(worker);
+			});
+			return resolver.promise;
+		};
+		/**
+		* Wrapper error type to denote that a TimeoutError has already been proceesed
+		* and we should skip cleanup operations
+		* @param {Promise.TimeoutError} timeoutError
+		*/
+		function WrappedTimeoutError(timeoutError) {
+			this.error = timeoutError;
+			this.stack = (/* @__PURE__ */ new Error()).stack;
+		}
+		var TerminateError$1 = /* @__PURE__ */ function(_Error) {
+			/**
+			* Create a timeout error
+			* @param {String} [message]
+			* @param {Error=} [cause]
+			*/
+			function TerminateError(message, cause) {
+				var _this;
+				_classCallCheck(this, TerminateError);
+				_this = _callSuper(this, TerminateError, [message || "worker terminated"]);
+				_this.cause = cause;
+				return _this;
+			}
+			_inherits(TerminateError, _Error);
+			return _createClass(TerminateError);
+		}(/* @__PURE__ */ _wrapNativeSuper(Error));
+		WorkerHandler$1.exports = WorkerHandler;
+		WorkerHandler$1.exports._tryRequireWorkerThreads = tryRequireWorkerThreads;
+		WorkerHandler$1.exports._setupProcessWorker = setupProcessWorker;
+		WorkerHandler$1.exports._setupBrowserWorker = setupBrowserWorker;
+		WorkerHandler$1.exports._setupWorkerThreadWorker = setupWorkerThreadWorker;
+		WorkerHandler$1.exports.ensureWorkerThreads = ensureWorkerThreads;
+		WorkerHandler$1.exports.TerminateError = TerminateError$1;
+		var WorkerHandlerExports = WorkerHandler$1.exports;
+		/**
+		* FIFO Queue implementation
+		* @template [T=any]
+		* @constructor
+		* @implements {import('./types').TaskQueue<T>}
+		*/
+		var queues;
+		var hasRequiredQueues;
+		function requireQueues() {
+			if (hasRequiredQueues) return queues;
+			hasRequiredQueues = 1;
+			function FIFOQueue() {
+				/** @type {import('./types').Task<T>[]} */
+				this.tasks = [];
+			}
+			/**
+			* @param {import('./types').Task<T>} task
+			* @returns {void}
+			*/
+			FIFOQueue.prototype.push = function(task) {
+				this.tasks.push(task);
+			};
+			/**
+			* @returns {import('./types').Task<T> | undefined}
+			*/
+			FIFOQueue.prototype.pop = function() {
+				return this.tasks.shift();
+			};
+			/**
+			* @returns {number}
+			*/
+			FIFOQueue.prototype.size = function() {
+				return this.tasks.length;
+			};
+			/**
+			* @param {import('./types').Task<T>} task
+			* @returns {boolean}
+			*/
+			FIFOQueue.prototype.contains = function(task) {
+				return this.tasks.includes(task);
+			};
+			/**
+			* @returns {void}
+			*/
+			FIFOQueue.prototype.clear = function() {
+				this.tasks.length = 0;
+			};
+			/**
+			* LIFO Queue implementation
+			* @template [T=any]
+			* @constructor
+			* @implements {import('./types').TaskQueue<T>}
+			*/
+			function LIFOQueue() {
+				/** @type {import('./types').Task<T>[]} */
+				this.tasks = [];
+			}
+			/**
+			* @param {import('./types').Task<T>} task
+			* @returns {void}
+			*/
+			LIFOQueue.prototype.push = function(task) {
+				this.tasks.push(task);
+			};
+			/**
+			* @returns {import('./types').Task<T> | undefined}
+			*/
+			LIFOQueue.prototype.pop = function() {
+				return this.tasks.pop();
+			};
+			/**
+			* @returns {number}
+			*/
+			LIFOQueue.prototype.size = function() {
+				return this.tasks.length;
+			};
+			/**
+			* @param {import('./types').Task<T>} task
+			* @returns {boolean}
+			*/
+			LIFOQueue.prototype.contains = function(task) {
+				return this.tasks.includes(task);
+			};
+			/**
+			* @returns {void}
+			*/
+			LIFOQueue.prototype.clear = function() {
+				this.tasks.length = 0;
+			};
+			queues = {
+				FIFOQueue,
+				LIFOQueue
+			};
+			return queues;
+		}
+		var debugPortAllocator;
+		var hasRequiredDebugPortAllocator;
+		function requireDebugPortAllocator() {
+			if (hasRequiredDebugPortAllocator) return debugPortAllocator;
+			hasRequiredDebugPortAllocator = 1;
+			var MAX_PORTS = 65535;
+			debugPortAllocator = DebugPortAllocator;
+			function DebugPortAllocator() {
+				this.ports = Object.create(null);
+				this.length = 0;
+			}
+			DebugPortAllocator.prototype.nextAvailableStartingAt = function(starting) {
+				while (this.ports[starting] === true) starting++;
+				if (starting >= MAX_PORTS) throw new Error("WorkerPool debug port limit reached: " + starting + ">= " + MAX_PORTS);
+				this.ports[starting] = true;
+				this.length++;
+				return starting;
+			};
+			DebugPortAllocator.prototype.releasePort = function(port) {
+				delete this.ports[port];
+				this.length--;
+			};
+			return debugPortAllocator;
+		}
+		var Pool_1;
+		var hasRequiredPool;
+		function requirePool() {
+			if (hasRequiredPool) return Pool_1;
+			hasRequiredPool = 1;
+			var Promise = require_Promise().Promise;
+			var WorkerHandler = WorkerHandlerExports;
+			var environment = environmentExports;
+			var _require$$2 = requireQueues(), FIFOQueue = _require$$2.FIFOQueue, LIFOQueue = _require$$2.LIFOQueue;
+			var DEBUG_PORT_ALLOCATOR = new (requireDebugPortAllocator())();
+			/**
+			* A pool to manage workers, which can be created using the function workerpool.pool.
+			*
+			* @param {String} [script]   Optional worker script
+			* @param {import('./types.js').WorkerPoolOptions} [options]  See docs
+			* @constructor
+			*/
+			function Pool(script, options) {
+				if (typeof script === "string")
+ /** @readonly */
+				this.script = script || null;
+				else {
+					this.script = null;
+					options = script;
+				}
+				/** @private */
+				this.workers = [];
+				/** @private */
+				this.taskQueue = this._createQueue(options && options.queueStrategy || "fifo");
+				options = options || {};
+				/** @readonly */
+				this.forkArgs = Object.freeze(options.forkArgs || []);
+				/** @readonly */
+				this.forkOpts = Object.freeze(options.forkOpts || {});
+				/** @readonly */
+				this.workerOpts = Object.freeze(options.workerOpts || {});
+				/** @readonly */
+				this.workerThreadOpts = Object.freeze(options.workerThreadOpts || {});
+				/** @private */
+				this.debugPortStart = options.debugPortStart || 43210;
+				/** @readonly @deprecated */
+				this.nodeWorker = options.nodeWorker;
+				/** @readonly
+				* @type {'auto' | 'web' | 'process' | 'thread'}
+				*/
+				this.workerType = options.workerType || options.nodeWorker || "auto";
+				/** @readonly */
+				this.maxQueueSize = options.maxQueueSize || Infinity;
+				/** @readonly */
+				this.workerTerminateTimeout = options.workerTerminateTimeout || 1e3;
+				/** @readonly */
+				this.onCreateWorker = options.onCreateWorker || function() {
+					return null;
+				};
+				/** @readonly */
+				this.onTerminateWorker = options.onTerminateWorker || function() {
+					return null;
+				};
+				/** @readonly */
+				this.emitStdStreams = options.emitStdStreams || false;
+				if (options && "maxWorkers" in options) {
+					validateMaxWorkers(options.maxWorkers);
+					/** @readonly */
+					this.maxWorkers = options.maxWorkers;
+				} else this.maxWorkers = Math.max((environment.cpus || 4) - 1, 1);
+				if (options && "minWorkers" in options) {
+					if (options.minWorkers === "max")
+ /** @readonly */
+					this.minWorkers = this.maxWorkers;
+					else {
+						validateMinWorkers(options.minWorkers);
+						this.minWorkers = options.minWorkers;
+						this.maxWorkers = Math.max(this.minWorkers, this.maxWorkers);
+					}
+					this._ensureMinWorkers();
+				}
+				/** @private */
+				this._boundNext = this._next.bind(this);
+				if (this.workerType === "thread") WorkerHandler.ensureWorkerThreads();
+			}
+			/**
+			* Execute a function on a worker.
+			*
+			* Example usage:
+			*
+			*   var pool = new Pool()
+			*
+			*   // call a function available on the worker
+			*   pool.exec('fibonacci', [6])
+			*
+			*   // offload a function
+			*   function add(a, b) {
+			*     return a + b
+			*   };
+			*   pool.exec(add, [2, 4])
+			*       .then(function (result) {
+			*         console.log(result); // outputs 6
+			*       })
+			*       .catch(function(error) {
+			*         console.log(error);
+			*       });
+			* @template { (...args: any[]) => any } T
+			* @param {String | T} method  Function name or function.
+			*                                    If `method` is a string, the corresponding
+			*                                    method on the worker will be executed
+			*                                    If `method` is a Function, the function
+			*                                    will be stringified and executed via the
+			*                                    workers built-in function `run(fn, args)`.
+			* @param {Parameters<T> | null} [params]  Function arguments applied when calling the function
+			* @param {import('./types.js').ExecOptions} [options]  Options
+			* @return {Promise<ReturnType<T>>}
+			*/
+			Pool.prototype.exec = function(method, params, options) {
+				if (params && !Array.isArray(params)) throw new TypeError("Array expected as argument \"params\"");
+				if (typeof method === "string") {
+					var resolver = Promise.defer();
+					if (this.taskQueue.size() >= this.maxQueueSize) throw new Error("Max queue size of " + this.maxQueueSize + " reached");
+					var task = {
+						method,
+						params,
+						resolver,
+						timeout: null,
+						options
+					};
+					this.taskQueue.push(task);
+					var originalTimeout = resolver.promise.timeout;
+					var taskQueue = this.taskQueue;
+					resolver.promise.timeout = function timeout(delay) {
+						if (taskQueue.contains(task)) {
+							task.timeout = delay;
+							return resolver.promise;
+						} else return originalTimeout.call(resolver.promise, delay);
+					};
+					this._next();
+					return resolver.promise;
+				} else if (typeof method === "function") return this.exec("run", [String(method), params], options);
+				else throw new TypeError("Function or string expected as argument \"method\"");
+			};
+			/**
+			* Create a proxy for current worker. Returns an object containing all
+			* methods available on the worker. All methods return promises resolving the methods result.
+			* @template { { [k: string]: (...args: any[]) => any } } T
+			* @return {Promise<import('./types.js').Proxy<T>, Error>} Returns a promise which resolves with a proxy object
+			*/
+			Pool.prototype.proxy = function() {
+				if (arguments.length > 0) throw new Error("No arguments expected");
+				var pool = this;
+				return this.exec("methods").then(function(methods) {
+					var proxy = {};
+					methods.forEach(function(method) {
+						proxy[method] = function() {
+							return pool.exec(method, Array.prototype.slice.call(arguments));
+						};
+					});
+					return proxy;
+				});
+			};
+			/**
+			* Creates new array with the results of calling a provided callback function
+			* on every element in this array.
+			* @param {Array} array
+			* @param {function} callback  Function taking two arguments:
+			*                             `callback(currentValue, index)`
+			* @return {Promise.<Array>} Returns a promise which resolves  with an Array
+			*                           containing the results of the callback function
+			*                           executed for each of the array elements.
+			*/
+			/**
+			* Grab the first task from the queue, find a free worker, and assign the
+			* worker to the task.
+			* @private
+			*/
+			Pool.prototype._next = function() {
+				if (this.taskQueue.size() > 0) {
+					var worker = this._getWorker();
+					if (worker) {
+						var me = this;
+						var task = this.taskQueue.pop();
+						if (task.resolver.promise.pending) {
+							var promise = worker.exec(task.method, task.params, task.resolver, task.options).then(me._boundNext).catch(function() {
+								if (worker.terminated) return me._removeWorker(worker);
+							}).then(function() {
+								me._next();
+							});
+							if (typeof task.timeout === "number") promise.timeout(task.timeout);
+						} else me._next();
+					}
+				}
+			};
+			/**
+			* Get an available worker. If no worker is available and the maximum number
+			* of workers isn't yet reached, a new worker will be created and returned.
+			* If no worker is available and the maximum number of workers is reached,
+			* null will be returned.
+			*
+			* @return {WorkerHandler | null} worker
+			* @private
+			*/
+			Pool.prototype._getWorker = function() {
+				var workers = this.workers;
+				for (var i = 0; i < workers.length; i++) {
+					var worker = workers[i];
+					if (worker.busy() === false) return worker;
+				}
+				if (workers.length < this.maxWorkers) {
+					worker = this._createWorkerHandler();
+					workers.push(worker);
+					return worker;
+				}
+				return null;
+			};
+			/**
+			* Remove a worker from the pool.
+			* Attempts to terminate worker if not already terminated, and ensures the minimum
+			* pool size is met.
+			* @param {WorkerHandler} worker
+			* @return {Promise<WorkerHandler>}
+			* @private
+			*/
+			Pool.prototype._removeWorker = function(worker) {
+				var me = this;
+				DEBUG_PORT_ALLOCATOR.releasePort(worker.debugPort);
+				this._removeWorkerFromList(worker);
+				this._ensureMinWorkers();
+				return new Promise(function(resolve, reject) {
+					worker.terminate(false, function(err) {
+						me.onTerminateWorker({
+							forkArgs: worker.forkArgs,
+							forkOpts: worker.forkOpts,
+							workerThreadOpts: worker.workerThreadOpts,
+							script: worker.script
+						});
+						if (err) reject(err);
+						else resolve(worker);
+					});
+				});
+			};
+			/**
+			* Remove a worker from the pool list.
+			* @param {WorkerHandler} worker
+			* @private
+			*/
+			Pool.prototype._removeWorkerFromList = function(worker) {
+				var index = this.workers.indexOf(worker);
+				if (index !== -1) this.workers.splice(index, 1);
+			};
+			/**
+			* Close all active workers. Tasks currently being executed will be finished first.
+			* @param {boolean} [force=false]   If false (default), the workers are terminated
+			*                                  after finishing all tasks currently in
+			*                                  progress. If true, the workers will be
+			*                                  terminated immediately.
+			* @param {number} [timeout]        If provided and non-zero, worker termination promise will be rejected
+			*                                  after timeout if worker process has not been terminated.
+			* @return {Promise.<void, Error>}
+			*/
+			Pool.prototype.terminate = function(force, timeout) {
+				var me = this;
+				var taskQueue = this.taskQueue;
+				while (taskQueue.size() > 0) {
+					var task = taskQueue.pop();
+					if (task) task.resolver.reject(/* @__PURE__ */ new Error("Pool terminated"));
+					else break;
+				}
+				taskQueue.clear();
+				var removeWorker = function f(worker) {
+					DEBUG_PORT_ALLOCATOR.releasePort(worker.debugPort);
+					this._removeWorkerFromList(worker);
+				}.bind(this);
+				var promises = [];
+				this.workers.slice().forEach(function(worker) {
+					var termPromise = worker.terminateAndNotify(force, timeout).then(removeWorker).always(function() {
+						me.onTerminateWorker({
+							forkArgs: worker.forkArgs,
+							forkOpts: worker.forkOpts,
+							workerThreadOpts: worker.workerThreadOpts,
+							script: worker.script
+						});
+					});
+					promises.push(termPromise);
+				});
+				return Promise.all(promises);
+			};
+			/**
+			* Retrieve statistics on tasks and workers.
+			* @return {{totalWorkers: number, busyWorkers: number, idleWorkers: number, pendingTasks: number, activeTasks: number}} Returns an object with statistics
+			*/
+			Pool.prototype.stats = function() {
+				var totalWorkers = this.workers.length;
+				var busyWorkers = this.workers.filter(function(worker) {
+					return worker.busy();
+				}).length;
+				return {
+					totalWorkers,
+					busyWorkers,
+					idleWorkers: totalWorkers - busyWorkers,
+					pendingTasks: this.taskQueue.size(),
+					activeTasks: busyWorkers
+				};
+			};
+			/**
+			* Ensures that a minimum of minWorkers is up and running
+			* @private
+			*/
+			Pool.prototype._ensureMinWorkers = function() {
+				if (this.minWorkers) for (var i = this.workers.length; i < this.minWorkers; i++) this.workers.push(this._createWorkerHandler());
+			};
+			/**
+			* Helper function to create a new WorkerHandler and pass all options.
+			* @return {WorkerHandler}
+			* @private
+			*/
+			Pool.prototype._createWorkerHandler = function() {
+				var overriddenParams = this.onCreateWorker({
+					forkArgs: this.forkArgs,
+					forkOpts: this.forkOpts,
+					workerOpts: this.workerOpts,
+					workerThreadOpts: this.workerThreadOpts,
+					script: this.script
+				}) || {};
+				return new WorkerHandler(overriddenParams.script || this.script, {
+					forkArgs: overriddenParams.forkArgs || this.forkArgs,
+					forkOpts: overriddenParams.forkOpts || this.forkOpts,
+					workerOpts: overriddenParams.workerOpts || this.workerOpts,
+					workerThreadOpts: overriddenParams.workerThreadOpts || this.workerThreadOpts,
+					debugPort: DEBUG_PORT_ALLOCATOR.nextAvailableStartingAt(this.debugPortStart),
+					workerType: this.workerType,
+					workerTerminateTimeout: this.workerTerminateTimeout,
+					emitStdStreams: this.emitStdStreams
+				});
+			};
+			/**
+			* Create queue instance based on strategy
+			* @param {'fifo' | 'lifo' | import('./types').TaskQueue} strategy
+			* @returns {import('./types').TaskQueue} Queue instance
+			* @private
+			*/
+			Pool.prototype._createQueue = function(strategy) {
+				if (typeof strategy === "string") switch (strategy) {
+					case "fifo": return new FIFOQueue();
+					case "lifo": return new LIFOQueue();
+					default: throw new Error("Unknown queue strategy: " + strategy);
+				}
+				if (!strategy) throw new Error("Queue strategy cannot be null or undefined");
+				var requiredMethods = [
+					"push",
+					"pop",
+					"size",
+					"contains",
+					"clear"
+				];
+				for (var i = 0; i < requiredMethods.length; i++) {
+					var method = requiredMethods[i];
+					if (typeof strategy[method] !== "function") throw new Error("Queue strategy must implement method: " + method);
+				}
+				return strategy;
+			};
+			/**
+			* Ensure that the maxWorkers option is an integer >= 1
+			* @param {*} maxWorkers
+			* @returns {boolean} returns true maxWorkers has a valid value
+			*/
+			function validateMaxWorkers(maxWorkers) {
+				if (!isNumber(maxWorkers) || !isInteger(maxWorkers) || maxWorkers < 1) throw new TypeError("Option maxWorkers must be an integer number >= 1");
+			}
+			/**
+			* Ensure that the minWorkers option is an integer >= 0
+			* @param {*} minWorkers
+			* @returns {boolean} returns true when minWorkers has a valid value
+			*/
+			function validateMinWorkers(minWorkers) {
+				if (!isNumber(minWorkers) || !isInteger(minWorkers) || minWorkers < 0) throw new TypeError("Option minWorkers must be an integer number >= 0");
+			}
+			/**
+			* Test whether a variable is a number
+			* @param {*} value
+			* @returns {boolean} returns true when value is a number
+			*/
+			function isNumber(value) {
+				return typeof value === "number";
+			}
+			/**
+			* Test whether a number is an integer
+			* @param {number} value
+			* @returns {boolean} Returns true if value is an integer
+			*/
+			function isInteger(value) {
+				return Math.round(value) == value;
+			}
+			Pool_1 = Pool;
+			return Pool_1;
+		}
+		var worker$1 = {};
+		/**
+		* The helper class for transferring data from the worker to the main thread.
+		*
+		* @param {Object} message The object to deliver to the main thread.
+		* @param {Object[]} transfer An array of transferable Objects to transfer ownership of.
+		*/
+		var transfer;
+		var hasRequiredTransfer;
+		function requireTransfer() {
+			if (hasRequiredTransfer) return transfer;
+			hasRequiredTransfer = 1;
+			function Transfer(message, transfer) {
+				this.message = message;
+				this.transfer = transfer;
+			}
+			transfer = Transfer;
+			return transfer;
+		}
+		var hasRequiredWorker;
+		function requireWorker() {
+			if (hasRequiredWorker) return worker$1;
+			hasRequiredWorker = 1;
+			(function(exports$1) {
+				var Transfer = requireTransfer();
+				/**
+				* worker must handle async cleanup handlers. Use custom Promise implementation. 
+				*/
+				var Promise = require_Promise().Promise;
+				/**
+				* Special message sent by parent which causes the worker to terminate itself.
+				* Not a "message object"; this string is the entire message.
+				*/
+				var TERMINATE_METHOD_ID = "__workerpool-terminate__";
+				/**
+				* Special message by parent which causes a child process worker to perform cleaup
+				* steps before determining if the child process worker should be terminated.
+				*/
+				var CLEANUP_METHOD_ID = "__workerpool-cleanup__";
+				var TIMEOUT_DEFAULT = 1e3;
+				var worker = { exit: function exit() {} };
+				var publicWorker = {
+					addAbortListener: function addAbortListener(listener) {
+						worker.abortListeners.push(listener);
+					},
+					emit: worker.emit
+				};
+				if (typeof self !== "undefined" && typeof postMessage === "function" && typeof addEventListener === "function") {
+					worker.on = function(event, callback) {
+						addEventListener(event, function(message) {
+							callback(message.data);
+						});
+					};
+					worker.send = function(message, transfer) {
+						transfer ? postMessage(message, transfer) : postMessage(message);
+					};
+				} else if (typeof process !== "undefined") {
+					var WorkerThreads;
+					try {
+						WorkerThreads = require___vite_browser_external();
+					} catch (error) {
+						if (_typeof(error) === "object" && error !== null && error.code === "MODULE_NOT_FOUND");
+						else throw error;
+					}
+					if (WorkerThreads && WorkerThreads.parentPort !== null) {
+						var parentPort = WorkerThreads.parentPort;
+						worker.send = parentPort.postMessage.bind(parentPort);
+						worker.on = parentPort.on.bind(parentPort);
+						worker.exit = process.exit.bind(process);
+					} else {
+						worker.on = process.on.bind(process);
+						worker.send = function(message) {
+							process.send(message);
+						};
+						worker.on("disconnect", function() {
+							process.exit(1);
+						});
+						worker.exit = process.exit.bind(process);
+					}
+				} else throw new Error("Script must be executed as a worker");
+				function convertError(error) {
+					if (error && error.toJSON) return JSON.parse(JSON.stringify(error));
+					return JSON.parse(JSON.stringify(error, Object.getOwnPropertyNames(error)));
+				}
+				/**
+				* Test whether a value is a Promise via duck typing.
+				* @param {*} value
+				* @returns {boolean} Returns true when given value is an object
+				*                    having functions `then` and `catch`.
+				*/
+				function isPromise(value) {
+					return value && typeof value.then === "function" && typeof value.catch === "function";
+				}
+				worker.methods = {};
+				/**
+				* Execute a function with provided arguments
+				* @param {String} fn     Stringified function
+				* @param {Array} [args]  Function arguments
+				* @returns {*}
+				*/
+				worker.methods.run = function run(fn, args) {
+					var f = new Function("return (" + fn + ").apply(this, arguments);");
+					f.worker = publicWorker;
+					return f.apply(f, args);
+				};
+				/**
+				* Get a list with methods available on this worker
+				* @return {String[]} methods
+				*/
+				worker.methods.methods = function methods() {
+					return Object.keys(worker.methods);
+				};
+				/**
+				* Custom handler for when the worker is terminated.
+				*/
+				worker.terminationHandler = void 0;
+				worker.abortListenerTimeout = TIMEOUT_DEFAULT;
+				/**
+				* Abort handlers for resolving errors which may cause a timeout or cancellation
+				* to occur from a worker context
+				*/
+				worker.abortListeners = [];
+				/**
+				* Cleanup and exit the worker.
+				* @param {Number} code 
+				* @returns {Promise<void>}
+				*/
+				worker.terminateAndExit = function(code) {
+					var _exit = function _exit() {
+						worker.exit(code);
+					};
+					if (!worker.terminationHandler) return _exit();
+					var result = worker.terminationHandler(code);
+					if (isPromise(result)) {
+						result.then(_exit, _exit);
+						return result;
+					} else {
+						_exit();
+						return new Promise(function(_resolve, reject) {
+							reject(/* @__PURE__ */ new Error("Worker terminating"));
+						});
+					}
+				};
+				/**
+				* Called within the worker message handler to run abort handlers if registered to perform cleanup operations.
+				* @param {Integer} [requestId] id of task which is currently executing in the worker
+				* @return {Promise<void>}
+				*/
+				worker.cleanup = function(requestId) {
+					if (!worker.abortListeners.length) {
+						worker.send({
+							id: requestId,
+							method: CLEANUP_METHOD_ID,
+							error: convertError(/* @__PURE__ */ new Error("Worker terminating"))
+						});
+						return new Promise(function(resolve) {
+							resolve();
+						});
+					}
+					var _exit = function _exit() {
+						worker.exit();
+					};
+					var _abort = function _abort() {
+						if (!worker.abortListeners.length) worker.abortListeners = [];
+					};
+					var promises = worker.abortListeners.map(function(listener) {
+						return listener();
+					});
+					var timerId;
+					var timeoutPromise = new Promise(function(_resolve, reject) {
+						timerId = setTimeout(function() {
+							reject(/* @__PURE__ */ new Error("Timeout occured waiting for abort handler, killing worker"));
+						}, worker.abortListenerTimeout);
+					});
+					var settlePromise = Promise.all(promises).then(function() {
+						clearTimeout(timerId);
+						_abort();
+					}, function() {
+						clearTimeout(timerId);
+						_exit();
+					});
+					return new Promise(function(resolve, reject) {
+						settlePromise.then(resolve, reject);
+						timeoutPromise.then(resolve, reject);
+					}).then(function() {
+						worker.send({
+							id: requestId,
+							method: CLEANUP_METHOD_ID,
+							error: null
+						});
+					}, function(err) {
+						worker.send({
+							id: requestId,
+							method: CLEANUP_METHOD_ID,
+							error: err ? convertError(err) : null
+						});
+					});
+				};
+				var currentRequestId = null;
+				worker.on("message", function(request) {
+					if (request === TERMINATE_METHOD_ID) return worker.terminateAndExit(0);
+					if (request.method === CLEANUP_METHOD_ID) return worker.cleanup(request.id);
+					try {
+						var method = worker.methods[request.method];
+						if (method) {
+							currentRequestId = request.id;
+							var result = method.apply(method, request.params);
+							if (isPromise(result)) result.then(function(result) {
+								if (result instanceof Transfer) worker.send({
+									id: request.id,
+									result: result.message,
+									error: null
+								}, result.transfer);
+								else worker.send({
+									id: request.id,
+									result,
+									error: null
+								});
+								currentRequestId = null;
+							}).catch(function(err) {
+								worker.send({
+									id: request.id,
+									result: null,
+									error: convertError(err)
+								});
+								currentRequestId = null;
+							});
+							else {
+								if (result instanceof Transfer) worker.send({
+									id: request.id,
+									result: result.message,
+									error: null
+								}, result.transfer);
+								else worker.send({
+									id: request.id,
+									result,
+									error: null
+								});
+								currentRequestId = null;
+							}
+						} else throw new Error("Unknown method \"" + request.method + "\"");
+					} catch (err) {
+						worker.send({
+							id: request.id,
+							result: null,
+							error: convertError(err)
+						});
+					}
+				});
+				/**
+				* Register methods to the worker
+				* @param {Object} [methods]
+				* @param {import('./types.js').WorkerRegisterOptions} [options]
+				*/
+				worker.register = function(methods, options) {
+					if (methods) {
+						for (var name in methods) if (methods.hasOwnProperty(name)) {
+							worker.methods[name] = methods[name];
+							worker.methods[name].worker = publicWorker;
+						}
+					}
+					if (options) {
+						worker.terminationHandler = options.onTerminate;
+						worker.abortListenerTimeout = options.abortListenerTimeout || TIMEOUT_DEFAULT;
+					}
+					worker.send("ready");
+				};
+				worker.emit = function(payload) {
+					if (currentRequestId) {
+						if (payload instanceof Transfer) {
+							worker.send({
+								id: currentRequestId,
+								isEvent: true,
+								payload: payload.message
+							}, payload.transfer);
+							return;
+						}
+						worker.send({
+							id: currentRequestId,
+							isEvent: true,
+							payload
+						});
+					}
+				};
+				exports$1.add = worker.register;
+				exports$1.emit = worker.emit;
+			})(worker$1);
+			return worker$1;
+		}
+		var platform = environmentExports.platform, isMainThread = environmentExports.isMainThread, cpus = environmentExports.cpus;
+		var TerminateError = WorkerHandlerExports.TerminateError;
+		/** @typedef {import("./Pool")} Pool */
+		/** @typedef {import("./types.js").WorkerPoolOptions} WorkerPoolOptions */
+		/** @typedef {import("./types.js").WorkerRegisterOptions} WorkerRegisterOptions */
+		/**
+		* @template { { [k: string]: (...args: any[]) => any } } T
+		* @typedef {import('./types.js').Proxy<T>} Proxy<T>
+		*/
+		/**
+		* @overload
+		* Create a new worker pool
+		* @param {WorkerPoolOptions} [script]
+		* @returns {Pool} pool
+		*/
+		/**
+		* @overload
+		* Create a new worker pool
+		* @param {string} [script]
+		* @param {WorkerPoolOptions} [options]
+		* @returns {Pool} pool
+		*/
+		function pool(script, options) {
+			return new (requirePool())(script, options);
+		}
+		var pool_1 = src.pool = pool;
+		/**
+		* Create a worker and optionally register a set of methods to the worker.
+		* @param {{ [k: string]: (...args: any[]) => any }} [methods]
+		* @param {WorkerRegisterOptions} [options]
+		*/
+		function worker(methods, options) {
+			requireWorker().add(methods, options);
+		}
+		var worker_1 = src.worker = worker;
+		/**
+		* Sends an event to the parent worker pool.
+		* @param {any} payload 
+		*/
+		function workerEmit(payload) {
+			requireWorker().emit(payload);
+		}
+		var workerEmit_1 = src.workerEmit = workerEmit;
+		var _Promise = src.Promise = require_Promise().Promise;
+		var Transfer = src.Transfer = requireTransfer();
+		var platform_1 = src.platform = platform;
+		var isMainThread_1 = src.isMainThread = isMainThread;
+		var cpus_1 = src.cpus = cpus;
+		var TerminateError_1 = src.TerminateError = TerminateError;
+		exports$2.Promise = _Promise;
+		exports$2.TerminateError = TerminateError_1;
+		exports$2.Transfer = Transfer;
+		exports$2.cpus = cpus_1;
+		exports$2.default = src;
+		exports$2.isMainThread = isMainThread_1;
+		exports$2.platform = platform_1;
+		exports$2.pool = pool_1;
+		exports$2.worker = worker_1;
+		exports$2.workerEmit = workerEmit_1;
+		Object.defineProperty(exports$2, "__esModule", { value: true });
+	}));
+})))(), 1);
+var _virtual_worker_script_default = "!function(e,n){\"object\"==typeof exports&&\"undefined\"!=typeof module?module.exports=n():\"function\"==typeof define&&define.amd?define(n):(e=\"undefined\"!=typeof globalThis?globalThis:e||self).worker=n()}(this,(function(){\"use strict\";function e(n){return e=\"function\"==typeof Symbol&&\"symbol\"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&\"function\"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?\"symbol\":typeof e},e(n)}function n(e){return e&&e.__esModule&&Object.prototype.hasOwnProperty.call(e,\"default\")?e.default:e}var t={};var r=function(e,n){this.message=e,this.transfer=n},o={};function i(e,n){var t=this;if(!(this instanceof i))throw new SyntaxError(\"Constructor must be called with the new operator\");if(\"function\"!=typeof e)throw new SyntaxError(\"Function parameter handler(resolve, reject) missing\");var r=[],o=[];this.resolved=!1,this.rejected=!1,this.pending=!0,this[Symbol.toStringTag]=\"Promise\";var a=function(e,n){r.push(e),o.push(n)};this.then=function(e,n){return new i((function(t,r){var o=e?s(e,t,r):t,i=n?s(n,t,r):r;a(o,i)}),t)};var f=function(e){return t.resolved=!0,t.rejected=!1,t.pending=!1,r.forEach((function(n){n(e)})),a=function(n,t){n(e)},f=d=function(){},t},d=function(e){return t.resolved=!1,t.rejected=!0,t.pending=!1,o.forEach((function(n){n(e)})),a=function(n,t){t(e)},f=d=function(){},t};this.cancel=function(){return n?n.cancel():d(new u),t},this.timeout=function(e){if(n)n.timeout(e);else{var r=setTimeout((function(){d(new c(\"Promise timed out after \"+e+\" ms\"))}),e);t.always((function(){clearTimeout(r)}))}return t},e((function(e){f(e)}),(function(e){d(e)}))}function s(e,n,t){return function(r){try{var o=e(r);o&&\"function\"==typeof o.then&&\"function\"==typeof o.catch?o.then(n,t):n(o)}catch(e){t(e)}}}function u(e){this.message=e||\"promise cancelled\",this.stack=(new Error).stack}function c(e){this.message=e||\"timeout exceeded\",this.stack=(new Error).stack}return i.prototype.catch=function(e){return this.then(null,e)},i.prototype.always=function(e){return this.then(e,e)},i.prototype.finally=function(e){var n=this,t=function(){return new i((function(e){return e()})).then(e).then((function(){return n}))};return this.then(t,t)},i.all=function(e){return new i((function(n,t){var r=e.length,o=[];r?e.forEach((function(e,i){e.then((function(e){o[i]=e,0==--r&&n(o)}),(function(e){r=0,t(e)}))})):n(o)}))},i.defer=function(){var e={};return e.promise=new i((function(n,t){e.resolve=n,e.reject=t})),e},u.prototype=new Error,u.prototype.constructor=Error,u.prototype.name=\"CancellationError\",i.CancellationError=u,c.prototype=new Error,c.prototype.constructor=Error,c.prototype.name=\"TimeoutError\",i.TimeoutError=c,o.Promise=i,function(n){var t=r,i=o.Promise,s=\"__workerpool-cleanup__\",u={exit:function(){}},c={addAbortListener:function(e){u.abortListeners.push(e)},emit:u.emit};if(\"undefined\"!=typeof self&&\"function\"==typeof postMessage&&\"function\"==typeof addEventListener)u.on=function(e,n){addEventListener(e,(function(e){n(e.data)}))},u.send=function(e,n){n?postMessage(e,n):postMessage(e)};else{if(\"undefined\"==typeof process)throw new Error(\"Script must be executed as a worker\");var a;try{a=require(\"worker_threads\")}catch(n){if(\"object\"!==e(n)||null===n||\"MODULE_NOT_FOUND\"!==n.code)throw n}if(a&&null!==a.parentPort){var f=a.parentPort;u.send=f.postMessage.bind(f),u.on=f.on.bind(f),u.exit=process.exit.bind(process)}else u.on=process.on.bind(process),u.send=function(e){process.send(e)},u.on(\"disconnect\",(function(){process.exit(1)})),u.exit=process.exit.bind(process)}function d(e){return e&&e.toJSON?JSON.parse(JSON.stringify(e)):JSON.parse(JSON.stringify(e,Object.getOwnPropertyNames(e)))}function l(e){return e&&\"function\"==typeof e.then&&\"function\"==typeof e.catch}u.methods={},u.methods.run=function(e,n){var t=new Function(\"return (\"+e+\").apply(this, arguments);\");return t.worker=c,t.apply(t,n)},u.methods.methods=function(){return Object.keys(u.methods)},u.terminationHandler=void 0,u.abortListenerTimeout=1e3,u.abortListeners=[],u.terminateAndExit=function(e){var n=function(){u.exit(e)};if(!u.terminationHandler)return n();var t=u.terminationHandler(e);return l(t)?(t.then(n,n),t):(n(),new i((function(e,n){n(new Error(\"Worker terminating\"))})))},u.cleanup=function(e){if(!u.abortListeners.length)return u.send({id:e,method:s,error:d(new Error(\"Worker terminating\"))}),new i((function(e){e()}));var n,t=u.abortListeners.map((function(e){return e()})),r=new i((function(e,t){n=setTimeout((function(){t(new Error(\"Timeout occured waiting for abort handler, killing worker\"))}),u.abortListenerTimeout)})),o=i.all(t).then((function(){clearTimeout(n),u.abortListeners.length||(u.abortListeners=[])}),(function(){clearTimeout(n),u.exit()}));return new i((function(e,n){o.then(e,n),r.then(e,n)})).then((function(){u.send({id:e,method:s,error:null})}),(function(n){u.send({id:e,method:s,error:n?d(n):null})}))};var p=null;u.on(\"message\",(function(e){if(\"__workerpool-terminate__\"===e)return u.terminateAndExit(0);if(e.method===s)return u.cleanup(e.id);try{var n=u.methods[e.method];if(!n)throw new Error('Unknown method \"'+e.method+'\"');p=e.id;var r=n.apply(n,e.params);l(r)?r.then((function(n){n instanceof t?u.send({id:e.id,result:n.message,error:null},n.transfer):u.send({id:e.id,result:n,error:null}),p=null})).catch((function(n){u.send({id:e.id,result:null,error:d(n)}),p=null})):(r instanceof t?u.send({id:e.id,result:r.message,error:null},r.transfer):u.send({id:e.id,result:r,error:null}),p=null)}catch(n){u.send({id:e.id,result:null,error:d(n)})}})),u.register=function(e,n){if(e)for(var t in e)e.hasOwnProperty(t)&&(u.methods[t]=e[t],u.methods[t].worker=c);n&&(u.terminationHandler=n.onTerminate,u.abortListenerTimeout=n.abortListenerTimeout||1e3),u.send(\"ready\")},u.emit=function(e){if(p){if(e instanceof t)return void u.send({id:p,isEvent:!0,payload:e.message},e.transfer);u.send({id:p,isEvent:!0,payload:e})}},n.add=u.register,n.emit=u.emit}(t),n(t)}));\n\n;(function(){\nvar runTask=(function thread() {\n    const MAXMEM = 32767;\n    let instance;\n    let memory;\n\n    // Lazily cached typed-array views over wasm memory.\n    // Invalidated automatically when memory.grow() replaces memory.buffer.\n    let _u32 = null;\n    let _u8  = null;\n\n    function getU32() {\n        if (_u32 === null || _u32.buffer !== memory.buffer) {\n            _u32 = new Uint32Array(memory.buffer, 0, 1);\n        }\n        return _u32;\n    }\n\n    function getU8() {\n        if (_u8 === null || _u8.buffer !== memory.buffer) {\n            _u8 = new Uint8Array(memory.buffer);\n        }\n        return _u8;\n    }\n\n    async function init(data) {\n        let wasmModule;\n        if (data.code instanceof WebAssembly.Module) {\n            wasmModule = data.code;\n        } else {\n            wasmModule = await WebAssembly.compile(new Uint8Array(data.code));\n        }\n        memory = new WebAssembly.Memory({initial: data.init, maximum: MAXMEM});\n        // Reset cached views — new memory means new backing buffer.\n        _u32 = null;\n        _u8  = null;\n        instance = await WebAssembly.instantiate(wasmModule, {env: {memory}});\n    }\n\n    function alloc(length) {\n        const u32 = getU32();\n        // Align to 4 bytes with a branchless bitmask instead of a loop.\n        u32[0] = (u32[0] + 3) & ~3;\n        const res = u32[0];\n        u32[0] += length;\n        if (u32[0] + length > memory.buffer.byteLength) {\n            const currentPages = memory.buffer.byteLength / 0x10000;\n            let requiredPages = Math.floor((u32[0] + length) / 0x10000) + 1;\n            if (requiredPages > MAXMEM) requiredPages = MAXMEM;\n            memory.grow(requiredPages - currentPages);\n            // memory.buffer changed — cached views are now stale.\n        }\n        return res;\n    }\n\n    function allocBuffer(buffer) {\n        const src = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);\n        const p = alloc(src.byteLength);\n        // getU8() handles re-creation if alloc() triggered a grow.\n        getU8().set(src, p);\n        return p;\n    }\n\n    function getBuffer(pointer, length) {\n        return new Uint8Array(memory.buffer, pointer, length);\n    }\n\n    function setBuffer(pointer, buffer) {\n        getU8().set(buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer), pointer);\n    }\n\n    function runTask(task) {\n        if (task[0].cmd === \"INIT\") {\n            // INIT is the only async path — return a Promise so workerpool\n            // can await it; all other tasks execute synchronously to prevent\n            // concurrent execution of tasks within the same worker.\n            return init(task[0]);\n        }\n        const vars = [];\n        const out  = [];\n        const oldAlloc = getU32()[0];\n        for (let i = 0; i < task.length; i++) {\n            const step = task[i];\n            switch (step.cmd) {\n            case \"ALLOCSET\":\n                vars[step.var] = allocBuffer(step.buff);\n                break;\n            case \"ALLOC\":\n                vars[step.var] = alloc(step.len);\n                break;\n            case \"SET\":\n                setBuffer(vars[step.var], step.buff);\n                break;\n            case \"CALL\": {\n                const paramDefs = step.params;\n                const params = new Array(paramDefs.length);\n                for (let j = 0; j < paramDefs.length; j++) {\n                    const p = paramDefs[j];\n                    params[j] = p.var !== undefined\n                        ? vars[p.var] + (p.offset || 0)\n                        : p.val;\n                }\n                instance.exports[step.fnName](...params);\n                break;\n            }\n            case \"GET\":\n                out[step.out] = getBuffer(vars[step.var], step.len).slice();\n                break;\n            default:\n                throw new Error(\"Invalid cmd: \" + step.cmd);\n            }\n        }\n        // Reclaim task-local allocations. getU32() handles a post-grow buffer.\n        getU32()[0] = oldAlloc;\n        return out;\n    }\n\n    return runTask;\n})();\nworker.add({runTask:runTask});\n})();";
+//#endregion
+//#region src/threadman.browser.js
 function getConcurrency() {
-	return os.default.cpus().length || 2;
+	return typeof navigator === "object" && navigator.hardwareConcurrency || 2;
 }
 function getWorkerType() {
-	return "thread";
+	return "web";
 }
 function supportsWorkers() {
-	return true;
+	return typeof Worker !== "undefined";
 }
+var _workerSource = null;
 function getWorkerSource() {
-	if (typeof __dirname !== "undefined") return (0, path.resolve)(__dirname, "threadman_worker.cjs");
-	return (0, url.fileURLToPath)(new URL("data:text/javascript;base64,LyoqCiAqIFN0YW5kYWxvbmUgd29ya2VyIGVudHJ5LXBvaW50IGZvciBOb2RlLmpzICh3b3JrZXJfdGhyZWFkcykuCiAqCiAqIFRoaXMgZmlsZSBpcyBjb21waWxlZCBieSByb2xsdXAgaW50byBidWlsZC90aHJlYWRtYW5fd29ya2VyLmNqcyBhbmQgbG9hZGVkCiAqIGJ5IHdvcmtlcnBvb2wgd2hlbiBydW5uaW5nIGluIE5vZGUuanMgbXVsdGktdGhyZWFkIG1vZGUuCiAqCiAqIHdvcmtlcnBvb2wgZGV0ZWN0cyB0aGF0IGl0IGlzIGluc2lkZSBhIHdvcmtlcl90aHJlYWRzIHdvcmtlciB2aWEgcGFyZW50UG9ydAogKiBhbmQgY2FsbHMgd29ya2VyLnJlZ2lzdGVyKCkgdG8gZXhwb3NlIHRoZSBtZXRob2RzIHRvIHRoZSBwb29sLgogKi8KaW1wb3J0IHdvcmtlcnBvb2wgZnJvbSAid29ya2VycG9vbCI7CmltcG9ydCB0aHJlYWQgZnJvbSAiLi90aHJlYWRtYW5fdGhyZWFkLmpzIjsKCmNvbnN0IHJ1blRhc2tGbiA9IHRocmVhZCgpOwoKd29ya2VycG9vbC53b3JrZXIoewogICAgcnVuVGFzayh0YXNrKSB7CiAgICAgICAgY29uc3QgcmVzdWx0ID0gcnVuVGFza0ZuKHRhc2spOwogICAgICAgIC8vIElOSVQgcGF0aDogcnVuVGFza0ZuIHJldHVybnMgYSBQcm9taXNlIOKAlCBsZXQgd29ya2VycG9vbCBhd2FpdCBpdC4KICAgICAgICBpZiAocmVzdWx0IGluc3RhbmNlb2YgUHJvbWlzZSkgcmV0dXJuIHJlc3VsdDsKICAgICAgICAvLyBOb24tSU5JVCBwYXRoOiB0cmFuc2ZlciBvdXRwdXQgVWludDhBcnJheXMgemVyby1jb3B5IHRvIHRoZSBtYWluIHRocmVhZC4KICAgICAgICBpZiAocmVzdWx0Lmxlbmd0aCA9PT0gMCkgcmV0dXJuIHJlc3VsdDsKICAgICAgICByZXR1cm4gbmV3IHdvcmtlcnBvb2wuVHJhbnNmZXIocmVzdWx0LCByZXN1bHQubWFwKGIgPT4gYi5idWZmZXIpKTsKICAgIH0KfSk7Cg==", "" + {}.url));
+	if (_workerSource) return _workerSource;
+	const blob = new Blob([_virtual_worker_script_default], { type: "application/javascript" });
+	_workerSource = (globalThis.URL ? globalThis.URL : globalThis.webkitURL).createObjectURL(blob);
+	return _workerSource;
 }
 //#endregion
 //#region src/threadman.js
@@ -2974,7 +4975,7 @@ async function buildThreadManager(wasm, singleThread) {
 	tm.code = wasm.code;
 	tm.wasmModule = wasmModule;
 	if (singleThread) {
-		tm.taskManager = require_threadman_thread.thread();
+		tm.taskManager = thread();
 		await tm.taskManager([{
 			cmd: "INIT",
 			init: MEM_SIZE,
@@ -2985,7 +4986,7 @@ async function buildThreadManager(wasm, singleThread) {
 		const rawConcurrency = getConcurrency();
 		const concurrency = Math.min(Math.max(rawConcurrency, 2), 64);
 		tm.concurrency = concurrency;
-		tm.pool = workerpool.default.pool(getWorkerSource(), {
+		tm.pool = import_workerpool.default.pool(getWorkerSource(), {
 			maxWorkers: concurrency,
 			workerType: getWorkerType()
 		});
@@ -4501,18 +6502,4 @@ async function getCurveFromName(name, singleThread, plugins) {
 var Scalar = scalar_exports;
 var utils = utils_exports;
 //#endregion
-exports.BigBuffer = BigBuffer;
-exports.ChaCha = ChaCha;
-exports.EC = EC;
-exports.F1Field = ZqField;
-exports.F2Field = F2Field;
-exports.F3Field = F3Field;
-exports.PolField = PolField;
-exports.Scalar = Scalar;
-exports.ZqField = ZqField;
-exports.buildBls12381 = buildBls12381;
-exports.buildBn128 = buildBn128;
-exports.getCurveFromName = getCurveFromName;
-exports.getCurveFromQ = getCurveFromQ;
-exports.getCurveFromR = getCurveFromR;
-exports.utils = utils;
+export { BigBuffer, ChaCha, EC, ZqField as F1Field, ZqField, F2Field, F3Field, PolField, Scalar, buildBls12381, buildBn128, getCurveFromName, getCurveFromQ, getCurveFromR, utils };

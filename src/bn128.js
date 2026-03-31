@@ -15,7 +15,7 @@ export default async function buildBn128(singleThread, plugins) {
 
         //import { bn128_wasm_gzip as bn128wasmPrebuilt } from "wasmcurves";
         //const { bn128_wasm_gzip: bn128wasmPrebuilt } = await import("wasmcurves");
-        const { default: bn128wasmPrebuilt } = await import("wasmcurves/build/bn128_wasm_gzip.js");
+        const bn128wasmPrebuilt = await import("wasmcurves/build/bn128_wasm_gzip.js");
 
         //console.log(bn128wasmPrebuilt);
         bn128wasm.pq = bn128wasmPrebuilt.pq;
@@ -34,7 +34,7 @@ export default async function buildBn128(singleThread, plugins) {
         bn128wasm.q = bn128wasmPrebuilt.q;
         bn128wasm.r = bn128wasmPrebuilt.r;
 
-        const compressedCode = new Uint8Array(Buffer.from(bn128wasmPrebuilt.gzipCode, "base64"));
+        const compressedCode = Uint8Array.from(atob(bn128wasmPrebuilt.gzipCode), c => c.charCodeAt(0));
         const blob = new Blob([compressedCode]);
 
         const ds = new DecompressionStream("gzip");

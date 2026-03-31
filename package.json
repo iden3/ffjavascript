@@ -11,14 +11,37 @@
         "import": "./main.js",
         "require": "./build/main.cjs"
       },
-      "browser": "./build/browser.esm.js"
+      "browser": {
+        "import": "./build/browser/browser.esm.js",
+        "default": "./build/browser/browser.iife.js"
+      },
+      "default": "./main.js"
+    },
+    "./threadman-platform": {
+      "node": "./src/threadman.node.js",
+      "browser": "./src/threadman.browser.js",
+      "default": "./src/threadman.node.js"
+    }
+  },
+  "imports": {
+    "#threadman-platform": {
+      "node": "./src/threadman.node.js",
+      "browser": "./src/threadman.browser.js",
+      "default": "./src/threadman.node.js"
     }
   },
   "scripts": {
-    "test": "mocha",
-    "build:node": "rollup -c rollup.cjs.config.js",
-    "build:browser": "rollup -c rollup.browser.esm.config.js",
-    "build": "npm run build:node && npm run build:browser"
+    "lint": "eslint .",
+    "clean": "rm -rf build",
+    "pretest": "npm run lint",
+    "test": "vitest run",
+    "test:node": "vitest run --project node-esm",
+    "test:browser": "vitest run --project browser",
+    "test:watch": "vitest --project node-esm",
+    "build:node": "vite build",
+    "build:browser": "vite build --mode browser",
+    "build:browser:iife": "vite build --mode browser-iife",
+    "build": "npm run clean && npm run build:node && npm run build:browser && npm run build:browser:iife"
   },
   "repository": {
     "type": "git",
@@ -40,16 +63,17 @@
   "homepage": "https://github.com/iden3/ffjavascript",
   "dependencies": {
     "wasmbuilder": "0.0.16",
-    "wasmcurves": "file:../wasmcurves",
-    "web-worker": "1.5.0"
+    "wasmcurves": "https://github.com/iden3/wasmcurves.git#feat/esm-migration",
+    "workerpool": "10.0.1"
   },
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^25.0.4",
-    "@rollup/plugin-node-resolve": "^15.2.1",
-    "@rollup/plugin-replace": "^5.0.3",
-    "chai": "^5.1.1",
-    "eslint": "^9.12.0",
-    "mocha": "^10.7.3",
-    "rollup": "^3.29.4"
+    "@eslint/js": "^10.0.1",
+    "@vitest/browser": "^4.1.1",
+    "@vitest/browser-playwright": "^4.1.1",
+    "eslint": "^10.1.0",
+    "globals": "^17.4.0",
+    "playwright": "^1.58.2",
+    "vite": "^8.0.2",
+    "vitest": "^4.1.1"
   }
 }

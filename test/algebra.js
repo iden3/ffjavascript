@@ -17,23 +17,20 @@
     zksnark JavaScript library. If not, see <https://www.gnu.org/licenses/>.
 */
 
-import * as chai from "chai";
 
 import * as Scalar from "../src/scalar.js";
 import buildBn128 from "../src/bn128.js";
 import F1Field from "../src/f1field.js";
+import { describe, it, beforeAll, afterAll, assert } from "vitest";
 
-const assert = chai.assert;
 
-
-describe("F1 testing", function() {
-    this.timeout(0);
+describe("F1 testing", function () {
 
     let bn128;
-    before( async() => {
+    beforeAll(async () => {
         bn128 = await buildBn128();
     });
-    after( async() => {
+    afterAll(async () => {
         bn128.terminate();
     });
 
@@ -47,8 +44,8 @@ describe("F1 testing", function() {
     it("Should multiply and divide in F1", () => {
         const a = bn128.F1.e("1");
         const b = bn128.F1.e("-1");
-        const c = bn128.F1.mul(a,b);
-        const d = bn128.F1.div(c,b);
+        const c = bn128.F1.mul(a, b);
+        const d = bn128.F1.div(c, b);
 
         assert(bn128.F1.eq(a, d));
     });
@@ -64,7 +61,7 @@ describe("F1 testing", function() {
 
     it("Should compute sqrt of 100 random numbers", () => {
         const F = new F1Field(bn128.r);
-        for (let j=0;j<100; j++) {
+        for (let j = 0; j < 100; j++) {
             let a = F.random();
             let s = F.sqrt(a);
             if (s != null) {
@@ -74,14 +71,13 @@ describe("F1 testing", function() {
     });
 });
 
-describe("Curve G1 Test", function() {
-    this.timeout(0);
+describe("Curve G1 Test", function () {
 
     let bn128;
-    before( async() => {
+    beforeAll(async () => {
         bn128 = await buildBn128();
     });
-    after( async() => {
+    afterAll(async () => {
         bn128.terminate();
     });
 
@@ -107,18 +103,17 @@ describe("Curve G1 Test", function() {
     });
 });
 
-describe("Curve G2 Test", function() {
-    this.timeout(0);
+describe("Curve G2 Test", function () {
 
     let bn128;
-    before( async() => {
+    beforeAll(async () => {
         bn128 = await buildBn128();
     });
-    after( async() => {
+    afterAll(async () => {
         bn128.terminate();
     });
 
-    it ("r*one == 0", () => {
+    it("r*one == 0", () => {
         const res = bn128.G2.timesScalar(bn128.G2.g, bn128.r);
 
         assert(bn128.G2.eq(res, bn128.G2.zero), "G2 does not have range r");
@@ -144,14 +139,13 @@ describe("Curve G2 Test", function() {
     });
 });
 
-describe("F6 testing", function() {
-    this.timeout(0);
+describe("F6 testing", function () {
 
     let bn128;
-    before( async() => {
+    beforeAll(async () => {
         bn128 = await buildBn128();
     });
-    after( async() => {
+    afterAll(async () => {
         bn128.terminate();
     });
 
@@ -167,21 +161,20 @@ describe("F6 testing", function() {
             [Scalar.e("10"), Scalar.e("9")],
             [Scalar.e("8"), Scalar.e("7")]
         ]);
-        const c = bn128.F6.mul(a,b);
-        const d = bn128.F6.div(c,b);
+        const c = bn128.F6.mul(a, b);
+        const d = bn128.F6.div(c, b);
 
         assert(bn128.F6.eq(a, d));
     });
 });
 
-describe("F12 testing", function() {
-    this.timeout(0);
+describe("F12 testing", function () {
 
     let bn128;
-    before( async() => {
+    beforeAll(async () => {
         bn128 = await buildBn128();
     });
-    after( async() => {
+    afterAll(async () => {
         bn128.terminate();
     });
 
@@ -210,21 +203,20 @@ describe("F12 testing", function() {
                 [Scalar.e("2"), Scalar.e("1")]
             ]
         ]);
-        const c = bn128.F12.mul(a,b);
-        const d = bn128.F12.div(c,b);
+        const c = bn128.F12.mul(a, b);
+        const d = bn128.F12.div(c, b);
 
         assert(bn128.F12.eq(a, d));
     });
 });
 
-describe("Pairing", function() {
-    this.timeout(0);
+describe("Pairing", function () {
 
     let bn128;
-    before( async() => {
+    beforeAll(async () => {
         bn128 = await buildBn128();
     });
-    after( async() => {
+    afterAll(async () => {
         bn128.terminate();
     });
 
@@ -256,7 +248,7 @@ describe("Pairing", function() {
     })
     */
     it("Should generate another pairing pairing", () => {
-        for (let i=0; i<1; i++) {
+        for (let i = 0; i < 1; i++) {
             const g1a = bn128.G1.timesScalar(bn128.G1.g, 10);
             const g2a = bn128.G2.timesScalar(bn128.G2.g, 1);
 
@@ -298,26 +290,25 @@ describe("Pairing", function() {
     });
 });
 
-describe("Compressed Form", function() {
-    this.timeout(0);
+describe("Compressed Form", function () {
 
     let bn128;
-    before( async() => {
+    beforeAll(async () => {
         bn128 = await buildBn128();
     });
-    after( async() => {
+    afterAll(async () => {
         bn128.terminate();
     });
 
     it("Should test rpr of G2", () => {
         const P1 = bn128.G2.fromObject([
             [
-                Scalar.e("1b2327ce7815d3358fe89fd8e5695305ed23682db29569f549ab8f48cae1f1c4",16),
-                Scalar.e("1ed41ca6b3edc06237af648f845c270ff83bcde333f17863c1b71a43b271b46d",16)
+                Scalar.e("1b2327ce7815d3358fe89fd8e5695305ed23682db29569f549ab8f48cae1f1c4", 16),
+                Scalar.e("1ed41ca6b3edc06237af648f845c270ff83bcde333f17863c1b71a43b271b46d", 16)
             ],
             [
-                Scalar.e("122057912ab892abcf2e729f0f342baea3fe1b484840eb97c7d78cd7530f4ab5",16),
-                Scalar.e("2cb317fd40d56eeb17b0c1ff9443661a42ec00cea060012873b3f643f1a5bff8",16)
+                Scalar.e("122057912ab892abcf2e729f0f342baea3fe1b484840eb97c7d78cd7530f4ab5", 16),
+                Scalar.e("2cb317fd40d56eeb17b0c1ff9443661a42ec00cea060012873b3f643f1a5bff8", 16)
             ],
             [
                 Scalar.one,
@@ -334,6 +325,6 @@ describe("Compressed Form", function() {
         console.log(bn128.G2.toString(P2, 16));
         */
 
-        assert(bn128.G2.eq(P1,P2));
+        assert(bn128.G2.eq(P1, P2));
     });
 });
