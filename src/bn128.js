@@ -19,7 +19,7 @@ export default async function buildBn128(singleThread, plugins) {
 
         //console.log(bn128wasmPrebuilt);
         bn128wasm.pq = bn128wasmPrebuilt.pq;
-        bn128wasm.pr = bn128wasmPrebuilt.pq;
+        bn128wasm.pr = bn128wasmPrebuilt.pr;
         bn128wasm.pG1gen = bn128wasmPrebuilt.pG1gen;
         bn128wasm.pG1zero = bn128wasmPrebuilt.pG1zero;
         bn128wasm.pG1b = bn128wasmPrebuilt.pG1b;

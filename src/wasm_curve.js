@@ -209,7 +209,7 @@ export default class WasmCurve {
 
     toJacobian(a) {
         if (a.byteLength == this.F.n8*3) {
-            return a;
+            return a.slice();
         } else if (a.byteLength == this.F.n8*2) {
             return this.op1("_toJacobian", a);
         } else {

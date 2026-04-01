@@ -2835,7 +2835,7 @@ var WasmCurve = class {
 		else throw new Error("invalid point size");
 	}
 	toJacobian(a) {
-		if (a.byteLength == this.F.n8 * 3) return a;
+		if (a.byteLength == this.F.n8 * 3) return a.slice();
 		else if (a.byteLength == this.F.n8 * 2) return this.op1("_toJacobian", a);
 		else throw new Error("invalid point size");
 	}
@@ -5507,10 +5507,8 @@ function buildFFT(curve, groupName) {
 			buff = array2buffer(buff, sIn);
 			returnArray = true;
 		} else buff = buff.slice(0, buff.byteLength);
-		console.log("FFT input size:", buff.byteLength, " bytes");
 		const nPoints = buff.byteLength / sIn;
 		const bits = log2(nPoints);
-		console.log("FFT points:", nPoints, " bits:", bits);
 		if (1 << bits != nPoints) throw new Error("fft must be multiple of 2");
 		if (bits == Fr.s + 1) {
 			let buffOut;
@@ -5522,25 +5520,26 @@ function buildFFT(curve, groupName) {
 		let inv;
 		if (inverse) inv = Fr.inv(Fr.e(nPoints));
 		let buffOut;
-		console.log("fnReversePermutation:", fnReversePermutation);
-		const task = [];
-		task.push({
-			cmd: "ALLOCSET",
-			var: 0,
-			buff
-		});
-		task.push({
-			cmd: "CALL",
-			fnName: fnReversePermutation,
-			params: [{ var: 0 }, { val: bits }]
-		});
-		task.push({
-			cmd: "GET",
-			out: 0,
-			var: 0,
-			len: nPoints * sIn
-		});
-		buff = (await tm.queueAction(task, [buff.buffer]))[0];
+		if (sIn === sMid) {
+			const task = [];
+			task.push({
+				cmd: "ALLOCSET",
+				var: 0,
+				buff
+			});
+			task.push({
+				cmd: "CALL",
+				fnName: fnReversePermutation,
+				params: [{ var: 0 }, { val: bits }]
+			});
+			task.push({
+				cmd: "GET",
+				out: 0,
+				var: 0,
+				len: nPoints * sIn
+			});
+			buff = (await tm.queueAction(task, [buff.buffer]))[0];
+		} else buffReverseBits(buff, sIn);
 		let chunks;
 		let pointsInChunk = Math.min(1 << MAX_BITS_THREAD, nPoints);
 		let nChunks = nPoints / pointsInChunk;
@@ -6350,7 +6349,7 @@ async function buildBn128(singleThread, plugins) {
 		console.log("Using prebuilt bn128 wasm");
 		const bn128wasmPrebuilt = await import("wasmcurves/build/bn128_wasm_gzip.js");
 		bn128wasm.pq = bn128wasmPrebuilt.pq;
-		bn128wasm.pr = bn128wasmPrebuilt.pq;
+		bn128wasm.pr = bn128wasmPrebuilt.pr;
 		bn128wasm.pG1gen = bn128wasmPrebuilt.pG1gen;
 		bn128wasm.pG1zero = bn128wasmPrebuilt.pG1zero;
 		bn128wasm.pG1b = bn128wasmPrebuilt.pG1b;
