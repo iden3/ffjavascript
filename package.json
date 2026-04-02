@@ -41,7 +41,7 @@
     "build:node": "vite build",
     "build:browser": "vite build --mode browser",
     "build:browser:iife": "vite build --mode browser-iife",
-    "build": "npm run clean && npm run build:node && npm run build:browser && npm run build:browser:iife"
+    "build": "npm run clean && npm run build:browser && npm run build:browser:iife && npm run build:node"
   },
   "repository": {
     "type": "git",
