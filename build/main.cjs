@@ -5,7 +5,7 @@ let workerpool = require("workerpool");
 workerpool = require_threadman_thread.__toESM(workerpool);
 let os = require("os");
 os = require_threadman_thread.__toESM(os);
-require("url");
+let url = require("url");
 //#region src/scalar.js
 var scalar_exports = /* @__PURE__ */ require_threadman_thread.__exportAll({
 	abs: () => abs,
@@ -2947,7 +2947,8 @@ function supportsWorkers() {
 	return true;
 }
 function getWorkerSource() {
-	return "/Users/dimak/Documents/work/snarkjs-refactor/ffjavascript/build/threadman_worker.cjs";
+	if (typeof require("path").join(__dirname, "threadman_worker.cjs") !== "undefined") return require("path").join(__dirname, "threadman_worker.cjs");
+	return (0, url.fileURLToPath)(new URL("data:text/javascript;base64,LyoqCiAqIFN0YW5kYWxvbmUgd29ya2VyIGVudHJ5LXBvaW50IGZvciBOb2RlLmpzICh3b3JrZXJfdGhyZWFkcykuCiAqCiAqIFRoaXMgZmlsZSBpcyBjb21waWxlZCBieSByb2xsdXAgaW50byBidWlsZC90aHJlYWRtYW5fd29ya2VyLmNqcyBhbmQgbG9hZGVkCiAqIGJ5IHdvcmtlcnBvb2wgd2hlbiBydW5uaW5nIGluIE5vZGUuanMgbXVsdGktdGhyZWFkIG1vZGUuCiAqCiAqIHdvcmtlcnBvb2wgZGV0ZWN0cyB0aGF0IGl0IGlzIGluc2lkZSBhIHdvcmtlcl90aHJlYWRzIHdvcmtlciB2aWEgcGFyZW50UG9ydAogKiBhbmQgY2FsbHMgd29ya2VyLnJlZ2lzdGVyKCkgdG8gZXhwb3NlIHRoZSBtZXRob2RzIHRvIHRoZSBwb29sLgogKi8KaW1wb3J0IHdvcmtlcnBvb2wgZnJvbSAid29ya2VycG9vbCI7CmltcG9ydCB0aHJlYWQgZnJvbSAiLi90aHJlYWRtYW5fdGhyZWFkLmpzIjsKCmNvbnN0IHJ1blRhc2tGbiA9IHRocmVhZCgpOwoKd29ya2VycG9vbC53b3JrZXIoewogICAgcnVuVGFzayh0YXNrKSB7CiAgICAgICAgY29uc3QgcmVzdWx0ID0gcnVuVGFza0ZuKHRhc2spOwogICAgICAgIC8vIElOSVQgcGF0aDogcnVuVGFza0ZuIHJldHVybnMgYSBQcm9taXNlIOKAlCBsZXQgd29ya2VycG9vbCBhd2FpdCBpdC4KICAgICAgICBpZiAocmVzdWx0IGluc3RhbmNlb2YgUHJvbWlzZSkgcmV0dXJuIHJlc3VsdDsKICAgICAgICAvLyBOb24tSU5JVCBwYXRoOiB0cmFuc2ZlciBvdXRwdXQgVWludDhBcnJheXMgemVyby1jb3B5IHRvIHRoZSBtYWluIHRocmVhZC4KICAgICAgICBpZiAocmVzdWx0Lmxlbmd0aCA9PT0gMCkgcmV0dXJuIHJlc3VsdDsKICAgICAgICByZXR1cm4gbmV3IHdvcmtlcnBvb2wuVHJhbnNmZXIocmVzdWx0LCByZXN1bHQubWFwKGIgPT4gYi5idWZmZXIpKTsKICAgIH0KfSk7Cg==", "" + {}.url));
 }
 //#endregion
 //#region src/threadman.js

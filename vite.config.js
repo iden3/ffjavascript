@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import { resolve } from "path";
 import { readFileSync, rmSync } from "fs";
 import { playwright } from "@vitest/browser-playwright";
-import path from "path";
+
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const abs = (...p) => resolve(__dirname, ...p);
@@ -261,9 +261,7 @@ export default defineConfig(({ mode }) => {
                     define: {
                         // Injected only during `vite build` (apply:"build" excludes vitest).
                         // Points to the compiled worker that lands next to main.cjs in build/.
-                        __BUILD_WORKER_PATH__: JSON.stringify(
-                            resolve(path.dirname(fileURLToPath(import.meta.url)), "build", "threadman_worker.cjs")
-                        ),
+                        __BUILD_WORKER_PATH__: "require('path').join(__dirname, 'threadman_worker.cjs')",
                     },
                 }),
             },
