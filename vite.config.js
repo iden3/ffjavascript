@@ -299,6 +299,7 @@ export default defineConfig(({ mode }) => {
                         testTimeout: 300_000,
                         browser: {
                             provider: playwright(),
+                            headless: true,
                             enabled: true,
                             instances: [{ browser: "chromium" }],
                         },
