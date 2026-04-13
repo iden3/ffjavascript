@@ -1,7 +1,7 @@
 console.log("node cjs");
 const require_threadman_thread = require("./threadman_thread.cjs");
 let workerpool = require("workerpool");
-workerpool = require_threadman_thread.__toESM(workerpool);
+workerpool = require_threadman_thread.__toESM(workerpool, 1);
 //#region src/threadman_worker.js
 /**
 * Standalone worker entry-point for Node.js (worker_threads).

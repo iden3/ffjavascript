@@ -2,9 +2,9 @@ console.log("node cjs");
 Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 const require_threadman_thread = require("./threadman_thread.cjs");
 let workerpool = require("workerpool");
-workerpool = require_threadman_thread.__toESM(workerpool);
+workerpool = require_threadman_thread.__toESM(workerpool, 1);
 let os = require("os");
-os = require_threadman_thread.__toESM(os);
+os = require_threadman_thread.__toESM(os, 1);
 let url = require("url");
 //#region src/scalar.js
 var scalar_exports = /* @__PURE__ */ require_threadman_thread.__exportAll({
