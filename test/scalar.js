@@ -3,7 +3,7 @@ import { describe, it, assert } from "vitest";
 
 
 describe("Basic scalar conversions", () => {
-    it("Should conversion Native", () => {
+    it("Should convert Native", () => {
         assert(Scalar.eq(Scalar.e("0x12"), 18));
         assert(Scalar.eq(Scalar.e("0x12", 16), 18));
         assert(Scalar.eq(Scalar.e("12", 16), 18));

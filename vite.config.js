@@ -17,9 +17,13 @@ const pkg = JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf-8")
  *
  * We cannot use emptyOutDir:true because build/ also contains build/browser/
  * which is produced by the separate build:browser step.
+ *
+ * apply:"build" restricts this to `vite build` so it does NOT fire during
+ * vitest, which would otherwise delete the committed build/*.cjs artifacts.
  */
 const cleanNodeBuildPlugin = {
     name: "clean-node-build",
+    apply: "build",
     buildStart() {
         for (const f of ["main.cjs", "threadman_thread.cjs", "threadman_worker.cjs"]) {
             rmSync(abs("build", f), { force: true });
@@ -69,11 +73,31 @@ const workerScriptPlugin = {
         if (_workerScript) return;
 
         const raw = readFileSync(abs("src/threadman_thread.js"), "utf-8");
-        const fnSrc = raw.slice(raw.indexOf("export default ") + "export default ".length).trim();
+        const marker = "export default ";
+        const markerIdx = raw.indexOf(marker);
+        if (markerIdx === -1) {
+            throw new Error(
+                `worker-script-inline: could not find "${marker}" in src/threadman_thread.js; ` +
+                "cannot assemble the worker script.",
+            );
+        }
+        const fnSrc = raw.slice(markerIdx + marker.length).trim();
 
         // workerpool's pre-built, minified worker runtime (CJS string export).
+        // NOTE: this is an internal workerpool path, not part of its public API,
+        // so it may move between versions — fail loudly with a clear message.
         const require = createRequire(import.meta.url);
-        const embeddedWorker = require("workerpool/src/generated/embeddedWorker");
+        let embeddedWorker;
+        try {
+            embeddedWorker = require("workerpool/src/generated/embeddedWorker");
+        } catch (err) {
+            throw new Error(
+                "worker-script-inline: failed to load workerpool's embeddedWorker " +
+                "(workerpool/src/generated/embeddedWorker). This internal path may have " +
+                "moved in the installed workerpool version.",
+                { cause: err },
+            );
+        }
 
         // Strip the trailing sourceMappingURL comment that workerpool bakes
         // into its minified worker string.  The comment is harmless in the
@@ -150,7 +174,6 @@ export default defineConfig(({ mode }) => {
                     codeSplitting: false,
                     rollupOptions: {
                         onwarn: suppressNodeExternalWarnings,
-                        output: { banner: "console.log('browser iife');" },
                     },
                 },
                 define: { "process.browser": "true" },
@@ -194,7 +217,6 @@ export default defineConfig(({ mode }) => {
                 rollupOptions: {
                     external: isExternal,
                     onwarn: suppressNodeExternalWarnings,
-                    output: { banner: "console.log('browser esm');" },
                 },
             },
             define: { "process.browser": "true" },
@@ -241,7 +263,6 @@ export default defineConfig(({ mode }) => {
             rollupOptions: {
                 external: isExternal,
                 output: {
-                    banner: "console.log('node cjs');",
                     // Stable chunk names so the require() path never changes
                     // between rebuilds.
                     chunkFileNames: "[name].cjs",

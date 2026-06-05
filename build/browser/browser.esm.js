@@ -1,4 +1,3 @@
-console.log("browser esm");
 //#region \0rolldown/runtime.js
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -6,7 +5,7 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __commonJSMin = (cb, mod) => () => (mod || cb((mod = { exports: {} }).exports, mod), mod.exports);
+var __commonJSMin = (cb, mod) => () => (mod || (cb((mod = { exports: {} }).exports, mod), cb = null), mod.exports);
 var __exportAll = (all, no_symbols) => {
 	let target = {};
 	for (var name in all) __defProp(target, name, {
@@ -3072,33 +3071,33 @@ function thread() {
 	}
 	return runTask;
 }
+/**
+* workerpool.js
+* https://github.com/josdejong/workerpool
+*
+* Offload tasks to a pool of workers on node.js and in the browser.
+*
+* @version 10.0.1
+* @date    2025-11-19
+*
+* @license
+* Copyright (C) 2014-2022 Jos de Jong <wjosdejong@gmail.com>
+*
+* Licensed under the Apache License, Version 2.0 (the "License"); you may not
+* use this file except in compliance with the License. You may obtain a copy
+* of the License at
+*
+* http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+* WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+* License for the specific language governing permissions and limitations under
+* the License.
+*/
 //#endregion
 //#region \0virtual:worker-script
 var import_workerpool = /* @__PURE__ */ __toESM((/* @__PURE__ */ __commonJSMin(((exports, module) => {
-	/**
-	* workerpool.js
-	* https://github.com/josdejong/workerpool
-	*
-	* Offload tasks to a pool of workers on node.js and in the browser.
-	*
-	* @version 10.0.1
-	* @date    2025-11-19
-	*
-	* @license
-	* Copyright (C) 2014-2022 Jos de Jong <wjosdejong@gmail.com>
-	*
-	* Licensed under the Apache License, Version 2.0 (the "License"); you may not
-	* use this file except in compliance with the License. You may obtain a copy
-	* of the License at
-	*
-	* http://www.apache.org/licenses/LICENSE-2.0
-	*
-	* Unless required by applicable law or agreed to in writing, software
-	* distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-	* WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-	* License for the specific language governing permissions and limitations under
-	* the License.
-	*/
 	(function(global, factory) {
 		typeof exports === "object" && typeof module !== "undefined" ? factory(exports) : typeof define === "function" && define.amd ? define(["exports"], factory) : (global = typeof globalThis !== "undefined" ? globalThis : global || self, factory(global.workerpool = {}));
 	})(exports, (function(exports$2) {
@@ -4047,7 +4046,7 @@ var import_workerpool = /* @__PURE__ */ __toESM((/* @__PURE__ */ __commonJSMin((
 			this.error = timeoutError;
 			this.stack = (/* @__PURE__ */ new Error()).stack;
 		}
-		var TerminateError$1 = /* @__PURE__ */ function(_Error) {
+		var TerminateError$1 = /*#__PURE__*/ function(_Error) {
 			/**
 			* Create a timeout error
 			* @param {String} [message]
@@ -4062,7 +4061,7 @@ var import_workerpool = /* @__PURE__ */ __toESM((/* @__PURE__ */ __commonJSMin((
 			}
 			_inherits(TerminateError, _Error);
 			return _createClass(TerminateError);
-		}(/* @__PURE__ */ _wrapNativeSuper(Error));
+		}(/*#__PURE__*/ _wrapNativeSuper(Error));
 		WorkerHandler$1.exports = WorkerHandler;
 		WorkerHandler$1.exports._tryRequireWorkerThreads = tryRequireWorkerThreads;
 		WorkerHandler$1.exports._setupProcessWorker = setupProcessWorker;
@@ -4624,9 +4623,18 @@ var import_workerpool = /* @__PURE__ */ __toESM((/* @__PURE__ */ __commonJSMin((
 				var TIMEOUT_DEFAULT = 1e3;
 				var worker = { exit: function exit() {} };
 				var publicWorker = {
+					/**
+					* Registers listeners which will trigger when a task is timed out or cancled. If all listeners resolve, the worker executing the given task will not be terminated.
+					* *Note*: If there is a blocking operation within a listener, the worker will be terminated.
+					* @param {() => Promise<void>} listener
+					*/
 					addAbortListener: function addAbortListener(listener) {
 						worker.abortListeners.push(listener);
 					},
+					/**
+					* Emit an event from the worker thread to the main thread.
+					* @param {any} payload
+					*/
 					emit: worker.emit
 				};
 				if (typeof self !== "undefined" && typeof postMessage === "function" && typeof addEventListener === "function") {
@@ -6367,7 +6375,7 @@ async function buildBn128(singleThread, plugins) {
 		const blob = new Blob([compressedCode]);
 		const ds = new DecompressionStream("gzip");
 		const decompressedStream = blob.stream().pipeThrough(ds);
-		bn128wasm.code = await new Response(decompressedStream).bytes();
+		bn128wasm.code = new Uint8Array(await new Response(decompressedStream).arrayBuffer());
 	} else {
 		const { ModuleBuilder } = await import("wasmbuilder");
 		const { buildBn128: buildBn128wasm } = await import("wasmcurves");

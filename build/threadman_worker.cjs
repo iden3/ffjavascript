@@ -1,4 +1,3 @@
-console.log("node cjs");
 const require_threadman_thread = require("./threadman_thread.cjs");
 let workerpool = require("workerpool");
 workerpool = require_threadman_thread.__toESM(workerpool, 1);

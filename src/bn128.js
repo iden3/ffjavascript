@@ -40,7 +40,7 @@ export default async function buildBn128(singleThread, plugins) {
         const ds = new DecompressionStream("gzip");
         const decompressedStream = blob.stream().pipeThrough(ds);
 
-        bn128wasm.code = await new Response(decompressedStream).bytes();
+        bn128wasm.code = new Uint8Array(await new Response(decompressedStream).arrayBuffer());
     } else {
 
         //import { ModuleBuilder } from "wasmbuilder";

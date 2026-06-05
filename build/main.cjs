@@ -1,4 +1,3 @@
-console.log("node cjs");
 Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 const require_threadman_thread = require("./threadman_thread.cjs");
 let workerpool = require("workerpool");
@@ -4365,7 +4364,7 @@ async function buildBn128(singleThread, plugins) {
 		const blob = new Blob([compressedCode]);
 		const ds = new DecompressionStream("gzip");
 		const decompressedStream = blob.stream().pipeThrough(ds);
-		bn128wasm.code = await new Response(decompressedStream).bytes();
+		bn128wasm.code = new Uint8Array(await new Response(decompressedStream).arrayBuffer());
 	} else {
 		const { ModuleBuilder } = await import("wasmbuilder");
 		const { buildBn128: buildBn128wasm } = await import("wasmcurves");

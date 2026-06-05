@@ -67,7 +67,7 @@ describe("bn128", function () {
             const num1 = Ainv.slice(i * Fr.n8, i * Fr.n8 + Fr.n8);
             const num2 = a.slice(i * Fr.n8, i * Fr.n8 + Fr.n8);
 
-            assert(num1, num2);
+            assert(Fr.eq(num1, num2));
         }
     });
 
