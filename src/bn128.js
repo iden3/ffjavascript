@@ -11,13 +11,10 @@ export default async function buildBn128(singleThread, plugins) {
 
     if (!plugins) {
 
-        console.log("Using prebuilt bn128 wasm");
-
         //import { bn128_wasm_gzip as bn128wasmPrebuilt } from "wasmcurves";
         //const { bn128_wasm_gzip: bn128wasmPrebuilt } = await import("wasmcurves");
         const bn128wasmPrebuilt = await import("wasmcurves/build/bn128_wasm_gzip.js");
 
-        //console.log(bn128wasmPrebuilt);
         bn128wasm.pq = bn128wasmPrebuilt.pq;
         bn128wasm.pr = bn128wasmPrebuilt.pr;
         bn128wasm.pG1gen = bn128wasmPrebuilt.pG1gen;
@@ -71,8 +68,6 @@ export default async function buildBn128(singleThread, plugins) {
         bn128wasm.q = moduleBuilder.modules.bn128.q;
         bn128wasm.r = moduleBuilder.modules.bn128.r;
     }
-
-    //console.log("bn128wasm:", bn128wasm);
 
     const params = {
         name: "bn128",
