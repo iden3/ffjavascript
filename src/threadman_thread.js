@@ -1,211 +1,129 @@
-/* global WebAssembly */
-
-export default function thread(self) {
+/**
+ * Worker task logic used by workerpool.
+ *
+ * This module exports a plain function that encapsulates all wasm helper
+ * utilities (alloc, runTask, init).  The function can be:
+ *   1. Called directly in single-thread mode (returns the runTask function).
+ *   2. Stringified and embedded into a workerpool worker script for
+ *      multi-thread mode (browser or Node.js).
+ *
+ * The exported function accepts no arguments when used as factory and returns
+ * the runTask function, which can then be registered with workerpool.worker().
+ */
+export default function thread() {
     const MAXMEM = 32767;
     let instance;
     let memory;
-    let terminationTimeout = 1000; // milliseconds
-    let terminationTimer;
 
-    if (self) {
-        self.onmessage = function(e) {
-            let data;
-            if (e.data) {
-                data = e.data;
-            } else {
-                data = e;
-            }
+    // Lazily cached typed-array views over wasm memory.
+    // Invalidated automatically when memory.grow() replaces memory.buffer.
+    let _u32 = null;
+    let _u8  = null;
 
-            try {
-                if (data[0].cmd === "INIT") {
-                    init(data[0]).then(function() {
-                        console.log("INIT DONE");
-                        self.postMessage({status: "initialized"});
-                    });
-                } else if (data[0].cmd === "TERMINATE") {
-                    terminate();
-                } else {
-                    let terminateAfterTask = false;
-                    if (data[data.length-1].cmd === "TERMINATE") {
-                        terminateAfterTask = true;
-                        data.pop();
-                        //terminationTimeout = 1;
-                    }
-                    const res = runTask(data);
-                    //self.postMessage(res);
-                    let transfers = [];
-                    for (let i=0; i<res.length; i++) {
-                        if (res[i] instanceof Uint8Array) {
-                            transfers.push(res[i].buffer);
-                            //console.log("transfer buffer", res[i].byteLength);
-                        }
-                    }
-                    for (let i=0; i<data.length; i++) {
-                        if (data[i].cmd === "CALL") {
-                            //console.log(data[i].fnName);
-                        }
-                    }
-                    //console.log("transfers", transfers);
-                    self.postMessage(res, transfers);
-                    //self.postMessage(res);
-                    if (terminateAfterTask) {
-                        //self.postMessage({status: "graceful_termination"});
-                        terminate();
-                    }
-                }
-            } catch (err) {
-                // Catch any error and send it back to main thread
-                self.postMessage({error: err.message});
-            }
-            scheduleTermination();
-        };
+    function getU32() {
+        if (_u32 === null || _u32.buffer !== memory.buffer) {
+            _u32 = new Uint32Array(memory.buffer, 0, 1);
+        }
+        return _u32;
+    }
 
-        // self.onerror = function (e) {
-        //     console.error("Worker caught an error:", e.message);
-        //     // Prevent the default behavior (which would terminate the worker)
-        //     return true;
-        // };
+    function getU8() {
+        if (_u8 === null || _u8.buffer !== memory.buffer) {
+            _u8 = new Uint8Array(memory.buffer);
+        }
+        return _u8;
     }
 
     async function init(data) {
         let wasmModule;
         if (data.code instanceof WebAssembly.Module) {
-            console.log("Using precompiled WebAssembly.Module");
             wasmModule = data.code;
         } else {
-            console.log("Compiling WebAssembly.Module");
-            const code = new Uint8Array(data.code);
-            wasmModule = await WebAssembly.compile(code);
+            wasmModule = await WebAssembly.compile(new Uint8Array(data.code));
         }
-        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
-
-        console.log("Initialized thread with memory", memory.buffer.byteLength / 1024 / 1024, "MB");
-
-        instance = await WebAssembly.instantiate(wasmModule, {
-            env: {
-                "memory": memory
-            }
-        });
-
-        if (data.terminationTimeout) {
-            terminationTimeout = data.terminationTimeout;
-        }
-        console.log("init done!");
-
-        scheduleTermination();
+        memory = new WebAssembly.Memory({initial: data.init, maximum: MAXMEM});
+        // Reset cached views — new memory means new backing buffer.
+        _u32 = null;
+        _u8  = null;
+        instance = await WebAssembly.instantiate(wasmModule, {env: {memory}});
     }
 
-
-
     function alloc(length) {
-        const u32 = new Uint32Array(memory.buffer, 0, 1);
-        while (u32[0] & 3) u32[0]++;  // Return always aligned pointers
+        const u32 = getU32();
+        // Align to 4 bytes with a branchless bitmask instead of a loop.
+        u32[0] = (u32[0] + 3) & ~3;
         const res = u32[0];
         u32[0] += length;
         if (u32[0] + length > memory.buffer.byteLength) {
             const currentPages = memory.buffer.byteLength / 0x10000;
-            let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;
-            if (requiredPages>MAXMEM) requiredPages=MAXMEM;
-            memory.grow(requiredPages-currentPages);
-            console.log("Growing memory to", memory.buffer.byteLength / 1024 / 1024, "MB");
+            let requiredPages = Math.floor((u32[0] + length) / 0x10000) + 1;
+            if (requiredPages > MAXMEM) requiredPages = MAXMEM;
+            memory.grow(requiredPages - currentPages);
+            // memory.buffer changed — cached views are now stale.
         }
         return res;
     }
 
     function allocBuffer(buffer) {
-        const p = alloc(buffer.byteLength);
-        setBuffer(p, buffer);
+        const src = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+        const p = alloc(src.byteLength);
+        // getU8() handles re-creation if alloc() triggered a grow.
+        getU8().set(src, p);
         return p;
     }
 
     function getBuffer(pointer, length) {
-        // const u8 = new Uint8Array(memory.buffer);
-        // return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);
         return new Uint8Array(memory.buffer, pointer, length);
     }
 
     function setBuffer(pointer, buffer) {
-        const u8 = new Uint8Array(memory.buffer);
-        u8.set(new Uint8Array(buffer), pointer);
+        getU8().set(buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer), pointer);
     }
 
     function runTask(task) {
-        clearTimeout(terminationTimer);
         if (task[0].cmd === "INIT") {
+            // INIT is the only async path — return a Promise so workerpool
+            // can await it; all other tasks execute synchronously to prevent
+            // concurrent execution of tasks within the same worker.
             return init(task[0]);
         }
-        const ctx = {
-            vars: [],
-            out: []
-        };
-        const u32a = new Uint32Array(memory.buffer, 0, 1);
-        const oldAlloc = u32a[0];
-        for (let i=0; i<task.length; i++) {
-            switch (task[i].cmd) {
+        const vars = [];
+        const out  = [];
+        const oldAlloc = getU32()[0];
+        for (let i = 0; i < task.length; i++) {
+            const step = task[i];
+            switch (step.cmd) {
             case "ALLOCSET":
-                if (task[i].len / 1024 / 1024 > 25) {
-                    console.log("tasks", task);
-                    console.trace();
-                }
-                ctx.vars[task[i].var] = allocBuffer(task[i].buff);
+                vars[step.var] = allocBuffer(step.buff);
                 break;
             case "ALLOC":
-                if (task[i].len / 1024 / 1024 > 25) {
-                    console.log("tasks", task);
-                    console.trace();
-                }
-                ctx.vars[task[i].var] = alloc(task[i].len);
+                vars[step.var] = alloc(step.len);
                 break;
             case "SET":
-                setBuffer(ctx.vars[task[i].var], task[i].buff);
+                setBuffer(vars[step.var], step.buff);
                 break;
             case "CALL": {
-                const params = [];
-                for (let j=0; j<task[i].params.length; j++) {
-                    const p = task[i].params[j];
-                    if (typeof p.var !== "undefined") {
-                        params.push(ctx.vars[p.var] + (p.offset || 0));
-                    } else if (typeof p.val != "undefined") {
-                        params.push(p.val);
-                    }
+                const paramDefs = step.params;
+                const params = new Array(paramDefs.length);
+                for (let j = 0; j < paramDefs.length; j++) {
+                    const p = paramDefs[j];
+                    params[j] = p.var !== undefined
+                        ? vars[p.var] + (p.offset || 0)
+                        : p.val;
                 }
-                instance.exports[task[i].fnName](...params);
+                instance.exports[step.fnName](...params);
                 break;
             }
             case "GET":
-                ctx.out[task[i].out] = getBuffer(ctx.vars[task[i].var], task[i].len).slice();
+                out[step.out] = getBuffer(vars[step.var], step.len).slice();
                 break;
             default:
-                throw new Error("Invalid cmd");
+                throw new Error("Invalid cmd: " + step.cmd);
             }
         }
-        const u32b = new Uint32Array(memory.buffer, 0, 1);
-        u32b[0] = oldAlloc;
-
-        //console.log(ctx.out);
-
-        return ctx.out;
-    }
-
-    function scheduleTermination() {
-        clearTimeout(terminationTimer);
-        if (terminationTimeout>0) {
-            terminationTimer = setTimeout( () => {
-                console.log("Shutting down thread due to inactivity");
-                terminate();
-            }, terminationTimeout);
-        }
-    }
-
-    function terminate() {
-        clearTimeout(terminationTimer);
-        //instance = null;
-        //memory = null;
-        if (self) {
-            console.log("TERMINATE");
-            self.postMessage({status: "terminated"});
-            self.close();
-        }
+        // Reclaim task-local allocations. getU32() handles a post-grow buffer.
+        getU32()[0] = oldAlloc;
+        return out;
     }
 
     return runTask;

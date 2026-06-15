@@ -11,15 +11,12 @@ export default async function buildBn128(singleThread, plugins) {
 
     if (!plugins) {
 
-        console.log("Using prebuilt bn128 wasm");
-
         //import { bn128_wasm_gzip as bn128wasmPrebuilt } from "wasmcurves";
         //const { bn128_wasm_gzip: bn128wasmPrebuilt } = await import("wasmcurves");
-        const { default: bn128wasmPrebuilt } = await import("wasmcurves/build/bn128_wasm_gzip.js");
+        const bn128wasmPrebuilt = await import("wasmcurves/build/bn128_wasm_gzip.js");
 
-        //console.log(bn128wasmPrebuilt);
         bn128wasm.pq = bn128wasmPrebuilt.pq;
-        bn128wasm.pr = bn128wasmPrebuilt.pq;
+        bn128wasm.pr = bn128wasmPrebuilt.pr;
         bn128wasm.pG1gen = bn128wasmPrebuilt.pG1gen;
         bn128wasm.pG1zero = bn128wasmPrebuilt.pG1zero;
         bn128wasm.pG1b = bn128wasmPrebuilt.pG1b;
@@ -34,13 +31,13 @@ export default async function buildBn128(singleThread, plugins) {
         bn128wasm.q = bn128wasmPrebuilt.q;
         bn128wasm.r = bn128wasmPrebuilt.r;
 
-        const compressedCode = new Uint8Array(Buffer.from(bn128wasmPrebuilt.gzipCode, "base64"));
+        const compressedCode = Uint8Array.from(atob(bn128wasmPrebuilt.gzipCode), c => c.charCodeAt(0));
         const blob = new Blob([compressedCode]);
 
         const ds = new DecompressionStream("gzip");
         const decompressedStream = blob.stream().pipeThrough(ds);
 
-        bn128wasm.code = await new Response(decompressedStream).bytes();
+        bn128wasm.code = new Uint8Array(await new Response(decompressedStream).arrayBuffer());
     } else {
 
         //import { ModuleBuilder } from "wasmbuilder";
@@ -71,8 +68,6 @@ export default async function buildBn128(singleThread, plugins) {
         bn128wasm.q = moduleBuilder.modules.bn128.q;
         bn128wasm.r = moduleBuilder.modules.bn128.r;
     }
-
-    //console.log("bn128wasm:", bn128wasm);
 
     const params = {
         name: "bn128",

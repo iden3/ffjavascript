@@ -47,7 +47,7 @@ export default class PolField {
 
 
         this.roots = [];
-/*        for (let i=0; i<16; i++) {
+        /*        for (let i=0; i<16; i++) {
             let r = this.F.one;
             n = 1 << i;
             const rootsi = new Array(n);

@@ -17,73 +17,73 @@
     zksnark JavaScript library. If not, see <https://www.gnu.org/licenses/>.
 */
 
-import * as chai from "chai";
 
 import * as Scalar from "../src/scalar.js";
 import ZqField from "../src/f1field.js";
 import RatField from "../src/ratfield.js";
+import { describe, it, assert } from "vitest";
 
-const q  = Scalar.fromString("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+const q = Scalar.fromString("21888242871839275222246405745257275088548364400416034343698204186575808495617");
 const Z = new ZqField(q);
 const R = new RatField(Z);
 
-const assert = chai.assert;
 
-function r(a,b) {
+
+function r(a, b) {
     return [Z.e(a), Z.e(b)];
 }
 
 
 describe("Rational zq Field", () => {
     it("Should compare correctly", () => {
-        assert( R.eq(r(3,5), r(6,10)));
-        assert(!R.eq(r(3,5), r(6,11)));
+        assert(R.eq(r(3, 5), r(6, 10)));
+        assert(!R.eq(r(3, 5), r(6, 11)));
     });
     it("Should add correctly", () => {
-        const a = r(7,4);
-        const b = r(5,12);
+        const a = r(7, 4);
+        const b = r(5, 12);
 
-        assert(R.eq( R.add(a,b), r(13, 6)));
+        assert(R.eq(R.add(a, b), r(13, 6)));
     });
     it("Should substract", () => {
-        const a = r(7,4);
-        const b = r(5,12);
+        const a = r(7, 4);
+        const b = r(5, 12);
 
-        assert(R.eq( R.sub(a,b), r(4, 3)));
+        assert(R.eq(R.sub(a, b), r(4, 3)));
     });
     it("Should multiply", () => {
-        const a = r(7,4);
-        const b = r(5,12);
+        const a = r(7, 4);
+        const b = r(5, 12);
 
-        assert(R.eq( R.mul(a,b), r(35, 48)));
+        assert(R.eq(R.mul(a, b), r(35, 48)));
     });
     it("Should div", () => {
-        const a = r(7,4);
-        const b = r(5,12);
+        const a = r(7, 4);
+        const b = r(5, 12);
 
-        assert(R.eq( R.div(a,b), r(7*12, 5*4)));
+        assert(R.eq(R.div(a, b), r(7 * 12, 5 * 4)));
     });
     it("Should square", () => {
-        const a = r(7,4);
+        const a = r(7, 4);
 
-        assert(R.eq( R.square(a), r(49, 16)));
+        assert(R.eq(R.square(a), r(49, 16)));
     });
     it("Should affine", () => {
-        const a = r(12,4);
+        const a = r(12, 4);
         const aa = R.affine(a);
-        assert(Z.eq( aa[0], Z.e(3)));
-        assert(Z.eq( aa[1], Z.one));
+        assert(Z.eq(aa[0], Z.e(3)));
+        assert(Z.eq(aa[1], Z.one));
     });
     it("Should convert from Z to R", () => {
         const vz = Z.e(34);
         const vr = R.fromF(vz);
 
-        assert(R.eq( vr, r(34,1)));
+        assert(R.eq(vr, r(34, 1)));
     });
     it("Should convert from R to Z", () => {
         const vr = r(32, 2);
         const vz = R.toF(vr);
 
-        assert(Z.eq( vz, Z.e(16)));
+        assert(Z.eq(vz, Z.e(16)));
     });
 });

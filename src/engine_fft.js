@@ -1,4 +1,4 @@
-import {log2, buffReverseBits, array2buffer, buffer2array} from "./utils.js";
+import { log2, buffReverseBits, array2buffer, buffer2array } from "./utils.js";
 import BigBuffer from "./bigbuffer.js";
 
 
@@ -76,12 +76,8 @@ export default function buildFFT(curve, groupName) {
             buff = buff.slice(0, buff.byteLength);
         }
 
-        console.log("FFT input size:", buff.byteLength, " bytes");
-
         const nPoints = buff.byteLength / sIn;
         const bits = log2(nPoints);
-
-        console.log("FFT points:", nPoints, " bits:", bits);
 
         if  ((1 << bits) != nPoints) {
             throw new Error("fft must be multiple of 2" );
@@ -110,26 +106,21 @@ export default function buildFFT(curve, groupName) {
 
         let buffOut;
 
-        // TODO: optimize. Move to wasm
-        // buffReverseBits(buff, sIn);
-
-        console.log("fnReversePermutation:", fnReversePermutation);
-
-        // TODO: try to do reversing for each batch separately and inside of the task
-        const task = [];
-        task.push({cmd: "ALLOCSET", var: 0, buff: buff});
-        task.push({cmd: "CALL", fnName: fnReversePermutation, params: [{var:0}, {val: bits}]});
-        task.push({cmd: "GET", out:0, var: 0, len: nPoints*sOut});
-        const reversedBuff = await tm.queueAction(task, [buff.buffer]);
-        //const reversedBuff = await tm.queueAction(task, []);
-
-        //console.log("wasm buffReverseBits:", reversedBuff[0]);
-        //buffReverseBits(buff, sIn);
-        //console.log("js buffReverseBits:", buff);
-
-        //exit(1);
-
-        buff = reversedBuff[0];
+        // The WASM _reversePermutation functions use a fixed element stride
+        // (the native group representation size, e.g. Jacobian for G1/G2).
+        // When the input format (sIn) matches the native stride (sMid), we can
+        // use the fast WASM path.  Otherwise fall back to the JS implementation
+        // which accepts an arbitrary element size.
+        if (sIn === sMid) {
+            const task = [];
+            task.push({cmd: "ALLOCSET", var: 0, buff: buff});
+            task.push({cmd: "CALL", fnName: fnReversePermutation, params: [{var:0}, {val: bits}]});
+            task.push({ cmd: "GET", out: 0, var: 0, len: nPoints * sIn });
+            const reversedBuff = await tm.queueAction(task, [buff.buffer]);
+            buff = reversedBuff[0];
+        } else {
+            buffReverseBits(buff, sIn);
+        }
 
         let chunks;
         let pointsInChunk = Math.min(1 << MAX_BITS_THREAD, nPoints);

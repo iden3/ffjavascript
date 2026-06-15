@@ -1,4 +1,3 @@
-/* global BigInt */
 import * as Scalar from "./scalar.js";
 
 export function stringifyBigInts(o) {
