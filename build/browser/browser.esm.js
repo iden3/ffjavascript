@@ -5433,13 +5433,11 @@ function buildMultiexp(curve, groupName) {
 		let nChunks = Math.floor((sScalar * 8 - 1) / bitChunkSize) + 1;
 		if (groupName === "G2") nChunks *= 2;
 		let chunkSize;
-		console.log("nChunks_0", nChunks);
 		nChunks = (Math.floor((nChunks - 1) / tm.concurrency) + 1) * tm.concurrency;
 		chunkSize = Math.floor(nPoints / nChunks) + 1;
 		if (chunkSize > MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
 		if (chunkSize < MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
-		console.log("nChunks", nChunks);
-		console.log("effective nChunks", nPoints / chunkSize);
+		if (logger) logger.debug(`${logText}: multiexp nChunks=${nChunks} chunkSize=${chunkSize} effectiveChunks=${nPoints / chunkSize}`);
 		for (let i = 0; i < nPoints; i += chunkSize) {
 			if (logger) logger.debug(`Multiexp start: ${logText}: ${i}/${nPoints}`);
 			const n = Math.min(nPoints - i, chunkSize);
@@ -6354,7 +6352,6 @@ async function buildBn128(singleThread, plugins) {
 	if (!singleThread && globalThis.curve_bn128) return globalThis.curve_bn128;
 	let bn128wasm = {};
 	if (!plugins) {
-		console.log("Using prebuilt bn128 wasm");
 		const bn128wasmPrebuilt = await import("wasmcurves/build/bn128_wasm_gzip.js");
 		bn128wasm.pq = bn128wasmPrebuilt.pq;
 		bn128wasm.pr = bn128wasmPrebuilt.pr;
