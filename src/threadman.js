@@ -38,6 +38,23 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// WorkerSlot holds the native Worker and all per-worker state.
+// Each call to startWorker() creates a fresh WorkerSlot instance.
+// Message handlers close over the slot reference so that stale messages
+// from a replaced worker are detected by a simple identity check
+// (tm.pool[i] !== slot).
+class WorkerSlot {
+    constructor(worker) {
+        this.worker      = worker; // native Worker thread
+        this.initialized = false;
+        this.initializing= false;
+        this.working     = false;
+        this.pendingDeferred = null;
+        this.onMsg   = null; // stored so removeEventListener can be called on termination
+        this.onError = null;
+    }
+}
+
 let workerSource;
 
 const threadStr = `(${thread.toString()})(self)`;
@@ -49,7 +66,7 @@ if(process.browser) {
     } else {
         workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
     }
-} else {  
+} else {
     workerSource = "data:application/javascript;base64," + Buffer.from(threadStr).toString("base64");
 }
 
@@ -69,11 +86,11 @@ export default async function buildThreadManager(wasm, singleThread) {
             "memory": tm.memory
         }
     });
-    
+
     if(process.browser && !globalThis?.Worker) {
         singleThread = true;
     }
-    
+
     tm.singleThread = singleThread;
     tm.initalPFree = tm.u32[0];   // Save the Pointer to free space.
     tm.pq = wasm.pq;
@@ -87,9 +104,6 @@ export default async function buildThreadManager(wasm, singleThread) {
     tm.code = wasm.code;
     tm.wasmModule = wasmModule;
 
-    //    tm.pTmp0 = tm.alloc(curve.G2.F.n8*3);
-    //    tm.pTmp1 = tm.alloc(curve.G2.F.n8*3);
-
     if (singleThread) {
         tm.taskManager = thread();
         await tm.taskManager([{
@@ -99,12 +113,8 @@ export default async function buildThreadManager(wasm, singleThread) {
         }]);
         tm.concurrency  = 1;
     } else {
-        tm.workers = [];
-        tm.pendingDeferreds = [];
-        tm.working = [];
-        tm.initialized = [];
-        tm.initializing = [];
-        tm.terminating = [];
+        // pool[i] is the active WorkerSlot at slot i, or null if the slot is empty.
+        tm.pool = [];
 
         let concurrency = 2;
         if (process.browser) {
@@ -119,55 +129,11 @@ export default async function buildThreadManager(wasm, singleThread) {
             concurrency = 2;
         }
 
-        //concurrency = 10; // For testing
-
         // Limit to 64 threads for memory reasons.
         if (concurrency>64) concurrency=64;
         tm.concurrency = concurrency;
-
-        // for (let i = 0; i<1; i++) {
-        //
-        //     tm.workers[i] = new Worker(workerSource);
-        //
-        //     tm.workers[i].addEventListener("message", getOnMsg(i));
-        //     //tm.workers[i].addEventListener("error", getOnError(i));
-        //
-        //     tm.working[i]=false;
-        // }
-        //
-        // const initPromises = [];
-        // for (let i=0; i<tm.workers.length;i++) {
-        //     const copyCode = wasm.code.slice();
-        //     initPromises.push(tm.postAction(i, [{
-        //         cmd: "INIT",
-        //         init: MEM_SIZE,
-        //         code: copyCode
-        //     }], [copyCode.buffer]));
-        // }
-        //
-        // // for (let i=0; i<tm.workers.length;i++) {
-        // //     //const copyCode = wasm.code.slice();
-        // //     initPromises.push(tm.postAction(i, [{
-        // //         cmd: "INIT",
-        // //         init: MEM_SIZE,
-        // //         code: wasmModule
-        // //     }]//, [copyCode.buffer]
-        // //     ));
-        // // }
-        //
-        // await Promise.all(initPromises);
-
-        // const initPromises = [];
-        // for (let i = 0; i < tm.concurrency; i++) {
-        //     initPromises.push(tm.startWorker(i));
-        // }
-        // await Promise.all(initPromises);
-
     }
     return tm;
-
-
-
 }
 
 export class ThreadManager {
@@ -176,94 +142,122 @@ export class ThreadManager {
         this.oldPFree = 0;
     }
 
-    getOnMsg(i) {
+    // Build the message handler for a specific WorkerSlot.
+    // All state reads/writes go through `slot`; the stale check
+    // `tm.pool[slotIndex] !== slot` discards messages from replaced workers.
+    _makeOnMsg(slotIndex, slot) {
         const tm = this;
         return async function(e) {
-            let data;
-            if ((e)&&(e.data)) {
-                data = e.data;
-            } else {
-                data = e;
+            const data = (e && e.data) ? e.data : e;
+
+            // Stale check: if pool[slotIndex] no longer points to this slot,
+            // the message is from a worker that was already replaced.
+            if (tm.pool[slotIndex] !== slot) {
+                if (data.status === "terminated") {
+                    // Break the reference cycle so the slot and its WASM memory
+                    // can be collected immediately rather than waiting for GC.
+                    slot.worker.removeEventListener("message", slot.onMsg);
+                    slot.worker.removeEventListener("error",   slot.onError);
+                    return;
+                }
+                if (!data.status && slot.working) {
+                    // Stale task result: the slot was replaced (want_to_terminate raced
+                    // with a task dispatch — pool[i] was nulled before the result came
+                    // back). The result is still valid; resolve so the caller doesn't hang.
+                    slot.working = false;
+                    slot.pendingDeferred.resolve(data);
+                }
+                await tm.processWorks();
+                return;
             }
 
-            // handle errors
             if (data.error) {
-                tm.working[i]=false;
-                tm.pendingDeferreds[i].reject("Worker error: " + data.error);
-                if (tm.initializing[i]) {
-                    tm.initializing[i]=false;
-                    tm.workers[i]=null;
-                } else {
-                    //tm.workers[i].postMessage([{cmd: "TERMINATE"}]);
+                slot.working = false;
+                slot.pendingDeferred.reject(new Error("Worker error: " + data.error));
+                if (slot.initializing) {
+                    slot.initializing = false;
+                    tm.pool[slotIndex] = null;
                 }
                 throw new Error("Worker error: " + data.error);
             }
 
-            // handle status messages
             if (data.status) {
                 if (data.status === "initialized") {
-                    // Initialization successful message
-                    tm.initializing[i]=false;
-                    tm.initialized[i]=true;
-                } else if (data.status === "graceful_termination") {
-                    // Graceful termination message
-                    console.log(`Worker ${i} is going to terminate gracefully.`);
-                    tm.initialized[i]=false;
-                    tm.initializing[i]=false;
-                    tm.working[i]=false;
-                    tm.workers[i]=null;
+                    slot.initializing = false;
+                    slot.initialized  = true;
+
+                } else if (data.status === "want_to_terminate") {
+                    // 2-phase termination: the worker is idle and asking to close.
+                    // Release the slot immediately so processWorks can fill it with a
+                    // fresh worker if the queue needs one.  The TERMINATE ack is sent
+                    // to the old worker so it can close cleanly; its later "terminated"
+                    // message will be stale (pool[slotIndex] !== slot) and ignored.
+                    tm.pool[slotIndex] = null;
+                    slot.worker.postMessage([{cmd: "TERMINATE"}]);
+                    await tm.processWorks();
+                    return;
+
                 } else if (data.status === "terminated") {
-                    // Termination successful message
-                    tm.initialized[i]=false;
-                    tm.initializing[i]=false;
-                    tm.workers[i]=null;
-                    tm.working[i]=null;
+                    // Worker has fully closed.  For the 2-phase path the slot was
+                    // already nulled in want_to_terminate, so this message arrives
+                    // stale and is handled above.  For a direct TERMINATE
+                    // (tm.terminate() at proof end) we clean up here.
+                    slot.worker.removeEventListener("message", slot.onMsg);
+                    slot.worker.removeEventListener("error",   slot.onError);
+                    tm.pool[slotIndex] = null;
+                    if (slot.working) {
+                        // Safety net: reject the pending deferred so the caller
+                        // surfaces an error instead of hanging.
+                        slot.pendingDeferred.reject(
+                            new Error(`Worker at slot ${slotIndex} terminated unexpectedly while processing task`)
+                        );
+                        slot.working = false;
+                    }
                     return;
                 }
-                //return;
+                // fall through for "initialized" so the INIT deferred is resolved below
             }
 
-            tm.working[i]=false;
-            tm.pendingDeferreds[i].resolve(data);
+            slot.working = false;
+            slot.pendingDeferred.resolve(data);
             await tm.processWorks();
         };
     }
 
-    getOnError(i) {
+    _makeOnError(slotIndex, slot) {
         const tm = this;
         return function(e) {
-            console.log("error event in worker:", e);
-            tm.working[i]=false;
-            tm.initialized[i]=false;
-
-            tm.pendingDeferreds[i].reject(e.message);
+            if (tm.pool[slotIndex] === slot) {
+                slot.working     = false;
+                slot.initialized = false;
+                if (slot.pendingDeferred) {
+                    slot.pendingDeferred.reject(new Error("Worker error: " + e.message));
+                }
+            }
             throw new Error("Worker error: " + e.message);
         };
     }
 
-    startWorker(i){
-        this.workers[i] = new Worker(workerSource);
+    startWorker(slotIndex) {
+        const nativeWorker = new Worker(workerSource);
+        const slot = new WorkerSlot(nativeWorker);
+        this.pool[slotIndex] = slot;
 
-        this.workers[i].addEventListener("message", this.getOnMsg(i));
-        this.workers[i].addEventListener("error", this.getOnError(i));
+        slot.onMsg   = this._makeOnMsg(slotIndex, slot);
+        slot.onError = this._makeOnError(slotIndex, slot);
+        nativeWorker.addEventListener("message", slot.onMsg);
+        nativeWorker.addEventListener("error",   slot.onError);
 
-        //this.working[i]=true;
-        this.initializing[i] = true;
+        slot.initializing = true;
 
-        // const copyCode = this.code.slice();
-        // await this.postAction(i, [{
-        //     cmd: "INIT",
-        //     init: MEM_SIZE,
-        //     code: copyCode
-        // }], [copyCode.buffer]);
-
-        //     //const copyCode = wasm.code.slice();
-        this.postAction(i, [{
-            cmd: "INIT",
+        // postAction sets slot.working = true synchronously before any await,
+        // so processWorks will not attempt to start this slot again.
+        this.postAction(slotIndex, [{
+            cmd:  "INIT",
             init: MEM_SIZE,
-            code: this.wasmModule
+            code: this.wasmModule,
         }]).then(() => {
-            this.initialized[i] = true;
+            slot.initialized = true;
         });
     }
 
@@ -278,44 +272,42 @@ export class ThreadManager {
         this.oldPFree = 0;
     }
 
-    async postAction(workerId, e, transfers, _deferred) {
-        if (this.working[workerId]) {
+    async postAction(slotIndex, e, transfers, _deferred) {
+        const slot = this.pool[slotIndex];
+        if (!slot || slot.working) {
             throw new Error("Posting a job to a working worker");
         }
-        this.working[workerId] = true;
-
-        this.pendingDeferreds[workerId] = _deferred ? _deferred : new Deferred();
-        await this.workers[workerId].postMessage(e, transfers);
-
-        return this.pendingDeferreds[workerId].promise;
+        slot.working = true;
+        slot.pendingDeferred = _deferred ? _deferred : new Deferred();
+        await slot.worker.postMessage(e, transfers);
+        return slot.pendingDeferred.promise;
     }
 
     async processWorks() {
-
-        //console.log("this.actionQueue.length:", this.actionQueue.length);
-
-        for (let i=0; (i<this.concurrency)&&(this.actionQueue.length > 0); i++) {
-            if (this.workers[i] && this.initialized[i] && !this.working[i]) {
+        // Dispatch queued tasks to ready workers.
+        for (let i = 0; i < this.concurrency && this.actionQueue.length > 0; i++) {
+            const slot = this.pool[i];
+            if (slot && slot.initialized && !slot.working) {
                 const work = this.actionQueue.shift();
                 await this.postAction(i, work.data, work.transfers, work.deferred);
             }
         }
 
-        // Initialize more workers if needed
+        // Start new workers for slots that need them.
         if (this.actionQueue.length > 0) {
-            // Find a worker that is not initialized yet
             let initializingCount = 0;
-            for (let i=0; i<this.concurrency; i++) {
-                initializingCount += this.initializing[i];
-                if (this.initialized[i]) continue;
-                if (this.initializing[i]) continue;
+            for (let i = 0; i < this.concurrency; i++) {
+                const slot = this.pool[i];
+                if (slot) {
+                    if (slot.initializing) initializingCount++;
+                    // slot exists: skip whether initialized, initializing, or working
+                    continue;
+                }
+                // slot is null: this slot is available to host a new worker
                 if (initializingCount >= this.actionQueue.length) break;
-
-                // Initialize this worker
                 console.log(`Worker ${i} not initialized yet. Initializing...`);
                 initializingCount++;
-                await this.startWorker(i);
-                //this.startWorker(i);
+                this.startWorker(i);
             }
         }
     }
@@ -327,14 +319,10 @@ export class ThreadManager {
             const res = this.taskManager(actionData);
             d.resolve(res);
         } else {
-            // Wait if queue is too large
-            // while (this.actionQueue.length >= this.concurrency * 2) {
-            //     await sleep(10);
-            // }
             this.actionQueue.push({
-                data: actionData,
+                data:      actionData,
                 transfers: transfers,
-                deferred: d
+                deferred:  d
             });
             await this.processWorks();
         }
@@ -352,7 +340,7 @@ export class ThreadManager {
     }
 
     getBuff(pointer, length) {
-        return this.u8.slice(pointer, pointer+ length);
+        return this.u8.slice(pointer, pointer + length);
     }
 
     setBuff(pointer, buffer) {
@@ -367,12 +355,11 @@ export class ThreadManager {
     }
 
     async terminate() {
-        //console.log("terminate!!!");
-        for (let i=0; i<this.workers.length; i++) {
-            this.workers[i].postMessage([{cmd: "TERMINATE"}]);
+        for (let i = 0; i < this.pool.length; i++) {
+            if (this.pool[i]) {
+                this.pool[i].worker.postMessage([{cmd: "TERMINATE"}]);
+            }
         }
-        // Give some time to the workers to terminate
-        //await sleep(200);
     }
 
 }

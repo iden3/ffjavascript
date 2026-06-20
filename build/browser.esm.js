@@ -3033,11 +3033,7 @@ class BigBuffer {
         for (let i=0; i<size; i+= PAGE_SIZE) {
             const n = Math.min(size-i, PAGE_SIZE);
             this.buffers.push(new Uint8Array(n));
-            //this.buffers.push(new Uint8Array(new SharedArrayBuffer(n)));
         }
-        // if (this.buffers.length === 1) {
-        //     this.buffer = this.buffers[0];
-        // }
 
     }
 
@@ -4245,7 +4241,7 @@ function thread(self) {
     const MAXMEM = 32767;
     let instance;
     let memory;
-    let terminationTimeout = 500; // milliseconds
+    let terminationTimeout = 200; // milliseconds
     let terminationTimer;
 
     if (self) {
@@ -4262,42 +4258,37 @@ function thread(self) {
                     init(data[0]).then(function() {
                         console.log("INIT DONE");
                         self.postMessage({status: "initialized"});
+                        // Start idle timer only after init completes so it never
+                        // fires during async WASM compilation.
+                        scheduleTermination();
                     });
+                    return; // skip the scheduleTermination() call at the bottom
                 } else if (data[0].cmd === "TERMINATE") {
                     terminate();
                 } else {
+                    let terminateAfterTask = false;
                     if (data[data.length-1].cmd === "TERMINATE") {
+                        terminateAfterTask = true;
                         data.pop();
-                        //terminationTimeout = 1;
                     }
                     const res = runTask(data);
-                    //self.postMessage(res);
                     let transfers = [];
                     for (let i=0; i<res.length; i++) {
                         if (res[i] instanceof Uint8Array) {
                             transfers.push(res[i].buffer);
-                            console.log("transfer buffer", res[i].byteLength);
                         }
                     }
-                    for (let i=0; i<data.length; i++) {
-                        if (data[i].cmd === "CALL") {
-                            console.log(data[i].fnName);
-                        }
-                    }
-                    //console.log("transfers", transfers);
                     self.postMessage(res, transfers);
+                    if (terminateAfterTask) {
+                        terminate();
+                    }
                 }
             } catch (err) {
                 // Catch any error and send it back to main thread
                 self.postMessage({error: err.message});
             }
+            scheduleTermination();
         };
-
-        // self.onerror = function (e) {
-        //     console.error("Worker caught an error:", e.message);
-        //     // Prevent the default behavior (which would terminate the worker)
-        //     return true;
-        // };
     }
 
     async function init(data) {
@@ -4323,9 +4314,6 @@ function thread(self) {
         if (data.terminationTimeout) {
             terminationTimeout = data.terminationTimeout;
         }
-        console.log("init done!");
-
-        scheduleTermination();
     }
 
 
@@ -4352,8 +4340,6 @@ function thread(self) {
     }
 
     function getBuffer(pointer, length) {
-        // const u8 = new Uint8Array(memory.buffer);
-        // return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);
         return new Uint8Array(memory.buffer, pointer, length);
     }
 
@@ -4376,9 +4362,17 @@ function thread(self) {
         for (let i=0; i<task.length; i++) {
             switch (task[i].cmd) {
             case "ALLOCSET":
+                if (task[i].len / 1024 / 1024 > 25) {
+                    console.log("tasks", task);
+                    //console.trace();
+                }
                 ctx.vars[task[i].var] = allocBuffer(task[i].buff);
                 break;
             case "ALLOC":
+                if (task[i].len / 1024 / 1024 > 25) {
+                    console.log("tasks", task);
+                    //console.trace();
+                }
                 ctx.vars[task[i].var] = alloc(task[i].len);
                 break;
             case "SET":
@@ -4407,24 +4401,20 @@ function thread(self) {
         const u32b = new Uint32Array(memory.buffer, 0, 1);
         u32b[0] = oldAlloc;
 
-        //console.log(ctx.out);
-
         return ctx.out;
     }
 
     function scheduleTermination() {
-        if (terminationTimeout>0) {
-            terminationTimer = setTimeout( () => {
-                console.log("Shutting down thread due to inactivity");
-                terminate();
+        clearTimeout(terminationTimer);
+        if (terminationTimeout > 0) {
+            terminationTimer = setTimeout(() => {
+                if (self) self.postMessage({status: "want_to_terminate"});
             }, terminationTimeout);
         }
     }
 
     function terminate() {
         clearTimeout(terminationTimer);
-        instance = null;
-        memory = null;
         if (self) {
             console.log("TERMINATE");
             self.postMessage({status: "terminated"});
@@ -4466,9 +4456,26 @@ class Deferred {
     }
 }
 
+// WorkerSlot holds the native Worker and all per-worker state.
+// Each call to startWorker() creates a fresh WorkerSlot instance.
+// Message handlers close over the slot reference so that stale messages
+// from a replaced worker are detected by a simple identity check
+// (tm.pool[i] !== slot).
+class WorkerSlot {
+    constructor(worker) {
+        this.worker      = worker; // native Worker thread
+        this.initialized = false;
+        this.initializing= false;
+        this.working     = false;
+        this.pendingDeferred = null;
+        this.onMsg   = null; // stored so removeEventListener can be called on termination
+        this.onError = null;
+    }
+}
+
 let workerSource;
 
-const threadStr = `(${"function thread(self) {\n    const MAXMEM = 32767;\n    let instance;\n    let memory;\n    let terminationTimeout = 500; // milliseconds\n    let terminationTimer;\n\n    if (self) {\n        self.onmessage = function(e) {\n            let data;\n            if (e.data) {\n                data = e.data;\n            } else {\n                data = e;\n            }\n\n            try {\n                if (data[0].cmd === \"INIT\") {\n                    init(data[0]).then(function() {\n                        console.log(\"INIT DONE\");\n                        self.postMessage({status: \"initialized\"});\n                    });\n                } else if (data[0].cmd === \"TERMINATE\") {\n                    terminate();\n                } else {\n                    let terminateAfterTask = false;\n                    if (data[data.length-1].cmd === \"TERMINATE\") {\n                        terminateAfterTask = true;\n                        data.pop();\n                        //terminationTimeout = 1;\n                    }\n                    const res = runTask(data);\n                    //self.postMessage(res);\n                    let transfers = [];\n                    for (let i=0; i<res.length; i++) {\n                        if (res[i] instanceof Uint8Array) {\n                            transfers.push(res[i].buffer);\n                            console.log(\"transfer buffer\", res[i].byteLength);\n                        }\n                    }\n                    for (let i=0; i<data.length; i++) {\n                        if (data[i].cmd === \"CALL\") {\n                            console.log(data[i].fnName);\n                        }\n                    }\n                    //console.log(\"transfers\", transfers);\n                    self.postMessage(res, transfers);\n                    //self.postMessage(res);\n                    if (terminateAfterTask) {\n                        //terminate();\n                    }\n                }\n            } catch (err) {\n                // Catch any error and send it back to main thread\n                self.postMessage({error: err.message});\n            }\n        };\n\n        // self.onerror = function (e) {\n        //     console.error(\"Worker caught an error:\", e.message);\n        //     // Prevent the default behavior (which would terminate the worker)\n        //     return true;\n        // };\n    }\n\n    async function init(data) {\n        let wasmModule;\n        if (data.code instanceof WebAssembly.Module) {\n            console.log(\"Using precompiled WebAssembly.Module\");\n            wasmModule = data.code;\n        } else {\n            console.log(\"Compiling WebAssembly.Module\");\n            const code = new Uint8Array(data.code);\n            wasmModule = await WebAssembly.compile(code);\n        }\n        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});\n\n        console.log(\"Initialized thread with memory\", memory.buffer.byteLength / 1024 / 1024, \"MB\");\n\n        instance = await WebAssembly.instantiate(wasmModule, {\n            env: {\n                \"memory\": memory\n            }\n        });\n\n        if (data.terminationTimeout) {\n            terminationTimeout = data.terminationTimeout;\n        }\n        console.log(\"init done!\");\n\n        scheduleTermination();\n    }\n\n\n\n    function alloc(length) {\n        const u32 = new Uint32Array(memory.buffer, 0, 1);\n        while (u32[0] & 3) u32[0]++;  // Return always aligned pointers\n        const res = u32[0];\n        u32[0] += length;\n        if (u32[0] + length > memory.buffer.byteLength) {\n            const currentPages = memory.buffer.byteLength / 0x10000;\n            let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;\n            if (requiredPages>MAXMEM) requiredPages=MAXMEM;\n            memory.grow(requiredPages-currentPages);\n            console.log(\"Growing memory to\", memory.buffer.byteLength / 1024 / 1024, \"MB\");\n        }\n        return res;\n    }\n\n    function allocBuffer(buffer) {\n        const p = alloc(buffer.byteLength);\n        setBuffer(p, buffer);\n        return p;\n    }\n\n    function getBuffer(pointer, length) {\n        // const u8 = new Uint8Array(memory.buffer);\n        // return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);\n        return new Uint8Array(memory.buffer, pointer, length);\n    }\n\n    function setBuffer(pointer, buffer) {\n        const u8 = new Uint8Array(memory.buffer);\n        u8.set(new Uint8Array(buffer), pointer);\n    }\n\n    function runTask(task) {\n        clearTimeout(terminationTimer);\n        if (task[0].cmd === \"INIT\") {\n            return init(task[0]);\n        }\n        const ctx = {\n            vars: [],\n            out: []\n        };\n        const u32a = new Uint32Array(memory.buffer, 0, 1);\n        const oldAlloc = u32a[0];\n        for (let i=0; i<task.length; i++) {\n            switch (task[i].cmd) {\n            case \"ALLOCSET\":\n                ctx.vars[task[i].var] = allocBuffer(task[i].buff);\n                break;\n            case \"ALLOC\":\n                ctx.vars[task[i].var] = alloc(task[i].len);\n                break;\n            case \"SET\":\n                setBuffer(ctx.vars[task[i].var], task[i].buff);\n                break;\n            case \"CALL\": {\n                const params = [];\n                for (let j=0; j<task[i].params.length; j++) {\n                    const p = task[i].params[j];\n                    if (typeof p.var !== \"undefined\") {\n                        params.push(ctx.vars[p.var] + (p.offset || 0));\n                    } else if (typeof p.val != \"undefined\") {\n                        params.push(p.val);\n                    }\n                }\n                instance.exports[task[i].fnName](...params);\n                break;\n            }\n            case \"GET\":\n                ctx.out[task[i].out] = getBuffer(ctx.vars[task[i].var], task[i].len).slice();\n                break;\n            default:\n                throw new Error(\"Invalid cmd\");\n            }\n        }\n        const u32b = new Uint32Array(memory.buffer, 0, 1);\n        u32b[0] = oldAlloc;\n\n        //console.log(ctx.out);\n\n        return ctx.out;\n    }\n\n    function scheduleTermination() {\n        if (terminationTimeout>0) {\n            terminationTimer = setTimeout( () => {\n                console.log(\"Shutting down thread due to inactivity\");\n                terminate();\n            }, terminationTimeout);\n        }\n    }\n\n    function terminate() {\n        clearTimeout(terminationTimer);\n        instance = null;\n        memory = null;\n        if (self) {\n            console.log(\"TERMINATE\");\n            self.postMessage({status: \"terminated\"});\n            self.close();\n        }\n    }\n\n    return runTask;\n}"})(self)`;
+const threadStr = `(${"function thread(self) {\n    const MAXMEM = 32767;\n    let instance;\n    let memory;\n    let terminationTimeout = 200; // milliseconds\n    let terminationTimer;\n    let wantToTerminate = false;\n\n    if (self) {\n        self.onmessage = function(e) {\n            let data;\n            if (e.data) {\n                data = e.data;\n            } else {\n                data = e;\n            }\n\n            try {\n                if (data[0].cmd === \"INIT\") {\n                    init(data[0]).then(function() {\n                        console.log(\"INIT DONE\");\n                        self.postMessage({status: \"initialized\"});\n                        // Start idle timer only after init completes so it never\n                        // fires during async WASM compilation.\n                        scheduleTermination();\n                    });\n                    return; // skip the scheduleTermination() call at the bottom\n                } else if (data[0].cmd === \"TERMINATE\") {\n                    terminate();\n                } else {\n                    let terminateAfterTask = false;\n                    if (data[data.length-1].cmd === \"TERMINATE\") {\n                        terminateAfterTask = true;\n                        data.pop();\n                    }\n                    const res = runTask(data);\n                    let transfers = [];\n                    for (let i=0; i<res.length; i++) {\n                        if (res[i] instanceof Uint8Array) {\n                            transfers.push(res[i].buffer);\n                        }\n                    }\n                    self.postMessage(res, transfers);\n                    if (terminateAfterTask) {\n                        terminate();\n                    }\n                }\n            } catch (err) {\n                // Catch any error and send it back to main thread\n                self.postMessage({error: err.message});\n            }\n            scheduleTermination();\n        };\n    }\n\n    async function init(data) {\n        let wasmModule;\n        if (data.code instanceof WebAssembly.Module) {\n            console.log(\"Using precompiled WebAssembly.Module\");\n            wasmModule = data.code;\n        } else {\n            console.log(\"Compiling WebAssembly.Module\");\n            const code = new Uint8Array(data.code);\n            wasmModule = await WebAssembly.compile(code);\n        }\n        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});\n\n        console.log(\"Initialized thread with memory\", memory.buffer.byteLength / 1024 / 1024, \"MB\");\n\n        instance = await WebAssembly.instantiate(wasmModule, {\n            env: {\n                \"memory\": memory\n            }\n        });\n\n        if (data.terminationTimeout) {\n            terminationTimeout = data.terminationTimeout;\n        }\n    }\n\n\n\n    function alloc(length) {\n        const u32 = new Uint32Array(memory.buffer, 0, 1);\n        while (u32[0] & 3) u32[0]++;  // Return always aligned pointers\n        const res = u32[0];\n        u32[0] += length;\n        if (u32[0] + length > memory.buffer.byteLength) {\n            const currentPages = memory.buffer.byteLength / 0x10000;\n            let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;\n            if (requiredPages>MAXMEM) requiredPages=MAXMEM;\n            memory.grow(requiredPages-currentPages);\n            console.log(\"Growing memory to\", memory.buffer.byteLength / 1024 / 1024, \"MB\");\n        }\n        return res;\n    }\n\n    function allocBuffer(buffer) {\n        const p = alloc(buffer.byteLength);\n        setBuffer(p, buffer);\n        return p;\n    }\n\n    function getBuffer(pointer, length) {\n        return new Uint8Array(memory.buffer, pointer, length);\n    }\n\n    function setBuffer(pointer, buffer) {\n        const u8 = new Uint8Array(memory.buffer);\n        u8.set(new Uint8Array(buffer), pointer);\n    }\n\n    function runTask(task) {\n        clearTimeout(terminationTimer);\n        wantToTerminate = false;\n        if (task[0].cmd === \"INIT\") {\n            return init(task[0]);\n        }\n        const ctx = {\n            vars: [],\n            out: []\n        };\n        const u32a = new Uint32Array(memory.buffer, 0, 1);\n        const oldAlloc = u32a[0];\n        for (let i=0; i<task.length; i++) {\n            switch (task[i].cmd) {\n            case \"ALLOCSET\":\n                if (task[i].len / 1024 / 1024 > 25) {\n                    console.log(\"tasks\", task);\n                    //console.trace();\n                }\n                ctx.vars[task[i].var] = allocBuffer(task[i].buff);\n                break;\n            case \"ALLOC\":\n                if (task[i].len / 1024 / 1024 > 25) {\n                    console.log(\"tasks\", task);\n                    //console.trace();\n                }\n                ctx.vars[task[i].var] = alloc(task[i].len);\n                break;\n            case \"SET\":\n                setBuffer(ctx.vars[task[i].var], task[i].buff);\n                break;\n            case \"CALL\": {\n                const params = [];\n                for (let j=0; j<task[i].params.length; j++) {\n                    const p = task[i].params[j];\n                    if (typeof p.var !== \"undefined\") {\n                        params.push(ctx.vars[p.var] + (p.offset || 0));\n                    } else if (typeof p.val != \"undefined\") {\n                        params.push(p.val);\n                    }\n                }\n                instance.exports[task[i].fnName](...params);\n                break;\n            }\n            case \"GET\":\n                ctx.out[task[i].out] = getBuffer(ctx.vars[task[i].var], task[i].len).slice();\n                break;\n            default:\n                throw new Error(\"Invalid cmd\");\n            }\n        }\n        const u32b = new Uint32Array(memory.buffer, 0, 1);\n        u32b[0] = oldAlloc;\n\n        return ctx.out;\n    }\n\n    function scheduleTermination() {\n        clearTimeout(terminationTimer);\n        if (terminationTimeout > 0) {\n            terminationTimer = setTimeout(() => {\n                // 2-phase termination: notify main thread first; close only after\n                // it acks with TERMINATE. This prevents the race where the main\n                // thread dispatches a task to a worker that has already closed.\n                wantToTerminate = true;\n                if (self) self.postMessage({status: \"want_to_terminate\"});\n            }, terminationTimeout);\n        }\n    }\n\n    function terminate() {\n        clearTimeout(terminationTimer);\n        if (self) {\n            console.log(\"TERMINATE\");\n            self.postMessage({status: \"terminated\"});\n            self.close();\n        }\n    }\n\n    return runTask;\n}"})(self)`;
 {
     if(globalThis?.Blob) {
         const threadBytes= new TextEncoder().encode(threadStr);
@@ -4499,7 +4506,7 @@ async function buildThreadManager(wasm, singleThread) {
     if(!globalThis?.Worker) {
         singleThread = true;
     }
-    
+
     tm.singleThread = singleThread;
     tm.initalPFree = tm.u32[0];   // Save the Pointer to free space.
     tm.pq = wasm.pq;
@@ -4513,9 +4520,6 @@ async function buildThreadManager(wasm, singleThread) {
     tm.code = wasm.code;
     tm.wasmModule = wasmModule;
 
-    //    tm.pTmp0 = tm.alloc(curve.G2.F.n8*3);
-    //    tm.pTmp1 = tm.alloc(curve.G2.F.n8*3);
-
     if (singleThread) {
         tm.taskManager = thread();
         await tm.taskManager([{
@@ -4525,11 +4529,8 @@ async function buildThreadManager(wasm, singleThread) {
         }]);
         tm.concurrency  = 1;
     } else {
-        tm.workers = [];
-        tm.pendingDeferreds = [];
-        tm.working = [];
-        tm.initialized = [];
-        tm.initializing = [];
+        // pool[i] is the active WorkerSlot at slot i, or null if the slot is empty.
+        tm.pool = [];
 
         let concurrency = 2;
         {
@@ -4542,55 +4543,11 @@ async function buildThreadManager(wasm, singleThread) {
             concurrency = 2;
         }
 
-        //concurrency = 10; // For testing
-
         // Limit to 64 threads for memory reasons.
         if (concurrency>64) concurrency=64;
         tm.concurrency = concurrency;
-
-        // for (let i = 0; i<1; i++) {
-        //
-        //     tm.workers[i] = new Worker(workerSource);
-        //
-        //     tm.workers[i].addEventListener("message", getOnMsg(i));
-        //     //tm.workers[i].addEventListener("error", getOnError(i));
-        //
-        //     tm.working[i]=false;
-        // }
-        //
-        // const initPromises = [];
-        // for (let i=0; i<tm.workers.length;i++) {
-        //     const copyCode = wasm.code.slice();
-        //     initPromises.push(tm.postAction(i, [{
-        //         cmd: "INIT",
-        //         init: MEM_SIZE,
-        //         code: copyCode
-        //     }], [copyCode.buffer]));
-        // }
-        //
-        // // for (let i=0; i<tm.workers.length;i++) {
-        // //     //const copyCode = wasm.code.slice();
-        // //     initPromises.push(tm.postAction(i, [{
-        // //         cmd: "INIT",
-        // //         init: MEM_SIZE,
-        // //         code: wasmModule
-        // //     }]//, [copyCode.buffer]
-        // //     ));
-        // // }
-        //
-        // await Promise.all(initPromises);
-
-        // const initPromises = [];
-        // for (let i = 0; i < tm.concurrency; i++) {
-        //     initPromises.push(tm.startWorker(i));
-        // }
-        // await Promise.all(initPromises);
-
     }
     return tm;
-
-
-
 }
 
 class ThreadManager {
@@ -4599,81 +4556,123 @@ class ThreadManager {
         this.oldPFree = 0;
     }
 
-    getOnMsg(i) {
+    // Build the message handler for a specific WorkerSlot.
+    // All state reads/writes go through `slot`; the stale check
+    // `tm.pool[slotIndex] !== slot` discards messages from replaced workers.
+    _makeOnMsg(slotIndex, slot) {
         const tm = this;
-        return function(e) {
-            let data;
-            if ((e)&&(e.data)) {
-                data = e.data;
-            } else {
-                data = e;
+        return async function(e) {
+            const data = (e && e.data) ? e.data : e;
+
+            // Stale check: if pool[slotIndex] no longer points to this slot,
+            // the message is from a worker that was already replaced.
+            if (tm.pool[slotIndex] !== slot) {
+                if (data.status === "terminated") {
+                    // Break the reference cycle so the slot and its WASM memory
+                    // can be collected immediately rather than waiting for GC.
+                    slot.worker.removeEventListener("message", slot.onMsg);
+                    slot.worker.removeEventListener("error",   slot.onError);
+                    return;
+                }
+                if (!data.status && slot.working) {
+                    // Stale task result: the slot was replaced (want_to_terminate raced
+                    // with a task dispatch — pool[i] was nulled before the result came
+                    // back). The result is still valid; resolve so the caller doesn't hang.
+                    slot.working = false;
+                    slot.pendingDeferred.resolve(data);
+                }
+                await tm.processWorks();
+                return;
             }
 
-            // handle errors
             if (data.error) {
-                tm.working[i]=false;
-                tm.pendingDeferreds[i].reject("Worker error: " + data.error);
-                if (tm.initializing[i]) {
-                    tm.initializing[i]=false;
-                    tm.workers[i]=null;
-                } else {
-                    tm.workers[i].postMessage([{cmd: "TERMINATE"}]);
+                slot.working = false;
+                slot.pendingDeferred.reject(new Error("Worker error: " + data.error));
+                if (slot.initializing) {
+                    slot.initializing = false;
+                    tm.pool[slotIndex] = null;
                 }
                 throw new Error("Worker error: " + data.error);
             }
 
-            // handle status messages
             if (data.status) {
                 if (data.status === "initialized") {
-                    // Initialization successful message
-                    tm.initializing[i]=false;
-                    tm.initialized[i]=true;
+                    slot.initializing = false;
+                    slot.initialized  = true;
+
+                } else if (data.status === "want_to_terminate") {
+                    // 2-phase termination: the worker is idle and asking to close.
+                    // Release the slot immediately so processWorks can fill it with a
+                    // fresh worker if the queue needs one.  The TERMINATE ack is sent
+                    // to the old worker so it can close cleanly; its later "terminated"
+                    // message will be stale (pool[slotIndex] !== slot) and ignored.
+                    tm.pool[slotIndex] = null;
+                    slot.worker.postMessage([{cmd: "TERMINATE"}]);
+                    await tm.processWorks();
+                    return;
+
                 } else if (data.status === "terminated") {
-                    // Termination successful message
-                    tm.initialized[i]=false;
-                    tm.initializing[i]=false;
-                    tm.workers[i]=null;
+                    // Worker has fully closed.  For the 2-phase path the slot was
+                    // already nulled in want_to_terminate, so this message arrives
+                    // stale and is handled above.  For a direct TERMINATE
+                    // (tm.terminate() at proof end) we clean up here.
+                    slot.worker.removeEventListener("message", slot.onMsg);
+                    slot.worker.removeEventListener("error",   slot.onError);
+                    tm.pool[slotIndex] = null;
+                    if (slot.working) {
+                        // Safety net: reject the pending deferred so the caller
+                        // surfaces an error instead of hanging.
+                        slot.pendingDeferred.reject(
+                            new Error(`Worker at slot ${slotIndex} terminated unexpectedly while processing task`)
+                        );
+                        slot.working = false;
+                    }
+                    return;
                 }
+                // fall through for "initialized" so the INIT deferred is resolved below
             }
 
-            tm.working[i]=false;
-            tm.pendingDeferreds[i].resolve(data);
-            tm.processWorks();
+            slot.working = false;
+            slot.pendingDeferred.resolve(data);
+            await tm.processWorks();
         };
     }
 
-    getOnError(i) {
+    _makeOnError(slotIndex, slot) {
         const tm = this;
         return function(e) {
-            tm.working[i]=false;
-            tm.pendingDeferreds[i].reject(e.message);
+            console.log("error event in worker:", e);
+            if (tm.pool[slotIndex] === slot) {
+                slot.working     = false;
+                slot.initialized = false;
+                if (slot.pendingDeferred) {
+                    slot.pendingDeferred.reject(new Error("Worker error: " + e.message));
+                }
+            }
             throw new Error("Worker error: " + e.message);
         };
     }
 
-    startWorker(i){
-        this.workers[i] = new Worker(workerSource);
+    startWorker(slotIndex) {
+        const nativeWorker = new Worker(workerSource);
+        const slot = new WorkerSlot(nativeWorker);
+        this.pool[slotIndex] = slot;
 
-        this.workers[i].addEventListener("message", this.getOnMsg(i));
-        //tm.workers[i].addEventListener("error", this.getOnError(i));
+        slot.onMsg   = this._makeOnMsg(slotIndex, slot);
+        slot.onError = this._makeOnError(slotIndex, slot);
+        nativeWorker.addEventListener("message", slot.onMsg);
+        nativeWorker.addEventListener("error",   slot.onError);
 
-        //this.working[i]=true;
-        this.initializing[i] = true;
+        slot.initializing = true;
 
-        // const copyCode = this.code.slice();
-        // await this.postAction(i, [{
-        //     cmd: "INIT",
-        //     init: MEM_SIZE,
-        //     code: copyCode
-        // }], [copyCode.buffer]);
-
-        //     //const copyCode = wasm.code.slice();
-        this.postAction(i, [{
-            cmd: "INIT",
+        // postAction sets slot.working = true synchronously before any await,
+        // so processWorks will not attempt to start this slot again.
+        this.postAction(slotIndex, [{
+            cmd:  "INIT",
             init: MEM_SIZE,
-            code: this.wasmModule
+            code: this.wasmModule,
         }]).then(() => {
-            this.initialized[i] = true;
+            slot.initialized = true;
         });
     }
 
@@ -4688,46 +4687,47 @@ class ThreadManager {
         this.oldPFree = 0;
     }
 
-    async postAction(workerId, e, transfers, _deferred) {
-        if (this.working[workerId]) {
+    async postAction(slotIndex, e, transfers, _deferred) {
+        const slot = this.pool[slotIndex];
+        if (!slot || slot.working) {
             throw new Error("Posting a job to a working worker");
         }
-        this.working[workerId] = true;
-
-        this.pendingDeferreds[workerId] = _deferred ? _deferred : new Deferred();
-        await this.workers[workerId].postMessage(e, transfers);
-
-        return this.pendingDeferreds[workerId].promise;
+        slot.working = true;
+        slot.pendingDeferred = _deferred ? _deferred : new Deferred();
+        await slot.worker.postMessage(e, transfers);
+        return slot.pendingDeferred.promise;
     }
 
     async processWorks() {
-        for (let i=0; (i<this.concurrency)&&(this.actionQueue.length > 0); i++) {
-            if (this.workers[i] && this.initialized[i] && !this.working[i]) {
+        // Dispatch queued tasks to ready workers.
+        for (let i = 0; i < this.concurrency && this.actionQueue.length > 0; i++) {
+            const slot = this.pool[i];
+            if (slot && slot.initialized && !slot.working) {
                 const work = this.actionQueue.shift();
-                this.postAction(i, work.data, work.transfers, work.deferred);
+                await this.postAction(i, work.data, work.transfers, work.deferred);
             }
         }
 
-        // Initialize more workers if needed
+        // Start new workers for slots that need them.
         if (this.actionQueue.length > 0) {
-            // Find a worker that is not initialized yet
             let initializingCount = 0;
-            for (let i=0; i<this.concurrency; i++) {
-                initializingCount += this.initializing[i];
-                if (this.initialized[i]) continue;
-                if (this.initializing[i]) continue;
+            for (let i = 0; i < this.concurrency; i++) {
+                const slot = this.pool[i];
+                if (slot) {
+                    if (slot.initializing) initializingCount++;
+                    // slot exists: skip whether initialized, initializing, or working
+                    continue;
+                }
+                // slot is null: this slot is available to host a new worker
                 if (initializingCount >= this.actionQueue.length) break;
-
-                // Initialize this worker
                 console.log(`Worker ${i} not initialized yet. Initializing...`);
                 initializingCount++;
-                await this.startWorker(i);
-                //this.startWorker(i);
+                this.startWorker(i);
             }
         }
     }
 
-    queueAction(actionData, transfers) {
+    async queueAction(actionData, transfers) {
         const d = new Deferred();
 
         if (this.singleThread) {
@@ -4735,11 +4735,11 @@ class ThreadManager {
             d.resolve(res);
         } else {
             this.actionQueue.push({
-                data: actionData,
+                data:      actionData,
                 transfers: transfers,
-                deferred: d
+                deferred:  d
             });
-            this.processWorks();
+            await this.processWorks();
         }
         return d.promise;
     }
@@ -4755,7 +4755,7 @@ class ThreadManager {
     }
 
     getBuff(pointer, length) {
-        return this.u8.slice(pointer, pointer+ length);
+        return this.u8.slice(pointer, pointer + length);
     }
 
     setBuff(pointer, buffer) {
@@ -4770,12 +4770,11 @@ class ThreadManager {
     }
 
     async terminate() {
-        console.log("terminate!!!");
-        for (let i=0; i<this.workers.length; i++) {
-            this.workers[i].postMessage([{cmd: "TERMINATE"}]);
+        for (let i = 0; i < this.pool.length; i++) {
+            if (this.pool[i]) {
+                this.pool[i].worker.postMessage([{cmd: "TERMINATE"}]);
+            }
         }
-        // Give some time to the workers to terminate
-        //await sleep(200);
     }
 
 }
@@ -5031,8 +5030,6 @@ function buildPairing(curve) {
 
 }
 
-/* eslint-disable indent */
-
 const pTSizes = [
     1 ,  1,  1,  1,    2,  3,  4,  5,
     6 ,  7,  7,  8,    9, 10, 11, 12,
@@ -5147,10 +5144,7 @@ function buildMultiexp$1(curve, groupName) {
             throw new Error("Scalar size does not match");
         }
 
-        //console.log("buffBases.buffer instanceof SharedArrayBuffer", buffBases.buffer instanceof SharedArrayBuffer);
-        //console.log("buffScalars.buffer instanceof SharedArrayBuffer", buffScalars.buffer instanceof SharedArrayBuffer);
-
-        //let result = [];
+        let result = [];
         const opPromises = [];
         const bitChunkSize = pTSizes[log2(nPoints)];
         let nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) +1;
@@ -5188,7 +5182,7 @@ function buildMultiexp$1(curve, groupName) {
             }));
         }
 
-        let result = await Promise.all(opPromises);
+        result = await Promise.all(opPromises);
 
         let res = G.zero;
         for (let i=result.length-1; i>=0; i--) {
@@ -5199,10 +5193,10 @@ function buildMultiexp$1(curve, groupName) {
     }
 
     G.multiExp = async function multiExpAffine(buffBases, buffScalars, logger, logText) {
-        return await _multiExp(buffBases, buffScalars, "jacobian", logger, logText);
+        return _multiExp(buffBases, buffScalars, "jacobian", logger, logText);
     };
     G.multiExpAffine = async function multiExpAffine(buffBases, buffScalars, logger, logText) {
-        return await _multiExp(buffBases, buffScalars, "affine", logger, logText);
+        return _multiExp(buffBases, buffScalars, "affine", logger, logText);
     };
 }
 
@@ -5230,7 +5224,7 @@ function buildFFT$2(curve, groupName) {
             }
             fnFFTJoin = "g1m_fftJoin";
             fnFFTMix = "g1m_fftMix";
-            fnReversePermutation = "g1m_reversePermutation";
+            fnReversePermutation = "g1m__reversePermutation";
 
             if (outType == "affine") {
                 sOut = G.F.n8*2;
@@ -5252,7 +5246,7 @@ function buildFFT$2(curve, groupName) {
             }
             fnFFTJoin = "g2m_fftJoin";
             fnFFTMix = "g2m_fftMix";
-            fnReversePermutation = "g2m_reversePermutation";
+            fnReversePermutation = "g2m__reversePermutation";
             if (outType == "affine") {
                 sOut = G.F.n8*2;
                 fnMid2Out = "g2m_batchToAffine";
@@ -5268,7 +5262,7 @@ function buildFFT$2(curve, groupName) {
             }
             fnFFTMix = "frm_fftMix";
             fnFFTJoin = "frm_fftJoin";
-            fnReversePermutation = "frm_fftReversePermutation";
+            fnReversePermutation = "frm__reversePermutation";
         }
 
 
@@ -5314,19 +5308,26 @@ function buildFFT$2(curve, groupName) {
 
         let buffOut;
 
-        // TODO: optimize. Move to wasm?
-        //buffReverseBits(buff, sIn);
+        // TODO: optimize. Move to wasm
+        // buffReverseBits(buff, sIn);
 
         console.log("fnReversePermutation:", fnReversePermutation);
 
+        // TODO: try to do reversing for each batch separately and inside of the task
         const task = [];
-        task.push({cmd: "ALLOC", var: 0, len: buff.byteLength});
-        task.push({cmd: "SET", var: 0, buff: buff});
-        task.push({cmd: "CALL", fnName: fnReversePermutation, params: [{var:0}, {val: bits}, {var: 0}]});
-        task.push({cmd: "GET", out:0, var: 0, len: buff.byteLength});
-        const res = await tm.queueAction(task, [buff.buffer]);
+        task.push({cmd: "ALLOCSET", var: 0, buff: buff});
+        task.push({cmd: "CALL", fnName: fnReversePermutation, params: [{var:0}, {val: bits}]});
+        task.push({cmd: "GET", out:0, var: 0, len: nPoints*sOut});
+        const reversedBuff = await tm.queueAction(task, [buff.buffer]);
+        //const reversedBuff = await tm.queueAction(task, []);
 
-        buff.set(res[0]);
+        //console.log("wasm buffReverseBits:", reversedBuff[0]);
+        //buffReverseBits(buff, sIn);
+        //console.log("js buffReverseBits:", buff);
+
+        //exit(1);
+
+        buff = reversedBuff[0];
 
         let chunks;
         let pointsInChunk = Math.min(1 << MAX_BITS_THREAD, nPoints);
@@ -5340,8 +5341,8 @@ function buildFFT$2(curve, groupName) {
         const l2Chunk = log2(pointsInChunk);
 
         const promises = [];
+        if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix start: ${nChunks}`);
         for (let i = 0; i< nChunks; i++) {
-            if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix start: ${i}/${nChunks}`);
             const task = [];
             task.push({cmd: "ALLOC", var: 0, len: sMid*pointsInChunk});
             const buffChunk = buff.slice( (pointsInChunk * i)*sIn, (pointsInChunk * (i+1))*sIn);
@@ -5369,17 +5370,15 @@ function buildFFT$2(curve, groupName) {
             } else {
                 task.push({cmd: "GET", out:0, var: 0, len: sMid*pointsInChunk});
             }
-            promises.push(tm.queueAction(task, [buffChunk.buffer]).then( (r) => {
-                if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix end: ${i}/${nChunks}`);
-                return r;
-            }));
+            promises.push(tm.queueAction(task, [buffChunk.buffer]));
         }
 
         chunks = await Promise.all(promises);
+        if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix end: ${nChunks}`);
         for (let i = 0; i< nChunks; i++) chunks[i] = chunks[i][0];
 
         for (let i = l2Chunk+1;   i<=bits; i++) {
-            if (logger) logger.debug(`${loggerTxt}: fft  ${bits}  join: ${i}/${bits}`);
+            if (logger) logger.debug(`${loggerTxt}: fft ${bits} join: ${i}/${bits}`);
             const nGroups = 1 << (bits - i);
             const nChunksPerGroup = nChunks / nGroups;
             const opPromises = [];
@@ -5426,10 +5425,7 @@ function buildFFT$2(curve, groupName) {
                         task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sMid});
                         task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sMid});
                     }
-                    opPromises.push(tm.queueAction(task, [chunks[o1].buffer, chunks[o2].buffer, first.buffer ]).then( (r) => {
-                        if (logger) logger.debug(`${loggerTxt}: fft ${bits} join  ${i}/${bits}  ${j+1}/${nGroups} ${k}/${nChunksPerGroup/2}`);
-                        return r;
-                    }));
+                    opPromises.push(tm.queueAction(task, [chunks[o1].buffer, chunks[o2].buffer, first.buffer ]));
                 }
             }
 
@@ -6059,8 +6055,8 @@ async function buildBn128$1(singleThread, plugins) {
         console.log("Using prebuilt bn128 wasm");
 
         //import { bn128_wasm_gzip as bn128wasmPrebuilt } from "wasmcurves";
-        const { bn128_wasm_gzip: bn128wasmPrebuilt } = await Promise.resolve().then(function () { return index; });
-        //const { default: bn128wasmPrebuilt } = await import("wasmcurves/build/bn128_wasm_gzip.js");
+        //const { bn128_wasm_gzip: bn128wasmPrebuilt } = await import("wasmcurves");
+        const { default: bn128wasmPrebuilt } = await Promise.resolve().then(function () { return bn128_wasm_gzip; });
 
         //console.log(bn128wasmPrebuilt);
         bn128wasm.pq = bn128wasmPrebuilt.pq;
@@ -6275,6 +6271,955 @@ bn128_wasm_gzip$1.gzipCode = "H4sIAAAAAAAAA+x9B3wURfv/zN5ecsneJZuQBoSwF1pooYNgy4
             bn128_wasm_gzip$1.n8r = 32;
             bn128_wasm_gzip$1.q = "21888242871839275222246405745257275088696311157297823662689037894645226208583";
             bn128_wasm_gzip$1.r = "21888242871839275222246405745257275088548364400416034343698204186575808495617";
+
+var bn128_wasm_gzip = /*#__PURE__*/Object.freeze({
+    __proto__: null,
+    default: bn128_wasm_gzip$1
+});
+
+/*
+    Copyright 2019 0KIMS association.
+
+    This file is part of wasmbuilder
+
+    wasmbuilder is a free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    wasmbuilder is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+    License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with wasmbuilder. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+function toNumber(n) {
+    return BigInt(n);
+}
+
+function isNegative$3(n) {
+    return n < 0n;
+}
+
+function isZero(n) {
+    return n === 0n;
+}
+
+function bitLength$5(n) {
+    if (isNegative$3(n)) {
+        return n.toString(2).length - 1; // discard the - sign
+    } else {
+        return n.toString(2).length;
+    }
+}
+
+function u32(n) {
+    const b = [];
+    const v = toNumber(n);
+    b.push(Number(v & 0xFFn));
+    b.push(Number(v >> 8n & 0xFFn));
+    b.push(Number(v >> 16n & 0xFFn));
+    b.push(Number(v >> 24n & 0xFFn));
+    return b;
+}
+
+function toUTF8Array(str) {
+    var utf8 = [];
+    for (var i=0; i < str.length; i++) {
+        var charcode = str.charCodeAt(i);
+        if (charcode < 0x80) utf8.push(charcode);
+        else if (charcode < 0x800) {
+            utf8.push(0xc0 | (charcode >> 6),
+                0x80 | (charcode & 0x3f));
+        }
+        else if (charcode < 0xd800 || charcode >= 0xe000) {
+            utf8.push(0xe0 | (charcode >> 12),
+                0x80 | ((charcode>>6) & 0x3f),
+                0x80 | (charcode & 0x3f));
+        }
+        // surrogate pair
+        else {
+            i++;
+            // UTF-16 encodes 0x10000-0x10FFFF by
+            // subtracting 0x10000 and splitting the
+            // 20 bits of 0x0-0xFFFFF into two halves
+            charcode = 0x10000 + (((charcode & 0x3ff)<<10)
+                      | (str.charCodeAt(i) & 0x3ff));
+            utf8.push(0xf0 | (charcode >>18),
+                0x80 | ((charcode>>12) & 0x3f),
+                0x80 | ((charcode>>6) & 0x3f),
+                0x80 | (charcode & 0x3f));
+        }
+    }
+    return utf8;
+}
+
+function string(str) {
+    const bytes = toUTF8Array(str);
+    return [ ...varuint32(bytes.length), ...bytes ];
+}
+
+function varuint(n) {
+    const code = [];
+    let v = toNumber(n);
+    if (isNegative$3(v)) throw new Error("Number cannot be negative");
+    while (!isZero(v)) {
+        code.push(Number(v & 0x7Fn));
+        v = v >> 7n;
+    }
+    if (code.length==0) code.push(0);
+    for (let i=0; i<code.length-1; i++) {
+        code[i] = code[i] | 0x80;
+    }
+    return code;
+}
+
+function varint(_n) {
+    let n, sign;
+    const bits = bitLength$5(_n);
+    if (_n<0) {
+        sign = true;
+        n = (1n << BigInt(bits)) + _n;
+    } else {
+        sign = false;
+        n = toNumber(_n);
+    }
+    const paddingBits = 7 - (bits % 7);
+
+    const padding = ((1n << BigInt(paddingBits)) - 1n) << BigInt(bits);
+    const paddingMask = ((1 << (7 - paddingBits))-1) | 0x80;
+
+    const code = varuint(n + padding);
+
+    if (!sign) {
+        code[code.length-1] = code[code.length-1] & paddingMask;
+    }
+
+    return code;
+}
+
+function varint32(n) {
+    let v = toNumber(n);
+    if (v > 0xFFFFFFFFn) throw new Error("Number too big");
+    if (v > 0x7FFFFFFFn) v = v - 0x100000000n;
+    // bigInt("-80000000", 16) as base10
+    if (v < -2147483648n) throw new Error("Number too small");
+    return varint(v);
+}
+
+function varint64(n) {
+    let v = toNumber(n);
+    if (v > 0xFFFFFFFFFFFFFFFFn) throw new Error("Number too big");
+    if (v > 0x7FFFFFFFFFFFFFFFn) v = v - 0x10000000000000000n;
+    // bigInt("-8000000000000000", 16) as base10
+    if (v < -9223372036854775808n) throw new Error("Number too small");
+    return varint(v);
+}
+
+function varuint32(n) {
+    let v = toNumber(n);
+    if (v > 0xFFFFFFFFn) throw new Error("Number too big");
+    return varuint(v);
+}
+
+function toHexString(byteArray) {
+    return Array.from(byteArray, function(byte) {
+        return ("0" + (byte & 0xFF).toString(16)).slice(-2);
+    }).join("");
+}
+
+/*
+    Copyright 2019 0KIMS association.
+
+    This file is part of wasmbuilder
+
+    wasmbuilder is a free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    wasmbuilder is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+    License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with wasmbuilder. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+
+class CodeBuilder {
+    constructor(func) {
+        this.func = func;
+        this.functionName = func.functionName;
+        this.module = func.module;
+    }
+
+    setLocal(localName, valCode) {
+        const idx = this.func.localIdxByName[localName];
+        if (idx === undefined)
+            throw new Error(`Local Variable not defined: Function: ${this.functionName} local: ${localName} `);
+        return [...valCode, 0x21, ...varuint32( idx )];
+    }
+
+    teeLocal(localName, valCode) {
+        const idx = this.func.localIdxByName[localName];
+        if (idx === undefined)
+            throw new Error(`Local Variable not defined: Function: ${this.functionName} local: ${localName} `);
+        return [...valCode, 0x22, ...varuint32( idx )];
+    }
+
+    getLocal(localName) {
+        const idx = this.func.localIdxByName[localName];
+        if (idx === undefined)
+            throw new Error(`Local Variable not defined: Function: ${this.functionName} local: ${localName} `);
+        return [0x20, ...varuint32( idx )];
+    }
+
+    i64_load8_s(idxCode, _offset, _align) {
+        const offset = _offset || 0;
+        const align = (_align === undefined) ? 0 : _align;  // 8 bits alignment by default
+        return [...idxCode, 0x30, align, ...varuint32(offset)];
+    }
+
+    i64_load8_u(idxCode, _offset, _align) {
+        const offset = _offset || 0;
+        const align = (_align === undefined) ? 0 : _align;  // 8 bits alignment by default
+        return [...idxCode, 0x31, align, ...varuint32(offset)];
+    }
+
+    i64_load16_s(idxCode, _offset, _align) {
+        const offset = _offset || 0;
+        const align = (_align === undefined) ? 1 : _align;  // 16 bits alignment by default
+        return [...idxCode, 0x32, align, ...varuint32(offset)];
+    }
+
+    i64_load16_u(idxCode, _offset, _align) {
+        const offset = _offset || 0;
+        const align = (_align === undefined) ? 1 : _align;  // 16 bits alignment by default
+        return [...idxCode, 0x33, align, ...varuint32(offset)];
+    }
+
+    i64_load32_s(idxCode, _offset, _align) {
+        const offset = _offset || 0;
+        const align = (_align === undefined) ? 2 : _align;  // 32 bits alignment by default
+        return [...idxCode, 0x34, align, ...varuint32(offset)];
+    }
+
+    i64_load32_u(idxCode, _offset, _align) {
+        const offset = _offset || 0;
+        const align = (_align === undefined) ? 2 : _align;  // 32 bits alignment by default
+        return [...idxCode, 0x35, align, ...varuint32(offset)];
+    }
+
+    i64_load(idxCode, _offset, _align) {
+        const offset = _offset || 0;
+        const align = (_align === undefined) ? 3 : _align;  // 64 bits alignment by default
+        return [...idxCode, 0x29, align, ...varuint32(offset)];
+    }
+
+
+    i64_store(idxCode, _offset, _align, _codeVal) {
+        let offset, align, codeVal;
+        if (Array.isArray(_offset)) {
+            offset = 0;
+            align = 3;
+            codeVal = _offset;
+        } else if (Array.isArray(_align)) {
+            offset = _offset;
+            align = 3;
+            codeVal = _align;
+        } else if (Array.isArray(_codeVal)) {
+            offset = _offset;
+            align = _align;
+            codeVal = _codeVal;
+        }
+        return [...idxCode, ...codeVal, 0x37, align, ...varuint32(offset)];
+    }
+
+    i64_store32(idxCode, _offset, _align, _codeVal) {
+        let offset, align, codeVal;
+        if (Array.isArray(_offset)) {
+            offset = 0;
+            align = 2;
+            codeVal = _offset;
+        } else if (Array.isArray(_align)) {
+            offset = _offset;
+            align = 2;
+            codeVal = _align;
+        } else if (Array.isArray(_codeVal)) {
+            offset = _offset;
+            align = _align;
+            codeVal = _codeVal;
+        }
+        return [...idxCode, ...codeVal, 0x3e, align, ...varuint32(offset)];
+    }
+
+
+    i64_store16(idxCode, _offset, _align, _codeVal) {
+        let offset, align, codeVal;
+        if (Array.isArray(_offset)) {
+            offset = 0;
+            align = 1;
+            codeVal = _offset;
+        } else if (Array.isArray(_align)) {
+            offset = _offset;
+            align = 1;
+            codeVal = _align;
+        } else if (Array.isArray(_codeVal)) {
+            offset = _offset;
+            align = _align;
+            codeVal = _codeVal;
+        }
+        return [...idxCode, ...codeVal, 0x3d, align, ...varuint32(offset)];
+    }
+
+
+    i64_store8(idxCode, _offset, _align, _codeVal) {
+        let offset, align, codeVal;
+        if (Array.isArray(_offset)) {
+            offset = 0;
+            align = 0;
+            codeVal = _offset;
+        } else if (Array.isArray(_align)) {
+            offset = _offset;
+            align = 0;
+            codeVal = _align;
+        } else if (Array.isArray(_codeVal)) {
+            offset = _offset;
+            align = _align;
+            codeVal = _codeVal;
+        }
+        return [...idxCode, ...codeVal, 0x3c, align, ...varuint32(offset)];
+    }
+
+    i32_load8_s(idxCode, _offset, _align) {
+        const offset = _offset || 0;
+        const align = (_align === undefined) ? 0 : _align;  // 32 bits alignment by default
+        return [...idxCode, 0x2c, align, ...varuint32(offset)];
+    }
+
+    i32_load8_u(idxCode, _offset, _align) {
+        const offset = _offset || 0;
+        const align = (_align === undefined) ? 0 : _align;  // 32 bits alignment by default
+        return [...idxCode, 0x2d, align, ...varuint32(offset)];
+    }
+
+    i32_load16_s(idxCode, _offset, _align) {
+        const offset = _offset || 0;
+        const align = (_align === undefined) ? 1 : _align;  // 32 bits alignment by default
+        return [...idxCode, 0x2e, align, ...varuint32(offset)];
+    }
+
+    i32_load16_u(idxCode, _offset, _align) {
+        const offset = _offset || 0;
+        const align = (_align === undefined) ? 1 : _align;  // 32 bits alignment by default
+        return [...idxCode, 0x2f, align, ...varuint32(offset)];
+    }
+
+    i32_load(idxCode, _offset, _align) {
+        const offset = _offset || 0;
+        const align = (_align === undefined) ? 2 : _align;  // 32 bits alignment by default
+        return [...idxCode, 0x28, align, ...varuint32(offset)];
+    }
+
+    i32_store(idxCode, _offset, _align, _codeVal) {
+        let offset, align, codeVal;
+        if (Array.isArray(_offset)) {
+            offset = 0;
+            align = 2;
+            codeVal = _offset;
+        } else if (Array.isArray(_align)) {
+            offset = _offset;
+            align = 2;
+            codeVal = _align;
+        } else if (Array.isArray(_codeVal)) {
+            offset = _offset;
+            align = _align;
+            codeVal = _codeVal;
+        }
+        return [...idxCode, ...codeVal, 0x36, align, ...varuint32(offset)];
+    }
+
+
+    i32_store16(idxCode, _offset, _align, _codeVal) {
+        let offset, align, codeVal;
+        if (Array.isArray(_offset)) {
+            offset = 0;
+            align = 1;
+            codeVal = _offset;
+        } else if (Array.isArray(_align)) {
+            offset = _offset;
+            align = 1;
+            codeVal = _align;
+        } else if (Array.isArray(_codeVal)) {
+            offset = _offset;
+            align = _align;
+            codeVal = _codeVal;
+        }
+        return [...idxCode, ...codeVal, 0x3b, align, ...varuint32(offset)];
+    }
+
+    i32_store8(idxCode, _offset, _align, _codeVal) {
+        let offset, align, codeVal;
+        if (Array.isArray(_offset)) {
+            offset = 0;
+            align = 0;
+            codeVal = _offset;
+        } else if (Array.isArray(_align)) {
+            offset = _offset;
+            align = 0;
+            codeVal = _align;
+        } else if (Array.isArray(_codeVal)) {
+            offset = _offset;
+            align = _align;
+            codeVal = _codeVal;
+        }
+        return [...idxCode, ...codeVal, 0x3a, align, ...varuint32(offset)];
+    }
+
+    call(fnName, ...args) {
+        const idx = this.module.functionIdxByName[fnName];
+        if (idx === undefined)
+            throw new Error(`Function not defined: Function: ${fnName}`);
+        return [...[].concat(...args), 0x10, ...varuint32(idx)];
+    }
+
+    call_indirect(fnIdx, ...args) {
+        return [...[].concat(...args), ...fnIdx, 0x11, 0, 0];
+    }
+
+    if(condCode, thenCode, elseCode) {
+        if (elseCode) {
+            return [...condCode, 0x04, 0x40, ...thenCode, 0x05, ...elseCode, 0x0b];
+        } else {
+            return [...condCode, 0x04, 0x40, ...thenCode, 0x0b];
+        }
+    }
+
+    block(bCode) { return [0x02, 0x40, ...bCode, 0x0b]; }
+    loop(...args) {
+        return [0x03, 0x40, ...[].concat(...[...args]), 0x0b];
+    }
+    br_if(relPath, condCode) { return [...condCode, 0x0d, ...varuint32(relPath)]; }
+    br(relPath) { return [0x0c, ...varuint32(relPath)]; }
+    ret(rCode) { return [...rCode, 0x0f]; }
+    drop(dCode) { return [...dCode,  0x1a]; }
+
+    i64_const(num) { return [0x42, ...varint64(num)]; }
+    i32_const(num) { return [0x41, ...varint32(num)]; }
+
+
+    i64_eqz(opcode) { return [...opcode, 0x50]; }
+    i64_eq(op1code, op2code) { return [...op1code, ...op2code, 0x51]; }
+    i64_ne(op1code, op2code) { return [...op1code, ...op2code, 0x52]; }
+    i64_lt_s(op1code, op2code) { return [...op1code, ...op2code, 0x53]; }
+    i64_lt_u(op1code, op2code) { return [...op1code, ...op2code, 0x54]; }
+    i64_gt_s(op1code, op2code) { return [...op1code, ...op2code, 0x55]; }
+    i64_gt_u(op1code, op2code) { return [...op1code, ...op2code, 0x56]; }
+    i64_le_s(op1code, op2code) { return [...op1code, ...op2code, 0x57]; }
+    i64_le_u(op1code, op2code) { return [...op1code, ...op2code, 0x58]; }
+    i64_ge_s(op1code, op2code) { return [...op1code, ...op2code, 0x59]; }
+    i64_ge_u(op1code, op2code) { return [...op1code, ...op2code, 0x5a]; }
+    i64_add(op1code, op2code) { return [...op1code, ...op2code, 0x7c]; }
+    i64_sub(op1code, op2code) { return [...op1code, ...op2code, 0x7d]; }
+    i64_mul(op1code, op2code) { return [...op1code, ...op2code, 0x7e]; }
+    i64_div_s(op1code, op2code) { return [...op1code, ...op2code, 0x7f]; }
+    i64_div_u(op1code, op2code) { return [...op1code, ...op2code, 0x80]; }
+    i64_rem_s(op1code, op2code) { return [...op1code, ...op2code, 0x81]; }
+    i64_rem_u(op1code, op2code) { return [...op1code, ...op2code, 0x82]; }
+    i64_and(op1code, op2code) { return [...op1code, ...op2code, 0x83]; }
+    i64_or(op1code, op2code) { return [...op1code, ...op2code, 0x84]; }
+    i64_xor(op1code, op2code) { return [...op1code, ...op2code, 0x85]; }
+    i64_shl(op1code, op2code) { return [...op1code, ...op2code, 0x86]; }
+    i64_shr_s(op1code, op2code) { return [...op1code, ...op2code, 0x87]; }
+    i64_shr_u(op1code, op2code) { return [...op1code, ...op2code, 0x88]; }
+    i64_extend_i32_s(op1code) { return [...op1code, 0xac]; }
+    i64_extend_i32_u(op1code) { return [...op1code, 0xad]; }
+    i64_clz(op1code) { return [...op1code, 0x79]; }
+    i64_ctz(op1code) { return [...op1code, 0x7a]; }
+
+    i32_eqz(op1code) { return [...op1code, 0x45]; }
+    i32_eq(op1code, op2code) { return [...op1code, ...op2code, 0x46]; }
+    i32_ne(op1code, op2code) { return [...op1code, ...op2code, 0x47]; }
+    i32_lt_s(op1code, op2code) { return [...op1code, ...op2code, 0x48]; }
+    i32_lt_u(op1code, op2code) { return [...op1code, ...op2code, 0x49]; }
+    i32_gt_s(op1code, op2code) { return [...op1code, ...op2code, 0x4a]; }
+    i32_gt_u(op1code, op2code) { return [...op1code, ...op2code, 0x4b]; }
+    i32_le_s(op1code, op2code) { return [...op1code, ...op2code, 0x4c]; }
+    i32_le_u(op1code, op2code) { return [...op1code, ...op2code, 0x4d]; }
+    i32_ge_s(op1code, op2code) { return [...op1code, ...op2code, 0x4e]; }
+    i32_ge_u(op1code, op2code) { return [...op1code, ...op2code, 0x4f]; }
+    i32_add(op1code, op2code) { return [...op1code, ...op2code, 0x6a]; }
+    i32_sub(op1code, op2code) { return [...op1code, ...op2code, 0x6b]; }
+    i32_mul(op1code, op2code) { return [...op1code, ...op2code, 0x6c]; }
+    i32_div_s(op1code, op2code) { return [...op1code, ...op2code, 0x6d]; }
+    i32_div_u(op1code, op2code) { return [...op1code, ...op2code, 0x6e]; }
+    i32_rem_s(op1code, op2code) { return [...op1code, ...op2code, 0x6f]; }
+    i32_rem_u(op1code, op2code) { return [...op1code, ...op2code, 0x70]; }
+    i32_and(op1code, op2code) { return [...op1code, ...op2code, 0x71]; }
+    i32_or(op1code, op2code) { return [...op1code, ...op2code, 0x72]; }
+    i32_xor(op1code, op2code) { return [...op1code, ...op2code, 0x73]; }
+    i32_shl(op1code, op2code) { return [...op1code, ...op2code, 0x74]; }
+    i32_shr_s(op1code, op2code) { return [...op1code, ...op2code, 0x75]; }
+    i32_shr_u(op1code, op2code) { return [...op1code, ...op2code, 0x76]; }
+    i32_rotl(op1code, op2code) { return [...op1code, ...op2code, 0x77]; }
+    i32_rotr(op1code, op2code) { return [...op1code, ...op2code, 0x78]; }
+    i32_wrap_i64(op1code) { return [...op1code, 0xa7]; }
+    i32_clz(op1code) { return [...op1code, 0x67]; }
+    i32_ctz(op1code) { return [...op1code, 0x68]; }
+
+    unreachable() { return [ 0x0 ]; }
+
+    current_memory() { return [ 0x3f, 0]; }
+
+    comment() { return []; }
+}
+
+/*
+    Copyright 2019 0KIMS association.
+
+    This file is part of wasmbuilder
+
+    wasmbuilder is a free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    wasmbuilder is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+    License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with wasmbuilder. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+
+const typeCodes = {
+    "i32": 0x7f,
+    "i64": 0x7e,
+    "f32": 0x7d,
+    "f64": 0x7c,
+    "anyfunc": 0x70,
+    "func": 0x60,
+    "emptyblock": 0x40
+};
+
+
+class FunctionBuilder {
+
+    constructor (module, fnName, fnType, moduleName, fieldName) {
+        if (fnType == "import") {
+            this.fnType = "import";
+            this.moduleName = moduleName;
+            this.fieldName = fieldName;
+        } else if (fnType == "internal") {
+            this.fnType = "internal";
+        } else {
+            throw new Error("Invalid function fnType: " + fnType);
+        }
+        this.module = module;
+        this.fnName = fnName;
+        this.params = [];
+        this.locals = [];
+        this.localIdxByName = {};
+        this.code = [];
+        this.returnType = null;
+        this.nextLocal =0;
+    }
+
+    addParam(paramName, paramType) {
+        if (this.localIdxByName[paramName])
+            throw new Error(`param already exists. Function: ${this.fnName}, Param: ${paramName} `);
+        const idx = this.nextLocal++;
+        this.localIdxByName[paramName] = idx;
+        this.params.push({
+            type: paramType
+        });
+    }
+
+    addLocal(localName, localType, _length) {
+        const length = _length || 1;
+        if (this.localIdxByName[localName])
+            throw new Error(`local already exists. Function: ${this.fnName}, Param: ${localName} `);
+        const idx = this.nextLocal++;
+        this.localIdxByName[localName] = idx;
+        this.locals.push({
+            type: localType,
+            length: length
+        });
+    }
+
+    setReturnType(returnType) {
+        if (this.returnType)
+            throw new Error(`returnType already defined. Function: ${this.fnName}`);
+        this.returnType = returnType;
+    }
+
+    getSignature() {
+        const params = [...varuint32(this.params.length), ...this.params.map((p) => typeCodes[p.type])];
+        const returns = this.returnType ? [0x01, typeCodes[this.returnType]] : [0];
+        return [0x60, ...params, ...returns];
+    }
+
+    getBody() {
+        const locals = this.locals.map((l) => [
+            ...varuint32(l.length),
+            typeCodes[l.type]
+        ]);
+
+        const body = [
+            ...varuint32(this.locals.length),
+            ...[].concat(...locals),
+            ...this.code,
+            0x0b
+        ];
+        return [
+            ...varuint32(body.length),
+            ...body
+        ];
+    }
+
+    addCode(...code) {
+        this.code.push(...[].concat(...[...code]));
+    }
+
+    getCodeBuilder() {
+        return new CodeBuilder(this);
+    }
+}
+
+/*
+    Copyright 2019 0KIMS association.
+
+    This file is part of wasmbuilder
+
+    wasmbuilder is a free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    wasmbuilder is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+    License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with wasmbuilder. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+
+class ModuleBuilder {
+
+    constructor() {
+        this.functions = [];
+        this.functionIdxByName = {};
+        this.nImportFunctions = 0;
+        this.nInternalFunctions =0;
+        this.memory = {
+            pagesSize: 1,
+            moduleName: "env",
+            fieldName: "memory"
+        };
+        this.free = 8;
+        this.datas = [];
+        this.modules = {};
+        this.exports = [];
+        this.functionsTable = [];
+    }
+
+    build() {
+        this._setSignatures();
+        return new Uint8Array([
+            ...u32(0x6d736100),
+            ...u32(1),
+            ...this._buildType(),
+            ...this._buildImport(),
+            ...this._buildFunctionDeclarations(),
+            ...this._buildFunctionsTable(),
+            ...this._buildExports(),
+            ...this._buildElements(),
+            ...this._buildCode(),
+            ...this._buildData()
+        ]);
+    }
+
+    addFunction(fnName) {
+        if (typeof(this.functionIdxByName[fnName]) !== "undefined")
+            throw new Error(`Function already defined: ${fnName}`);
+
+        const idx = this.functions.length;
+        this.functionIdxByName[fnName] = idx;
+
+        this.functions.push(new FunctionBuilder(this, fnName, "internal"));
+
+        this.nInternalFunctions++;
+        return this.functions[idx];
+    }
+
+    addIimportFunction(fnName, moduleName, _fieldName) {
+        if (typeof(this.functionIdxByName[fnName]) !== "undefined")
+            throw new Error(`Function already defined: ${fnName}`);
+
+        if (  (this.functions.length>0)
+            &&(this.functions[this.functions.length-1].type == "internal"))
+            throw new Error(`Import functions must be declared before internal: ${fnName}`);
+
+        let fieldName = _fieldName || fnName;
+
+        const idx = this.functions.length;
+        this.functionIdxByName[fnName] = idx;
+
+        this.functions.push(new FunctionBuilder(this, fnName, "import", moduleName, fieldName));
+
+        this.nImportFunctions ++;
+        return this.functions[idx];
+    }
+
+    setMemory(pagesSize, moduleName, fieldName) {
+        this.memory = {
+            pagesSize: pagesSize,
+            moduleName: moduleName || "env",
+            fieldName: fieldName || "memory"
+        };
+    }
+
+    exportFunction(fnName, _exportName) {
+        const exportName = _exportName || fnName;
+        if (typeof(this.functionIdxByName[fnName]) === "undefined")
+            throw new Error(`Function not defined: ${fnName}`);
+        const idx = this.functionIdxByName[fnName];
+        if (exportName != fnName) {
+            this.functionIdxByName[exportName] = idx;
+        }
+        this.exports.push({
+            exportName: exportName,
+            idx: idx
+        });
+    }
+
+    addFunctionToTable(fnName) {
+        const idx = this.functionIdxByName[fnName];
+        this.functionsTable.push(idx);
+    }
+
+    addData(offset, bytes) {
+        this.datas.push({
+            offset: offset,
+            bytes: bytes
+        });
+    }
+
+    alloc(a, b) {
+        let size;
+        let bytes;
+        if ((Array.isArray(a) || ArrayBuffer.isView(a)) && (typeof(b) === "undefined")) {
+            size = a.length;
+            bytes = a;
+        } else {
+            size = a;
+            bytes = b;
+        }
+        size = (((size-1)>>3) +1)<<3;       // Align to 64 bits.
+        const p = this.free;
+        this.free += size;
+        if (bytes) {
+            this.addData(p, bytes);
+        }
+        return p;
+    }
+
+    allocString(s) {
+        const encoder = new globalThis.TextEncoder();
+        const uint8array = encoder.encode(s);
+        return this.alloc([...uint8array, 0]);
+    }
+
+    _setSignatures() {
+        this.signatures = [];
+        const signatureIdxByName = {};
+        if (this.functionsTable.length>0) {
+            const signature = this.functions[this.functionsTable[0]].getSignature();
+            const signatureName = "s_"+toHexString(signature);
+            signatureIdxByName[signatureName] = 0;
+            this.signatures.push(signature);
+        }
+        for (let i=0; i<this.functions.length; i++) {
+            const signature = this.functions[i].getSignature();
+            const signatureName = "s_"+toHexString(signature);
+            if (typeof(signatureIdxByName[signatureName]) === "undefined") {
+                signatureIdxByName[signatureName] = this.signatures.length;
+                this.signatures.push(signature);
+            }
+
+            this.functions[i].signatureIdx = signatureIdxByName[signatureName];
+        }
+
+    }
+
+    _buildSection(sectionType, section) {
+        return [sectionType, ...varuint32(section.length), ...section];
+    }
+
+    _buildType() {
+        return this._buildSection(
+            0x01,
+            [
+                ...varuint32(this.signatures.length),
+                ...[].concat(...this.signatures)
+            ]
+        );
+    }
+
+    _buildImport() {
+        const entries = [];
+        entries.push([
+            ...string(this.memory.moduleName),
+            ...string(this.memory.fieldName),
+            0x02,
+            0x00,   //Flags no init valua
+            ...varuint32(this.memory.pagesSize)
+        ]);
+        for (let i=0; i< this.nImportFunctions; i++) {
+            entries.push([
+                ...string(this.functions[i].moduleName),
+                ...string(this.functions[i].fieldName),
+                0x00,
+                ...varuint32(this.functions[i].signatureIdx)
+            ]);
+        }
+        return this._buildSection(
+            0x02,
+            varuint32(entries.length).concat(...entries)
+        );
+    }
+
+    _buildFunctionDeclarations() {
+        const entries = [];
+        for (let i=this.nImportFunctions; i< this.nImportFunctions + this.nInternalFunctions; i++) {
+            entries.push(...varuint32(this.functions[i].signatureIdx));
+        }
+        return this._buildSection(
+            0x03,
+            [
+                ...varuint32(entries.length),
+                ...[...entries]
+            ]
+        );
+    }
+
+    _buildFunctionsTable() {
+        if (this.functionsTable.length == 0) return [];
+        return this._buildSection(
+            0x04,
+            [
+                ...varuint32(1),
+                0x70, 0, ...varuint32(this.functionsTable.length)
+            ]
+        );
+    }
+
+    _buildElements() {
+        if (this.functionsTable.length == 0) return [];
+        const entries = [];
+        for (let i=0; i<this.functionsTable.length; i++) {
+            entries.push(...varuint32(this.functionsTable[i]));
+        }
+        return this._buildSection(
+            0x09,
+            [
+                ...varuint32(1),      // 1 entry
+                ...varuint32(0),      // Table (0 in MVP)
+                0x41,                       // offset 0
+                ...varint32(0),
+                0x0b,
+                ...varuint32(this.functionsTable.length), // Number of elements
+                ...[...entries]
+            ]
+        );
+    }
+
+    _buildExports() {
+        const entries = [];
+        for (let i=0; i< this.exports.length; i++) {
+            entries.push([
+                ...string(this.exports[i].exportName),
+                0x00,
+                ...varuint32(this.exports[i].idx)
+            ]);
+        }
+        return this._buildSection(
+            0x07,
+            varuint32(entries.length).concat(...entries)
+        );
+    }
+
+    _buildCode() {
+        const entries = [];
+        for (let i=this.nImportFunctions; i< this.nImportFunctions + this.nInternalFunctions; i++) {
+            entries.push(this.functions[i].getBody());
+        }
+        return this._buildSection(
+            0x0a,
+            varuint32(entries.length).concat(...entries)
+        );
+    }
+
+    _buildData() {
+        const entries = [];
+        entries.push([
+            0x00,
+            0x41,
+            0x00,
+            0x0b,
+            0x04,
+            ...u32(this.free)
+        ]);
+        for (let i=0; i< this.datas.length; i++) {
+            entries.push([
+                0x00,
+                0x41,
+                ...varint32(this.datas[i].offset),
+                0x0b,
+                ...varuint32(this.datas[i].bytes.length),
+                ...this.datas[i].bytes,
+            ]);
+        }
+        return this._buildSection(
+            0x0b,
+            varuint32(entries.length).concat(...entries)
+        );
+    }
+
+}
+
+/*
+    Copyright 2019 0KIMS association.
+
+    This file is part of wasmbuilder
+
+    wasmbuilder is a free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    wasmbuilder is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+    License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with wasmbuilder. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+var main = /*#__PURE__*/Object.freeze({
+    __proto__: null,
+    ModuleBuilder: ModuleBuilder
+});
 
 var utils$5 = {};
 
@@ -7834,7 +8779,7 @@ function isEven(n) {
     return n % 2n === 0n;
 }
 
-function isNegative$3(n) {
+function isNegative$2(n) {
     return n < 0n;
 }
 
@@ -7842,8 +8787,8 @@ function isPositive(n) {
     return n > 0n;
 }
 
-function bitLength$5(n) {
-    if (isNegative$3(n)) {
+function bitLength$4(n) {
+    if (isNegative$2(n)) {
         return n.toString(2).length - 1; // discard the - sign
     } else {
         return n.toString(2).length;
@@ -7873,7 +8818,7 @@ function modInv$3(a, n) {
     if (compare(t, 0n) === -1) {
         t = t + n;
     }
-    if (isNegative$3(a)) {
+    if (isNegative$2(a)) {
         return -t;
     }
     return t;
@@ -7883,7 +8828,7 @@ function modPow$2(n, exp, mod) {
     if (mod === 0n) throw new Error("Cannot take modPow with modulus 0");
     var r = 1n,
         base = n % mod;
-    if (isNegative$3(exp)) {
+    if (isNegative$2(exp)) {
         exp = exp * -1n;
         base = modInv$3(base, mod);
     }
@@ -7922,6 +8867,19 @@ function prev(n) {
     return n - 1n;
 }
 
+function isKnownPrime(v) {
+    let n = abs(v);
+    switch (n) {
+        case 21888242871839275222246405745257275088696311157297823662689037894645226208583n:
+        case 21888242871839275222246405745257275088548364400416034343698204186575808495617n:
+        case 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaabn:
+        case 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001n:
+        case 41898490967918953402344214791240637128170709919953949071783502921025352812571106773058893763790338921418070971888458477323173057491593855069696241854796396165721416325350064441470418137846398469611935719059908164220784476160001n:
+            return true;
+    }
+    return false;
+}
+
 function millerRabinTest(n, a) {
     var nPrev = prev(n),
         b = nPrev,
@@ -7943,10 +8901,13 @@ function millerRabinTest(n, a) {
 }
 
 function isPrime$1(p) {
-    var isPrime = isBasicPrime(p);
+    let isPrime;
+    isPrime = isKnownPrime(p);
+    if (isPrime !== undefined) return isPrime;
+    isPrime = isBasicPrime(p);
     if (isPrime !== undefined) return isPrime;
     var n = abs(p);
-    var bits = bitLength$5(n);
+    var bits = bitLength$4(n);
     if (bits <= 64)
         return millerRabinTest(n, [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]);
     var logN = Math.log(2) * Number(bits);
@@ -7957,9 +8918,9 @@ function isPrime$1(p) {
     return millerRabinTest(n, a);
 }
 
-bigint.bitLength = bitLength$5;
+bigint.bitLength = bitLength$4;
 bigint.isOdd = isOdd$4;
-bigint.isNegative = isNegative$3;
+bigint.isNegative = isNegative$2;
 bigint.abs = abs;
 bigint.isUnit = isUnit;
 bigint.compare = compare;
@@ -7993,11 +8954,11 @@ const buildExp$2 = build_timesscalar;
 const buildBatchInverse$2 = build_batchinverse;
 const buildBatchConvertion$1 = build_batchconvertion;
 const buildBatchOp = build_batchop;
-const { bitLength: bitLength$4, modInv: modInv$2, modPow: modPow$1, isPrime, isOdd: isOdd$3, square } = bigint;
+const { bitLength: bitLength$3, modInv: modInv$2, modPow: modPow$1, isPrime, isOdd: isOdd$3, square } = bigint;
 
 var build_f1m = function buildF1m(module, _q, _prefix, _intPrefix) {
     const q = BigInt(_q);
-    const n64 = Math.floor((bitLength$4(q - 1n) - 1)/64) +1;
+    const n64 = Math.floor((bitLength$3(q - 1n) - 1)/64) +1;
     const n32 = n64*2;
     const n8 = n64*8;
 
@@ -9050,12 +10011,12 @@ var build_f1m = function buildF1m(module, _q, _prefix, _intPrefix) {
 */
 
 const buildF1m$2 =build_f1m;
-const { bitLength: bitLength$3 } = bigint;
+const { bitLength: bitLength$2 } = bigint;
 
 var build_f1 = function buildF1(module, _q, _prefix, _f1mPrefix, _intPrefix) {
 
     const q = BigInt(_q);
-    const n64 = Math.floor((bitLength$3(q - 1n) - 1)/64) +1;
+    const n64 = Math.floor((bitLength$2(q - 1n) - 1)/64) +1;
     const n8 = n64*8;
 
     const prefix = _prefix || "f1";
@@ -14521,7 +15482,7 @@ const buildFFT$1 = build_fft;
 const buildPol$1 = build_pol;
 const buildQAP$1 = build_qap;
 const buildApplyKey$1 = build_applykey;
-const { bitLength: bitLength$2, modInv, isOdd: isOdd$1, isNegative: isNegative$2 } = bigint;
+const { bitLength: bitLength$1, modInv, isOdd: isOdd$1, isNegative: isNegative$1 } = bigint;
 
 var build_bn128 = function buildBN128(module, _prefix) {
 
@@ -14533,7 +15494,7 @@ var build_bn128 = function buildBN128(module, _prefix) {
     const r = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 
 
-    const n64 = Math.floor((bitLength$2(q - 1n) - 1)/64) +1;
+    const n64 = Math.floor((bitLength$1(q - 1n) - 1)/64) +1;
     const n8 = n64*8;
     const frsize = n8;
     const f1size = n8;
@@ -15479,7 +16440,7 @@ var build_bn128 = function buildBN128(module, _prefix) {
                 (ac0 * bc0 - (  ac1 * bc1)  ) % q,
                 (ac0 * bc1 + (  ac1 * bc0)  ) % q,
             ];
-            if (isNegative$2(res[0])) res[0] = res[0] + q;
+            if (isNegative$1(res[0])) res[0] = res[0] + q;
             return res;
         }
 
@@ -15928,7 +16889,7 @@ const buildFFT = build_fft;
 const buildPol = build_pol;
 const buildQAP = build_qap;
 const buildApplyKey = build_applykey;
-const { bitLength: bitLength$1, isOdd, isNegative: isNegative$1 } = bigint;
+const { bitLength, isOdd, isNegative } = bigint;
 
 // Definition here: https://electriccoin.co/blog/new-snark-curve/
 
@@ -15941,13 +16902,13 @@ var build_bls12381 = function buildBLS12381(module, _prefix) {
     const q = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaabn;
     const r = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001n;
 
-    const n64q = Math.floor((bitLength$1(q - 1n) - 1)/64) +1;
+    const n64q = Math.floor((bitLength(q - 1n) - 1)/64) +1;
     const n8q = n64q*8;
     const f1size = n8q;
     const f2size = f1size * 2;
     const ftsize = f1size * 12;
 
-    const n64r = Math.floor((bitLength$1(r - 1n) - 1)/64) +1;
+    const n64r = Math.floor((bitLength(r - 1n) - 1)/64) +1;
     const n8r = n64r*8;
     const frsize = n8r;
 
@@ -16916,7 +17877,7 @@ var build_bls12381 = function buildBLS12381(module, _prefix) {
                 (ac0 * bc0 - (ac1 * bc1)) % q,
                 (ac0 * bc1 + (ac1 * bc0)) % q,
             ];
-            if (isNegative$1(res[0])) res[0] = res[0] + q;
+            if (isNegative(res[0])) res[0] = res[0] + q;
             return res;
         }
 
@@ -17553,9 +18514,6 @@ var build_bls12381 = function buildBLS12381(module, _prefix) {
     You should have received a copy of the GNU General Public License
     along with wasmsnark. If not, see <https://www.gnu.org/licenses/>.
 */
-
-// module.exports.bn128_wasm = require("./build/bn128_wasm.js");
-var bn128_wasm_gzip = bn128_wasm_gzip$1;
 // module.exports.bls12381_wasm = require("./build/bls12381_wasm.js");
 // module.exports.mnt6753_wasm = require("./build/mnt6753_wasm.js");
 
@@ -17564,953 +18522,8 @@ var buildBls12381 = build_bls12381;
 
 var index = /*#__PURE__*/Object.freeze({
     __proto__: null,
-    bn128_wasm_gzip: bn128_wasm_gzip,
     buildBls12381: buildBls12381,
     buildBn128: buildBn128
-});
-
-/*
-    Copyright 2019 0KIMS association.
-
-    This file is part of wasmbuilder
-
-    wasmbuilder is a free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    wasmbuilder is distributed in the hope that it will be useful, but WITHOUT
-    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
-    License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with wasmbuilder. If not, see <https://www.gnu.org/licenses/>.
-*/
-
-function toNumber(n) {
-    return BigInt(n);
-}
-
-function isNegative(n) {
-    return n < 0n;
-}
-
-function isZero(n) {
-    return n === 0n;
-}
-
-function bitLength(n) {
-    if (isNegative(n)) {
-        return n.toString(2).length - 1; // discard the - sign
-    } else {
-        return n.toString(2).length;
-    }
-}
-
-function u32(n) {
-    const b = [];
-    const v = toNumber(n);
-    b.push(Number(v & 0xFFn));
-    b.push(Number(v >> 8n & 0xFFn));
-    b.push(Number(v >> 16n & 0xFFn));
-    b.push(Number(v >> 24n & 0xFFn));
-    return b;
-}
-
-function toUTF8Array(str) {
-    var utf8 = [];
-    for (var i=0; i < str.length; i++) {
-        var charcode = str.charCodeAt(i);
-        if (charcode < 0x80) utf8.push(charcode);
-        else if (charcode < 0x800) {
-            utf8.push(0xc0 | (charcode >> 6),
-                0x80 | (charcode & 0x3f));
-        }
-        else if (charcode < 0xd800 || charcode >= 0xe000) {
-            utf8.push(0xe0 | (charcode >> 12),
-                0x80 | ((charcode>>6) & 0x3f),
-                0x80 | (charcode & 0x3f));
-        }
-        // surrogate pair
-        else {
-            i++;
-            // UTF-16 encodes 0x10000-0x10FFFF by
-            // subtracting 0x10000 and splitting the
-            // 20 bits of 0x0-0xFFFFF into two halves
-            charcode = 0x10000 + (((charcode & 0x3ff)<<10)
-                      | (str.charCodeAt(i) & 0x3ff));
-            utf8.push(0xf0 | (charcode >>18),
-                0x80 | ((charcode>>12) & 0x3f),
-                0x80 | ((charcode>>6) & 0x3f),
-                0x80 | (charcode & 0x3f));
-        }
-    }
-    return utf8;
-}
-
-function string(str) {
-    const bytes = toUTF8Array(str);
-    return [ ...varuint32(bytes.length), ...bytes ];
-}
-
-function varuint(n) {
-    const code = [];
-    let v = toNumber(n);
-    if (isNegative(v)) throw new Error("Number cannot be negative");
-    while (!isZero(v)) {
-        code.push(Number(v & 0x7Fn));
-        v = v >> 7n;
-    }
-    if (code.length==0) code.push(0);
-    for (let i=0; i<code.length-1; i++) {
-        code[i] = code[i] | 0x80;
-    }
-    return code;
-}
-
-function varint(_n) {
-    let n, sign;
-    const bits = bitLength(_n);
-    if (_n<0) {
-        sign = true;
-        n = (1n << BigInt(bits)) + _n;
-    } else {
-        sign = false;
-        n = toNumber(_n);
-    }
-    const paddingBits = 7 - (bits % 7);
-
-    const padding = ((1n << BigInt(paddingBits)) - 1n) << BigInt(bits);
-    const paddingMask = ((1 << (7 - paddingBits))-1) | 0x80;
-
-    const code = varuint(n + padding);
-
-    if (!sign) {
-        code[code.length-1] = code[code.length-1] & paddingMask;
-    }
-
-    return code;
-}
-
-function varint32(n) {
-    let v = toNumber(n);
-    if (v > 0xFFFFFFFFn) throw new Error("Number too big");
-    if (v > 0x7FFFFFFFn) v = v - 0x100000000n;
-    // bigInt("-80000000", 16) as base10
-    if (v < -2147483648n) throw new Error("Number too small");
-    return varint(v);
-}
-
-function varint64(n) {
-    let v = toNumber(n);
-    if (v > 0xFFFFFFFFFFFFFFFFn) throw new Error("Number too big");
-    if (v > 0x7FFFFFFFFFFFFFFFn) v = v - 0x10000000000000000n;
-    // bigInt("-8000000000000000", 16) as base10
-    if (v < -9223372036854775808n) throw new Error("Number too small");
-    return varint(v);
-}
-
-function varuint32(n) {
-    let v = toNumber(n);
-    if (v > 0xFFFFFFFFn) throw new Error("Number too big");
-    return varuint(v);
-}
-
-function toHexString(byteArray) {
-    return Array.from(byteArray, function(byte) {
-        return ("0" + (byte & 0xFF).toString(16)).slice(-2);
-    }).join("");
-}
-
-/*
-    Copyright 2019 0KIMS association.
-
-    This file is part of wasmbuilder
-
-    wasmbuilder is a free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    wasmbuilder is distributed in the hope that it will be useful, but WITHOUT
-    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
-    License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with wasmbuilder. If not, see <https://www.gnu.org/licenses/>.
-*/
-
-
-class CodeBuilder {
-    constructor(func) {
-        this.func = func;
-        this.functionName = func.functionName;
-        this.module = func.module;
-    }
-
-    setLocal(localName, valCode) {
-        const idx = this.func.localIdxByName[localName];
-        if (idx === undefined)
-            throw new Error(`Local Variable not defined: Function: ${this.functionName} local: ${localName} `);
-        return [...valCode, 0x21, ...varuint32( idx )];
-    }
-
-    teeLocal(localName, valCode) {
-        const idx = this.func.localIdxByName[localName];
-        if (idx === undefined)
-            throw new Error(`Local Variable not defined: Function: ${this.functionName} local: ${localName} `);
-        return [...valCode, 0x22, ...varuint32( idx )];
-    }
-
-    getLocal(localName) {
-        const idx = this.func.localIdxByName[localName];
-        if (idx === undefined)
-            throw new Error(`Local Variable not defined: Function: ${this.functionName} local: ${localName} `);
-        return [0x20, ...varuint32( idx )];
-    }
-
-    i64_load8_s(idxCode, _offset, _align) {
-        const offset = _offset || 0;
-        const align = (_align === undefined) ? 0 : _align;  // 8 bits alignment by default
-        return [...idxCode, 0x30, align, ...varuint32(offset)];
-    }
-
-    i64_load8_u(idxCode, _offset, _align) {
-        const offset = _offset || 0;
-        const align = (_align === undefined) ? 0 : _align;  // 8 bits alignment by default
-        return [...idxCode, 0x31, align, ...varuint32(offset)];
-    }
-
-    i64_load16_s(idxCode, _offset, _align) {
-        const offset = _offset || 0;
-        const align = (_align === undefined) ? 1 : _align;  // 16 bits alignment by default
-        return [...idxCode, 0x32, align, ...varuint32(offset)];
-    }
-
-    i64_load16_u(idxCode, _offset, _align) {
-        const offset = _offset || 0;
-        const align = (_align === undefined) ? 1 : _align;  // 16 bits alignment by default
-        return [...idxCode, 0x33, align, ...varuint32(offset)];
-    }
-
-    i64_load32_s(idxCode, _offset, _align) {
-        const offset = _offset || 0;
-        const align = (_align === undefined) ? 2 : _align;  // 32 bits alignment by default
-        return [...idxCode, 0x34, align, ...varuint32(offset)];
-    }
-
-    i64_load32_u(idxCode, _offset, _align) {
-        const offset = _offset || 0;
-        const align = (_align === undefined) ? 2 : _align;  // 32 bits alignment by default
-        return [...idxCode, 0x35, align, ...varuint32(offset)];
-    }
-
-    i64_load(idxCode, _offset, _align) {
-        const offset = _offset || 0;
-        const align = (_align === undefined) ? 3 : _align;  // 64 bits alignment by default
-        return [...idxCode, 0x29, align, ...varuint32(offset)];
-    }
-
-
-    i64_store(idxCode, _offset, _align, _codeVal) {
-        let offset, align, codeVal;
-        if (Array.isArray(_offset)) {
-            offset = 0;
-            align = 3;
-            codeVal = _offset;
-        } else if (Array.isArray(_align)) {
-            offset = _offset;
-            align = 3;
-            codeVal = _align;
-        } else if (Array.isArray(_codeVal)) {
-            offset = _offset;
-            align = _align;
-            codeVal = _codeVal;
-        }
-        return [...idxCode, ...codeVal, 0x37, align, ...varuint32(offset)];
-    }
-
-    i64_store32(idxCode, _offset, _align, _codeVal) {
-        let offset, align, codeVal;
-        if (Array.isArray(_offset)) {
-            offset = 0;
-            align = 2;
-            codeVal = _offset;
-        } else if (Array.isArray(_align)) {
-            offset = _offset;
-            align = 2;
-            codeVal = _align;
-        } else if (Array.isArray(_codeVal)) {
-            offset = _offset;
-            align = _align;
-            codeVal = _codeVal;
-        }
-        return [...idxCode, ...codeVal, 0x3e, align, ...varuint32(offset)];
-    }
-
-
-    i64_store16(idxCode, _offset, _align, _codeVal) {
-        let offset, align, codeVal;
-        if (Array.isArray(_offset)) {
-            offset = 0;
-            align = 1;
-            codeVal = _offset;
-        } else if (Array.isArray(_align)) {
-            offset = _offset;
-            align = 1;
-            codeVal = _align;
-        } else if (Array.isArray(_codeVal)) {
-            offset = _offset;
-            align = _align;
-            codeVal = _codeVal;
-        }
-        return [...idxCode, ...codeVal, 0x3d, align, ...varuint32(offset)];
-    }
-
-
-    i64_store8(idxCode, _offset, _align, _codeVal) {
-        let offset, align, codeVal;
-        if (Array.isArray(_offset)) {
-            offset = 0;
-            align = 0;
-            codeVal = _offset;
-        } else if (Array.isArray(_align)) {
-            offset = _offset;
-            align = 0;
-            codeVal = _align;
-        } else if (Array.isArray(_codeVal)) {
-            offset = _offset;
-            align = _align;
-            codeVal = _codeVal;
-        }
-        return [...idxCode, ...codeVal, 0x3c, align, ...varuint32(offset)];
-    }
-
-    i32_load8_s(idxCode, _offset, _align) {
-        const offset = _offset || 0;
-        const align = (_align === undefined) ? 0 : _align;  // 32 bits alignment by default
-        return [...idxCode, 0x2c, align, ...varuint32(offset)];
-    }
-
-    i32_load8_u(idxCode, _offset, _align) {
-        const offset = _offset || 0;
-        const align = (_align === undefined) ? 0 : _align;  // 32 bits alignment by default
-        return [...idxCode, 0x2d, align, ...varuint32(offset)];
-    }
-
-    i32_load16_s(idxCode, _offset, _align) {
-        const offset = _offset || 0;
-        const align = (_align === undefined) ? 1 : _align;  // 32 bits alignment by default
-        return [...idxCode, 0x2e, align, ...varuint32(offset)];
-    }
-
-    i32_load16_u(idxCode, _offset, _align) {
-        const offset = _offset || 0;
-        const align = (_align === undefined) ? 1 : _align;  // 32 bits alignment by default
-        return [...idxCode, 0x2f, align, ...varuint32(offset)];
-    }
-
-    i32_load(idxCode, _offset, _align) {
-        const offset = _offset || 0;
-        const align = (_align === undefined) ? 2 : _align;  // 32 bits alignment by default
-        return [...idxCode, 0x28, align, ...varuint32(offset)];
-    }
-
-    i32_store(idxCode, _offset, _align, _codeVal) {
-        let offset, align, codeVal;
-        if (Array.isArray(_offset)) {
-            offset = 0;
-            align = 2;
-            codeVal = _offset;
-        } else if (Array.isArray(_align)) {
-            offset = _offset;
-            align = 2;
-            codeVal = _align;
-        } else if (Array.isArray(_codeVal)) {
-            offset = _offset;
-            align = _align;
-            codeVal = _codeVal;
-        }
-        return [...idxCode, ...codeVal, 0x36, align, ...varuint32(offset)];
-    }
-
-
-    i32_store16(idxCode, _offset, _align, _codeVal) {
-        let offset, align, codeVal;
-        if (Array.isArray(_offset)) {
-            offset = 0;
-            align = 1;
-            codeVal = _offset;
-        } else if (Array.isArray(_align)) {
-            offset = _offset;
-            align = 1;
-            codeVal = _align;
-        } else if (Array.isArray(_codeVal)) {
-            offset = _offset;
-            align = _align;
-            codeVal = _codeVal;
-        }
-        return [...idxCode, ...codeVal, 0x3b, align, ...varuint32(offset)];
-    }
-
-    i32_store8(idxCode, _offset, _align, _codeVal) {
-        let offset, align, codeVal;
-        if (Array.isArray(_offset)) {
-            offset = 0;
-            align = 0;
-            codeVal = _offset;
-        } else if (Array.isArray(_align)) {
-            offset = _offset;
-            align = 0;
-            codeVal = _align;
-        } else if (Array.isArray(_codeVal)) {
-            offset = _offset;
-            align = _align;
-            codeVal = _codeVal;
-        }
-        return [...idxCode, ...codeVal, 0x3a, align, ...varuint32(offset)];
-    }
-
-    call(fnName, ...args) {
-        const idx = this.module.functionIdxByName[fnName];
-        if (idx === undefined)
-            throw new Error(`Function not defined: Function: ${fnName}`);
-        return [...[].concat(...args), 0x10, ...varuint32(idx)];
-    }
-
-    call_indirect(fnIdx, ...args) {
-        return [...[].concat(...args), ...fnIdx, 0x11, 0, 0];
-    }
-
-    if(condCode, thenCode, elseCode) {
-        if (elseCode) {
-            return [...condCode, 0x04, 0x40, ...thenCode, 0x05, ...elseCode, 0x0b];
-        } else {
-            return [...condCode, 0x04, 0x40, ...thenCode, 0x0b];
-        }
-    }
-
-    block(bCode) { return [0x02, 0x40, ...bCode, 0x0b]; }
-    loop(...args) {
-        return [0x03, 0x40, ...[].concat(...[...args]), 0x0b];
-    }
-    br_if(relPath, condCode) { return [...condCode, 0x0d, ...varuint32(relPath)]; }
-    br(relPath) { return [0x0c, ...varuint32(relPath)]; }
-    ret(rCode) { return [...rCode, 0x0f]; }
-    drop(dCode) { return [...dCode,  0x1a]; }
-
-    i64_const(num) { return [0x42, ...varint64(num)]; }
-    i32_const(num) { return [0x41, ...varint32(num)]; }
-
-
-    i64_eqz(opcode) { return [...opcode, 0x50]; }
-    i64_eq(op1code, op2code) { return [...op1code, ...op2code, 0x51]; }
-    i64_ne(op1code, op2code) { return [...op1code, ...op2code, 0x52]; }
-    i64_lt_s(op1code, op2code) { return [...op1code, ...op2code, 0x53]; }
-    i64_lt_u(op1code, op2code) { return [...op1code, ...op2code, 0x54]; }
-    i64_gt_s(op1code, op2code) { return [...op1code, ...op2code, 0x55]; }
-    i64_gt_u(op1code, op2code) { return [...op1code, ...op2code, 0x56]; }
-    i64_le_s(op1code, op2code) { return [...op1code, ...op2code, 0x57]; }
-    i64_le_u(op1code, op2code) { return [...op1code, ...op2code, 0x58]; }
-    i64_ge_s(op1code, op2code) { return [...op1code, ...op2code, 0x59]; }
-    i64_ge_u(op1code, op2code) { return [...op1code, ...op2code, 0x5a]; }
-    i64_add(op1code, op2code) { return [...op1code, ...op2code, 0x7c]; }
-    i64_sub(op1code, op2code) { return [...op1code, ...op2code, 0x7d]; }
-    i64_mul(op1code, op2code) { return [...op1code, ...op2code, 0x7e]; }
-    i64_div_s(op1code, op2code) { return [...op1code, ...op2code, 0x7f]; }
-    i64_div_u(op1code, op2code) { return [...op1code, ...op2code, 0x80]; }
-    i64_rem_s(op1code, op2code) { return [...op1code, ...op2code, 0x81]; }
-    i64_rem_u(op1code, op2code) { return [...op1code, ...op2code, 0x82]; }
-    i64_and(op1code, op2code) { return [...op1code, ...op2code, 0x83]; }
-    i64_or(op1code, op2code) { return [...op1code, ...op2code, 0x84]; }
-    i64_xor(op1code, op2code) { return [...op1code, ...op2code, 0x85]; }
-    i64_shl(op1code, op2code) { return [...op1code, ...op2code, 0x86]; }
-    i64_shr_s(op1code, op2code) { return [...op1code, ...op2code, 0x87]; }
-    i64_shr_u(op1code, op2code) { return [...op1code, ...op2code, 0x88]; }
-    i64_extend_i32_s(op1code) { return [...op1code, 0xac]; }
-    i64_extend_i32_u(op1code) { return [...op1code, 0xad]; }
-    i64_clz(op1code) { return [...op1code, 0x79]; }
-    i64_ctz(op1code) { return [...op1code, 0x7a]; }
-
-    i32_eqz(op1code) { return [...op1code, 0x45]; }
-    i32_eq(op1code, op2code) { return [...op1code, ...op2code, 0x46]; }
-    i32_ne(op1code, op2code) { return [...op1code, ...op2code, 0x47]; }
-    i32_lt_s(op1code, op2code) { return [...op1code, ...op2code, 0x48]; }
-    i32_lt_u(op1code, op2code) { return [...op1code, ...op2code, 0x49]; }
-    i32_gt_s(op1code, op2code) { return [...op1code, ...op2code, 0x4a]; }
-    i32_gt_u(op1code, op2code) { return [...op1code, ...op2code, 0x4b]; }
-    i32_le_s(op1code, op2code) { return [...op1code, ...op2code, 0x4c]; }
-    i32_le_u(op1code, op2code) { return [...op1code, ...op2code, 0x4d]; }
-    i32_ge_s(op1code, op2code) { return [...op1code, ...op2code, 0x4e]; }
-    i32_ge_u(op1code, op2code) { return [...op1code, ...op2code, 0x4f]; }
-    i32_add(op1code, op2code) { return [...op1code, ...op2code, 0x6a]; }
-    i32_sub(op1code, op2code) { return [...op1code, ...op2code, 0x6b]; }
-    i32_mul(op1code, op2code) { return [...op1code, ...op2code, 0x6c]; }
-    i32_div_s(op1code, op2code) { return [...op1code, ...op2code, 0x6d]; }
-    i32_div_u(op1code, op2code) { return [...op1code, ...op2code, 0x6e]; }
-    i32_rem_s(op1code, op2code) { return [...op1code, ...op2code, 0x6f]; }
-    i32_rem_u(op1code, op2code) { return [...op1code, ...op2code, 0x70]; }
-    i32_and(op1code, op2code) { return [...op1code, ...op2code, 0x71]; }
-    i32_or(op1code, op2code) { return [...op1code, ...op2code, 0x72]; }
-    i32_xor(op1code, op2code) { return [...op1code, ...op2code, 0x73]; }
-    i32_shl(op1code, op2code) { return [...op1code, ...op2code, 0x74]; }
-    i32_shr_s(op1code, op2code) { return [...op1code, ...op2code, 0x75]; }
-    i32_shr_u(op1code, op2code) { return [...op1code, ...op2code, 0x76]; }
-    i32_rotl(op1code, op2code) { return [...op1code, ...op2code, 0x77]; }
-    i32_rotr(op1code, op2code) { return [...op1code, ...op2code, 0x78]; }
-    i32_wrap_i64(op1code) { return [...op1code, 0xa7]; }
-    i32_clz(op1code) { return [...op1code, 0x67]; }
-    i32_ctz(op1code) { return [...op1code, 0x68]; }
-
-    unreachable() { return [ 0x0 ]; }
-
-    current_memory() { return [ 0x3f, 0]; }
-
-    comment() { return []; }
-}
-
-/*
-    Copyright 2019 0KIMS association.
-
-    This file is part of wasmbuilder
-
-    wasmbuilder is a free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    wasmbuilder is distributed in the hope that it will be useful, but WITHOUT
-    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
-    License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with wasmbuilder. If not, see <https://www.gnu.org/licenses/>.
-*/
-
-
-const typeCodes = {
-    "i32": 0x7f,
-    "i64": 0x7e,
-    "f32": 0x7d,
-    "f64": 0x7c,
-    "anyfunc": 0x70,
-    "func": 0x60,
-    "emptyblock": 0x40
-};
-
-
-class FunctionBuilder {
-
-    constructor (module, fnName, fnType, moduleName, fieldName) {
-        if (fnType == "import") {
-            this.fnType = "import";
-            this.moduleName = moduleName;
-            this.fieldName = fieldName;
-        } else if (fnType == "internal") {
-            this.fnType = "internal";
-        } else {
-            throw new Error("Invalid function fnType: " + fnType);
-        }
-        this.module = module;
-        this.fnName = fnName;
-        this.params = [];
-        this.locals = [];
-        this.localIdxByName = {};
-        this.code = [];
-        this.returnType = null;
-        this.nextLocal =0;
-    }
-
-    addParam(paramName, paramType) {
-        if (this.localIdxByName[paramName])
-            throw new Error(`param already exists. Function: ${this.fnName}, Param: ${paramName} `);
-        const idx = this.nextLocal++;
-        this.localIdxByName[paramName] = idx;
-        this.params.push({
-            type: paramType
-        });
-    }
-
-    addLocal(localName, localType, _length) {
-        const length = _length || 1;
-        if (this.localIdxByName[localName])
-            throw new Error(`local already exists. Function: ${this.fnName}, Param: ${localName} `);
-        const idx = this.nextLocal++;
-        this.localIdxByName[localName] = idx;
-        this.locals.push({
-            type: localType,
-            length: length
-        });
-    }
-
-    setReturnType(returnType) {
-        if (this.returnType)
-            throw new Error(`returnType already defined. Function: ${this.fnName}`);
-        this.returnType = returnType;
-    }
-
-    getSignature() {
-        const params = [...varuint32(this.params.length), ...this.params.map((p) => typeCodes[p.type])];
-        const returns = this.returnType ? [0x01, typeCodes[this.returnType]] : [0];
-        return [0x60, ...params, ...returns];
-    }
-
-    getBody() {
-        const locals = this.locals.map((l) => [
-            ...varuint32(l.length),
-            typeCodes[l.type]
-        ]);
-
-        const body = [
-            ...varuint32(this.locals.length),
-            ...[].concat(...locals),
-            ...this.code,
-            0x0b
-        ];
-        return [
-            ...varuint32(body.length),
-            ...body
-        ];
-    }
-
-    addCode(...code) {
-        this.code.push(...[].concat(...[...code]));
-    }
-
-    getCodeBuilder() {
-        return new CodeBuilder(this);
-    }
-}
-
-/*
-    Copyright 2019 0KIMS association.
-
-    This file is part of wasmbuilder
-
-    wasmbuilder is a free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    wasmbuilder is distributed in the hope that it will be useful, but WITHOUT
-    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
-    License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with wasmbuilder. If not, see <https://www.gnu.org/licenses/>.
-*/
-
-
-class ModuleBuilder {
-
-    constructor() {
-        this.functions = [];
-        this.functionIdxByName = {};
-        this.nImportFunctions = 0;
-        this.nInternalFunctions =0;
-        this.memory = {
-            pagesSize: 1,
-            moduleName: "env",
-            fieldName: "memory"
-        };
-        this.free = 8;
-        this.datas = [];
-        this.modules = {};
-        this.exports = [];
-        this.functionsTable = [];
-    }
-
-    build() {
-        this._setSignatures();
-        return new Uint8Array([
-            ...u32(0x6d736100),
-            ...u32(1),
-            ...this._buildType(),
-            ...this._buildImport(),
-            ...this._buildFunctionDeclarations(),
-            ...this._buildFunctionsTable(),
-            ...this._buildExports(),
-            ...this._buildElements(),
-            ...this._buildCode(),
-            ...this._buildData()
-        ]);
-    }
-
-    addFunction(fnName) {
-        if (typeof(this.functionIdxByName[fnName]) !== "undefined")
-            throw new Error(`Function already defined: ${fnName}`);
-
-        const idx = this.functions.length;
-        this.functionIdxByName[fnName] = idx;
-
-        this.functions.push(new FunctionBuilder(this, fnName, "internal"));
-
-        this.nInternalFunctions++;
-        return this.functions[idx];
-    }
-
-    addIimportFunction(fnName, moduleName, _fieldName) {
-        if (typeof(this.functionIdxByName[fnName]) !== "undefined")
-            throw new Error(`Function already defined: ${fnName}`);
-
-        if (  (this.functions.length>0)
-            &&(this.functions[this.functions.length-1].type == "internal"))
-            throw new Error(`Import functions must be declared before internal: ${fnName}`);
-
-        let fieldName = _fieldName || fnName;
-
-        const idx = this.functions.length;
-        this.functionIdxByName[fnName] = idx;
-
-        this.functions.push(new FunctionBuilder(this, fnName, "import", moduleName, fieldName));
-
-        this.nImportFunctions ++;
-        return this.functions[idx];
-    }
-
-    setMemory(pagesSize, moduleName, fieldName) {
-        this.memory = {
-            pagesSize: pagesSize,
-            moduleName: moduleName || "env",
-            fieldName: fieldName || "memory"
-        };
-    }
-
-    exportFunction(fnName, _exportName) {
-        const exportName = _exportName || fnName;
-        if (typeof(this.functionIdxByName[fnName]) === "undefined")
-            throw new Error(`Function not defined: ${fnName}`);
-        const idx = this.functionIdxByName[fnName];
-        if (exportName != fnName) {
-            this.functionIdxByName[exportName] = idx;
-        }
-        this.exports.push({
-            exportName: exportName,
-            idx: idx
-        });
-    }
-
-    addFunctionToTable(fnName) {
-        const idx = this.functionIdxByName[fnName];
-        this.functionsTable.push(idx);
-    }
-
-    addData(offset, bytes) {
-        this.datas.push({
-            offset: offset,
-            bytes: bytes
-        });
-    }
-
-    alloc(a, b) {
-        let size;
-        let bytes;
-        if ((Array.isArray(a) || ArrayBuffer.isView(a)) && (typeof(b) === "undefined")) {
-            size = a.length;
-            bytes = a;
-        } else {
-            size = a;
-            bytes = b;
-        }
-        size = (((size-1)>>3) +1)<<3;       // Align to 64 bits.
-        const p = this.free;
-        this.free += size;
-        if (bytes) {
-            this.addData(p, bytes);
-        }
-        return p;
-    }
-
-    allocString(s) {
-        const encoder = new globalThis.TextEncoder();
-        const uint8array = encoder.encode(s);
-        return this.alloc([...uint8array, 0]);
-    }
-
-    _setSignatures() {
-        this.signatures = [];
-        const signatureIdxByName = {};
-        if (this.functionsTable.length>0) {
-            const signature = this.functions[this.functionsTable[0]].getSignature();
-            const signatureName = "s_"+toHexString(signature);
-            signatureIdxByName[signatureName] = 0;
-            this.signatures.push(signature);
-        }
-        for (let i=0; i<this.functions.length; i++) {
-            const signature = this.functions[i].getSignature();
-            const signatureName = "s_"+toHexString(signature);
-            if (typeof(signatureIdxByName[signatureName]) === "undefined") {
-                signatureIdxByName[signatureName] = this.signatures.length;
-                this.signatures.push(signature);
-            }
-
-            this.functions[i].signatureIdx = signatureIdxByName[signatureName];
-        }
-
-    }
-
-    _buildSection(sectionType, section) {
-        return [sectionType, ...varuint32(section.length), ...section];
-    }
-
-    _buildType() {
-        return this._buildSection(
-            0x01,
-            [
-                ...varuint32(this.signatures.length),
-                ...[].concat(...this.signatures)
-            ]
-        );
-    }
-
-    _buildImport() {
-        const entries = [];
-        entries.push([
-            ...string(this.memory.moduleName),
-            ...string(this.memory.fieldName),
-            0x02,
-            0x00,   //Flags no init valua
-            ...varuint32(this.memory.pagesSize)
-        ]);
-        for (let i=0; i< this.nImportFunctions; i++) {
-            entries.push([
-                ...string(this.functions[i].moduleName),
-                ...string(this.functions[i].fieldName),
-                0x00,
-                ...varuint32(this.functions[i].signatureIdx)
-            ]);
-        }
-        return this._buildSection(
-            0x02,
-            varuint32(entries.length).concat(...entries)
-        );
-    }
-
-    _buildFunctionDeclarations() {
-        const entries = [];
-        for (let i=this.nImportFunctions; i< this.nImportFunctions + this.nInternalFunctions; i++) {
-            entries.push(...varuint32(this.functions[i].signatureIdx));
-        }
-        return this._buildSection(
-            0x03,
-            [
-                ...varuint32(entries.length),
-                ...[...entries]
-            ]
-        );
-    }
-
-    _buildFunctionsTable() {
-        if (this.functionsTable.length == 0) return [];
-        return this._buildSection(
-            0x04,
-            [
-                ...varuint32(1),
-                0x70, 0, ...varuint32(this.functionsTable.length)
-            ]
-        );
-    }
-
-    _buildElements() {
-        if (this.functionsTable.length == 0) return [];
-        const entries = [];
-        for (let i=0; i<this.functionsTable.length; i++) {
-            entries.push(...varuint32(this.functionsTable[i]));
-        }
-        return this._buildSection(
-            0x09,
-            [
-                ...varuint32(1),      // 1 entry
-                ...varuint32(0),      // Table (0 in MVP)
-                0x41,                       // offset 0
-                ...varint32(0),
-                0x0b,
-                ...varuint32(this.functionsTable.length), // Number of elements
-                ...[...entries]
-            ]
-        );
-    }
-
-    _buildExports() {
-        const entries = [];
-        for (let i=0; i< this.exports.length; i++) {
-            entries.push([
-                ...string(this.exports[i].exportName),
-                0x00,
-                ...varuint32(this.exports[i].idx)
-            ]);
-        }
-        return this._buildSection(
-            0x07,
-            varuint32(entries.length).concat(...entries)
-        );
-    }
-
-    _buildCode() {
-        const entries = [];
-        for (let i=this.nImportFunctions; i< this.nImportFunctions + this.nInternalFunctions; i++) {
-            entries.push(this.functions[i].getBody());
-        }
-        return this._buildSection(
-            0x0a,
-            varuint32(entries.length).concat(...entries)
-        );
-    }
-
-    _buildData() {
-        const entries = [];
-        entries.push([
-            0x00,
-            0x41,
-            0x00,
-            0x0b,
-            0x04,
-            ...u32(this.free)
-        ]);
-        for (let i=0; i< this.datas.length; i++) {
-            entries.push([
-                0x00,
-                0x41,
-                ...varint32(this.datas[i].offset),
-                0x0b,
-                ...varuint32(this.datas[i].bytes.length),
-                ...this.datas[i].bytes,
-            ]);
-        }
-        return this._buildSection(
-            0x0b,
-            varuint32(entries.length).concat(...entries)
-        );
-    }
-
-}
-
-/*
-    Copyright 2019 0KIMS association.
-
-    This file is part of wasmbuilder
-
-    wasmbuilder is a free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    wasmbuilder is distributed in the hope that it will be useful, but WITHOUT
-    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-    or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
-    License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with wasmbuilder. If not, see <https://www.gnu.org/licenses/>.
-*/
-
-var main = /*#__PURE__*/Object.freeze({
-    __proto__: null,
-    ModuleBuilder: ModuleBuilder
 });
 
 export { BigBuffer, ChaCha, EC, ZqField as F1Field, F2Field, F3Field, PolField, Scalar, ZqField, buildBls12381$1 as buildBls12381, buildBn128$1 as buildBn128, getCurveFromName, getCurveFromQ, getCurveFromR, utils$6 as utils };

@@ -4,8 +4,9 @@ export default function thread(self) {
     const MAXMEM = 32767;
     let instance;
     let memory;
-    let terminationTimeout = 1000; // milliseconds
+    let terminationTimeout = 200; // milliseconds
     let terminationTimer;
+    let wantToTerminate = false;
 
     if (self) {
         self.onmessage = function(e) {
@@ -21,7 +22,11 @@ export default function thread(self) {
                     init(data[0]).then(function() {
                         console.log("INIT DONE");
                         self.postMessage({status: "initialized"});
+                        // Start idle timer only after init completes so it never
+                        // fires during async WASM compilation.
+                        scheduleTermination();
                     });
+                    return; // skip the scheduleTermination() call at the bottom
                 } else if (data[0].cmd === "TERMINATE") {
                     terminate();
                 } else {
@@ -29,27 +34,16 @@ export default function thread(self) {
                     if (data[data.length-1].cmd === "TERMINATE") {
                         terminateAfterTask = true;
                         data.pop();
-                        //terminationTimeout = 1;
                     }
                     const res = runTask(data);
-                    //self.postMessage(res);
                     let transfers = [];
                     for (let i=0; i<res.length; i++) {
                         if (res[i] instanceof Uint8Array) {
                             transfers.push(res[i].buffer);
-                            //console.log("transfer buffer", res[i].byteLength);
                         }
                     }
-                    for (let i=0; i<data.length; i++) {
-                        if (data[i].cmd === "CALL") {
-                            //console.log(data[i].fnName);
-                        }
-                    }
-                    //console.log("transfers", transfers);
                     self.postMessage(res, transfers);
-                    //self.postMessage(res);
                     if (terminateAfterTask) {
-                        //self.postMessage({status: "graceful_termination"});
                         terminate();
                     }
                 }
@@ -59,12 +53,6 @@ export default function thread(self) {
             }
             scheduleTermination();
         };
-
-        // self.onerror = function (e) {
-        //     console.error("Worker caught an error:", e.message);
-        //     // Prevent the default behavior (which would terminate the worker)
-        //     return true;
-        // };
     }
 
     async function init(data) {
@@ -90,9 +78,6 @@ export default function thread(self) {
         if (data.terminationTimeout) {
             terminationTimeout = data.terminationTimeout;
         }
-        console.log("init done!");
-
-        scheduleTermination();
     }
 
 
@@ -119,8 +104,6 @@ export default function thread(self) {
     }
 
     function getBuffer(pointer, length) {
-        // const u8 = new Uint8Array(memory.buffer);
-        // return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);
         return new Uint8Array(memory.buffer, pointer, length);
     }
 
@@ -131,6 +114,7 @@ export default function thread(self) {
 
     function runTask(task) {
         clearTimeout(terminationTimer);
+        wantToTerminate = false;
         if (task[0].cmd === "INIT") {
             return init(task[0]);
         }
@@ -145,14 +129,14 @@ export default function thread(self) {
             case "ALLOCSET":
                 if (task[i].len / 1024 / 1024 > 25) {
                     console.log("tasks", task);
-                    console.trace();
+                    //console.trace();
                 }
                 ctx.vars[task[i].var] = allocBuffer(task[i].buff);
                 break;
             case "ALLOC":
                 if (task[i].len / 1024 / 1024 > 25) {
                     console.log("tasks", task);
-                    console.trace();
+                    //console.trace();
                 }
                 ctx.vars[task[i].var] = alloc(task[i].len);
                 break;
@@ -182,25 +166,24 @@ export default function thread(self) {
         const u32b = new Uint32Array(memory.buffer, 0, 1);
         u32b[0] = oldAlloc;
 
-        //console.log(ctx.out);
-
         return ctx.out;
     }
 
     function scheduleTermination() {
         clearTimeout(terminationTimer);
-        if (terminationTimeout>0) {
-            terminationTimer = setTimeout( () => {
-                console.log("Shutting down thread due to inactivity");
-                terminate();
+        if (terminationTimeout > 0) {
+            terminationTimer = setTimeout(() => {
+                // 2-phase termination: notify main thread first; close only after
+                // it acks with TERMINATE. This prevents the race where the main
+                // thread dispatches a task to a worker that has already closed.
+                wantToTerminate = true;
+                if (self) self.postMessage({status: "want_to_terminate"});
             }, terminationTimeout);
         }
     }
 
     function terminate() {
         clearTimeout(terminationTimer);
-        //instance = null;
-        //memory = null;
         if (self) {
             console.log("TERMINATE");
             self.postMessage({status: "terminated"});

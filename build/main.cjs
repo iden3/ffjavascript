@@ -3042,11 +3042,7 @@ class BigBuffer {
         for (let i=0; i<size; i+= PAGE_SIZE) {
             const n = Math.min(size-i, PAGE_SIZE);
             this.buffers.push(new Uint8Array(n));
-            //this.buffers.push(new Uint8Array(new SharedArrayBuffer(n)));
         }
-        // if (this.buffers.length === 1) {
-        //     this.buffer = this.buffers[0];
-        // }
 
     }
 
@@ -4254,7 +4250,7 @@ function thread(self) {
     const MAXMEM = 32767;
     let instance;
     let memory;
-    let terminationTimeout = 500; // milliseconds
+    let terminationTimeout = 200; // milliseconds
     let terminationTimer;
 
     if (self) {
@@ -4271,7 +4267,11 @@ function thread(self) {
                     init(data[0]).then(function() {
                         console.log("INIT DONE");
                         self.postMessage({status: "initialized"});
+                        // Start idle timer only after init completes so it never
+                        // fires during async WASM compilation.
+                        scheduleTermination();
                     });
+                    return; // skip the scheduleTermination() call at the bottom
                 } else if (data[0].cmd === "TERMINATE") {
                     terminate();
                 } else {
@@ -4279,40 +4279,25 @@ function thread(self) {
                     if (data[data.length-1].cmd === "TERMINATE") {
                         terminateAfterTask = true;
                         data.pop();
-                        //terminationTimeout = 1;
                     }
                     const res = runTask(data);
-                    //self.postMessage(res);
                     let transfers = [];
                     for (let i=0; i<res.length; i++) {
                         if (res[i] instanceof Uint8Array) {
                             transfers.push(res[i].buffer);
-                            console.log("transfer buffer", res[i].byteLength);
                         }
                     }
-                    for (let i=0; i<data.length; i++) {
-                        if (data[i].cmd === "CALL") {
-                            console.log(data[i].fnName);
-                        }
-                    }
-                    //console.log("transfers", transfers);
                     self.postMessage(res, transfers);
-                    //self.postMessage(res);
                     if (terminateAfterTask) {
-                        //terminate();
+                        terminate();
                     }
                 }
             } catch (err) {
                 // Catch any error and send it back to main thread
                 self.postMessage({error: err.message});
             }
+            scheduleTermination();
         };
-
-        // self.onerror = function (e) {
-        //     console.error("Worker caught an error:", e.message);
-        //     // Prevent the default behavior (which would terminate the worker)
-        //     return true;
-        // };
     }
 
     async function init(data) {
@@ -4338,9 +4323,6 @@ function thread(self) {
         if (data.terminationTimeout) {
             terminationTimeout = data.terminationTimeout;
         }
-        console.log("init done!");
-
-        scheduleTermination();
     }
 
 
@@ -4367,8 +4349,6 @@ function thread(self) {
     }
 
     function getBuffer(pointer, length) {
-        // const u8 = new Uint8Array(memory.buffer);
-        // return new Uint8Array(u8.buffer, u8.byteOffset + pointer, length);
         return new Uint8Array(memory.buffer, pointer, length);
     }
 
@@ -4391,9 +4371,17 @@ function thread(self) {
         for (let i=0; i<task.length; i++) {
             switch (task[i].cmd) {
             case "ALLOCSET":
+                if (task[i].len / 1024 / 1024 > 25) {
+                    console.log("tasks", task);
+                    //console.trace();
+                }
                 ctx.vars[task[i].var] = allocBuffer(task[i].buff);
                 break;
             case "ALLOC":
+                if (task[i].len / 1024 / 1024 > 25) {
+                    console.log("tasks", task);
+                    //console.trace();
+                }
                 ctx.vars[task[i].var] = alloc(task[i].len);
                 break;
             case "SET":
@@ -4422,24 +4410,20 @@ function thread(self) {
         const u32b = new Uint32Array(memory.buffer, 0, 1);
         u32b[0] = oldAlloc;
 
-        //console.log(ctx.out);
-
         return ctx.out;
     }
 
     function scheduleTermination() {
-        if (terminationTimeout>0) {
-            terminationTimer = setTimeout( () => {
-                console.log("Shutting down thread due to inactivity");
-                terminate();
+        clearTimeout(terminationTimer);
+        if (terminationTimeout > 0) {
+            terminationTimer = setTimeout(() => {
+                if (self) self.postMessage({status: "want_to_terminate"});
             }, terminationTimeout);
         }
     }
 
     function terminate() {
         clearTimeout(terminationTimer);
-        instance = null;
-        memory = null;
         if (self) {
             console.log("TERMINATE");
             self.postMessage({status: "terminated"});
@@ -4481,6 +4465,23 @@ class Deferred {
     }
 }
 
+// WorkerSlot holds the native Worker and all per-worker state.
+// Each call to startWorker() creates a fresh WorkerSlot instance.
+// Message handlers close over the slot reference so that stale messages
+// from a replaced worker are detected by a simple identity check
+// (tm.pool[i] !== slot).
+class WorkerSlot {
+    constructor(worker) {
+        this.worker      = worker; // native Worker thread
+        this.initialized = false;
+        this.initializing= false;
+        this.working     = false;
+        this.pendingDeferred = null;
+        this.onMsg   = null; // stored so removeEventListener can be called on termination
+        this.onError = null;
+    }
+}
+
 let workerSource;
 
 const threadStr = `(${thread.toString()})(self)`;
@@ -4492,7 +4493,7 @@ if(process.browser) {
     } else {
         workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
     }
-} else {  
+} else {
     workerSource = "data:application/javascript;base64," + Buffer.from(threadStr).toString("base64");
 }
 
@@ -4516,7 +4517,7 @@ async function buildThreadManager(wasm, singleThread) {
     if(process.browser && !globalThis?.Worker) {
         singleThread = true;
     }
-    
+
     tm.singleThread = singleThread;
     tm.initalPFree = tm.u32[0];   // Save the Pointer to free space.
     tm.pq = wasm.pq;
@@ -4530,9 +4531,6 @@ async function buildThreadManager(wasm, singleThread) {
     tm.code = wasm.code;
     tm.wasmModule = wasmModule;
 
-    //    tm.pTmp0 = tm.alloc(curve.G2.F.n8*3);
-    //    tm.pTmp1 = tm.alloc(curve.G2.F.n8*3);
-
     if (singleThread) {
         tm.taskManager = thread();
         await tm.taskManager([{
@@ -4542,11 +4540,8 @@ async function buildThreadManager(wasm, singleThread) {
         }]);
         tm.concurrency  = 1;
     } else {
-        tm.workers = [];
-        tm.pendingDeferreds = [];
-        tm.working = [];
-        tm.initialized = [];
-        tm.initializing = [];
+        // pool[i] is the active WorkerSlot at slot i, or null if the slot is empty.
+        tm.pool = [];
 
         let concurrency = 2;
         if (process.browser) {
@@ -4561,55 +4556,11 @@ async function buildThreadManager(wasm, singleThread) {
             concurrency = 2;
         }
 
-        //concurrency = 10; // For testing
-
         // Limit to 64 threads for memory reasons.
         if (concurrency>64) concurrency=64;
         tm.concurrency = concurrency;
-
-        // for (let i = 0; i<1; i++) {
-        //
-        //     tm.workers[i] = new Worker(workerSource);
-        //
-        //     tm.workers[i].addEventListener("message", getOnMsg(i));
-        //     //tm.workers[i].addEventListener("error", getOnError(i));
-        //
-        //     tm.working[i]=false;
-        // }
-        //
-        // const initPromises = [];
-        // for (let i=0; i<tm.workers.length;i++) {
-        //     const copyCode = wasm.code.slice();
-        //     initPromises.push(tm.postAction(i, [{
-        //         cmd: "INIT",
-        //         init: MEM_SIZE,
-        //         code: copyCode
-        //     }], [copyCode.buffer]));
-        // }
-        //
-        // // for (let i=0; i<tm.workers.length;i++) {
-        // //     //const copyCode = wasm.code.slice();
-        // //     initPromises.push(tm.postAction(i, [{
-        // //         cmd: "INIT",
-        // //         init: MEM_SIZE,
-        // //         code: wasmModule
-        // //     }]//, [copyCode.buffer]
-        // //     ));
-        // // }
-        //
-        // await Promise.all(initPromises);
-
-        // const initPromises = [];
-        // for (let i = 0; i < tm.concurrency; i++) {
-        //     initPromises.push(tm.startWorker(i));
-        // }
-        // await Promise.all(initPromises);
-
     }
     return tm;
-
-
-
 }
 
 class ThreadManager {
@@ -4618,81 +4569,123 @@ class ThreadManager {
         this.oldPFree = 0;
     }
 
-    getOnMsg(i) {
+    // Build the message handler for a specific WorkerSlot.
+    // All state reads/writes go through `slot`; the stale check
+    // `tm.pool[slotIndex] !== slot` discards messages from replaced workers.
+    _makeOnMsg(slotIndex, slot) {
         const tm = this;
-        return function(e) {
-            let data;
-            if ((e)&&(e.data)) {
-                data = e.data;
-            } else {
-                data = e;
+        return async function(e) {
+            const data = (e && e.data) ? e.data : e;
+
+            // Stale check: if pool[slotIndex] no longer points to this slot,
+            // the message is from a worker that was already replaced.
+            if (tm.pool[slotIndex] !== slot) {
+                if (data.status === "terminated") {
+                    // Break the reference cycle so the slot and its WASM memory
+                    // can be collected immediately rather than waiting for GC.
+                    slot.worker.removeEventListener("message", slot.onMsg);
+                    slot.worker.removeEventListener("error",   slot.onError);
+                    return;
+                }
+                if (!data.status && slot.working) {
+                    // Stale task result: the slot was replaced (want_to_terminate raced
+                    // with a task dispatch — pool[i] was nulled before the result came
+                    // back). The result is still valid; resolve so the caller doesn't hang.
+                    slot.working = false;
+                    slot.pendingDeferred.resolve(data);
+                }
+                await tm.processWorks();
+                return;
             }
 
-            // handle errors
             if (data.error) {
-                tm.working[i]=false;
-                tm.pendingDeferreds[i].reject("Worker error: " + data.error);
-                if (tm.initializing[i]) {
-                    tm.initializing[i]=false;
-                    tm.workers[i]=null;
-                } else {
-                    tm.workers[i].postMessage([{cmd: "TERMINATE"}]);
+                slot.working = false;
+                slot.pendingDeferred.reject(new Error("Worker error: " + data.error));
+                if (slot.initializing) {
+                    slot.initializing = false;
+                    tm.pool[slotIndex] = null;
                 }
                 throw new Error("Worker error: " + data.error);
             }
 
-            // handle status messages
             if (data.status) {
                 if (data.status === "initialized") {
-                    // Initialization successful message
-                    tm.initializing[i]=false;
-                    tm.initialized[i]=true;
+                    slot.initializing = false;
+                    slot.initialized  = true;
+
+                } else if (data.status === "want_to_terminate") {
+                    // 2-phase termination: the worker is idle and asking to close.
+                    // Release the slot immediately so processWorks can fill it with a
+                    // fresh worker if the queue needs one.  The TERMINATE ack is sent
+                    // to the old worker so it can close cleanly; its later "terminated"
+                    // message will be stale (pool[slotIndex] !== slot) and ignored.
+                    tm.pool[slotIndex] = null;
+                    slot.worker.postMessage([{cmd: "TERMINATE"}]);
+                    await tm.processWorks();
+                    return;
+
                 } else if (data.status === "terminated") {
-                    // Termination successful message
-                    tm.initialized[i]=false;
-                    tm.initializing[i]=false;
-                    tm.workers[i]=null;
+                    // Worker has fully closed.  For the 2-phase path the slot was
+                    // already nulled in want_to_terminate, so this message arrives
+                    // stale and is handled above.  For a direct TERMINATE
+                    // (tm.terminate() at proof end) we clean up here.
+                    slot.worker.removeEventListener("message", slot.onMsg);
+                    slot.worker.removeEventListener("error",   slot.onError);
+                    tm.pool[slotIndex] = null;
+                    if (slot.working) {
+                        // Safety net: reject the pending deferred so the caller
+                        // surfaces an error instead of hanging.
+                        slot.pendingDeferred.reject(
+                            new Error(`Worker at slot ${slotIndex} terminated unexpectedly while processing task`)
+                        );
+                        slot.working = false;
+                    }
+                    return;
                 }
+                // fall through for "initialized" so the INIT deferred is resolved below
             }
 
-            tm.working[i]=false;
-            tm.pendingDeferreds[i].resolve(data);
-            tm.processWorks();
+            slot.working = false;
+            slot.pendingDeferred.resolve(data);
+            await tm.processWorks();
         };
     }
 
-    getOnError(i) {
+    _makeOnError(slotIndex, slot) {
         const tm = this;
         return function(e) {
-            tm.working[i]=false;
-            tm.pendingDeferreds[i].reject(e.message);
+            console.log("error event in worker:", e);
+            if (tm.pool[slotIndex] === slot) {
+                slot.working     = false;
+                slot.initialized = false;
+                if (slot.pendingDeferred) {
+                    slot.pendingDeferred.reject(new Error("Worker error: " + e.message));
+                }
+            }
             throw new Error("Worker error: " + e.message);
         };
     }
 
-    startWorker(i){
-        this.workers[i] = new Worker(workerSource);
+    startWorker(slotIndex) {
+        const nativeWorker = new Worker(workerSource);
+        const slot = new WorkerSlot(nativeWorker);
+        this.pool[slotIndex] = slot;
 
-        this.workers[i].addEventListener("message", this.getOnMsg(i));
-        //tm.workers[i].addEventListener("error", this.getOnError(i));
+        slot.onMsg   = this._makeOnMsg(slotIndex, slot);
+        slot.onError = this._makeOnError(slotIndex, slot);
+        nativeWorker.addEventListener("message", slot.onMsg);
+        nativeWorker.addEventListener("error",   slot.onError);
 
-        //this.working[i]=true;
-        this.initializing[i] = true;
+        slot.initializing = true;
 
-        // const copyCode = this.code.slice();
-        // await this.postAction(i, [{
-        //     cmd: "INIT",
-        //     init: MEM_SIZE,
-        //     code: copyCode
-        // }], [copyCode.buffer]);
-
-        //     //const copyCode = wasm.code.slice();
-        this.postAction(i, [{
-            cmd: "INIT",
+        // postAction sets slot.working = true synchronously before any await,
+        // so processWorks will not attempt to start this slot again.
+        this.postAction(slotIndex, [{
+            cmd:  "INIT",
             init: MEM_SIZE,
-            code: this.wasmModule
+            code: this.wasmModule,
         }]).then(() => {
-            this.initialized[i] = true;
+            slot.initialized = true;
         });
     }
 
@@ -4707,46 +4700,47 @@ class ThreadManager {
         this.oldPFree = 0;
     }
 
-    async postAction(workerId, e, transfers, _deferred) {
-        if (this.working[workerId]) {
+    async postAction(slotIndex, e, transfers, _deferred) {
+        const slot = this.pool[slotIndex];
+        if (!slot || slot.working) {
             throw new Error("Posting a job to a working worker");
         }
-        this.working[workerId] = true;
-
-        this.pendingDeferreds[workerId] = _deferred ? _deferred : new Deferred();
-        await this.workers[workerId].postMessage(e, transfers);
-
-        return this.pendingDeferreds[workerId].promise;
+        slot.working = true;
+        slot.pendingDeferred = _deferred ? _deferred : new Deferred();
+        await slot.worker.postMessage(e, transfers);
+        return slot.pendingDeferred.promise;
     }
 
     async processWorks() {
-        for (let i=0; (i<this.concurrency)&&(this.actionQueue.length > 0); i++) {
-            if (this.workers[i] && this.initialized[i] && !this.working[i]) {
+        // Dispatch queued tasks to ready workers.
+        for (let i = 0; i < this.concurrency && this.actionQueue.length > 0; i++) {
+            const slot = this.pool[i];
+            if (slot && slot.initialized && !slot.working) {
                 const work = this.actionQueue.shift();
-                this.postAction(i, work.data, work.transfers, work.deferred);
+                await this.postAction(i, work.data, work.transfers, work.deferred);
             }
         }
 
-        // Initialize more workers if needed
+        // Start new workers for slots that need them.
         if (this.actionQueue.length > 0) {
-            // Find a worker that is not initialized yet
             let initializingCount = 0;
-            for (let i=0; i<this.concurrency; i++) {
-                initializingCount += this.initializing[i];
-                if (this.initialized[i]) continue;
-                if (this.initializing[i]) continue;
+            for (let i = 0; i < this.concurrency; i++) {
+                const slot = this.pool[i];
+                if (slot) {
+                    if (slot.initializing) initializingCount++;
+                    // slot exists: skip whether initialized, initializing, or working
+                    continue;
+                }
+                // slot is null: this slot is available to host a new worker
                 if (initializingCount >= this.actionQueue.length) break;
-
-                // Initialize this worker
                 console.log(`Worker ${i} not initialized yet. Initializing...`);
                 initializingCount++;
-                await this.startWorker(i);
-                //this.startWorker(i);
+                this.startWorker(i);
             }
         }
     }
 
-    queueAction(actionData, transfers) {
+    async queueAction(actionData, transfers) {
         const d = new Deferred();
 
         if (this.singleThread) {
@@ -4754,11 +4748,11 @@ class ThreadManager {
             d.resolve(res);
         } else {
             this.actionQueue.push({
-                data: actionData,
+                data:      actionData,
                 transfers: transfers,
-                deferred: d
+                deferred:  d
             });
-            this.processWorks();
+            await this.processWorks();
         }
         return d.promise;
     }
@@ -4774,7 +4768,7 @@ class ThreadManager {
     }
 
     getBuff(pointer, length) {
-        return this.u8.slice(pointer, pointer+ length);
+        return this.u8.slice(pointer, pointer + length);
     }
 
     setBuff(pointer, buffer) {
@@ -4789,12 +4783,11 @@ class ThreadManager {
     }
 
     async terminate() {
-        console.log("terminate!!!");
-        for (let i=0; i<this.workers.length; i++) {
-            this.workers[i].postMessage([{cmd: "TERMINATE"}]);
+        for (let i = 0; i < this.pool.length; i++) {
+            if (this.pool[i]) {
+                this.pool[i].worker.postMessage([{cmd: "TERMINATE"}]);
+            }
         }
-        // Give some time to the workers to terminate
-        //await sleep(200);
     }
 
 }
@@ -5050,8 +5043,6 @@ function buildPairing(curve) {
 
 }
 
-/* eslint-disable indent */
-
 const pTSizes = [
     1 ,  1,  1,  1,    2,  3,  4,  5,
     6 ,  7,  7,  8,    9, 10, 11, 12,
@@ -5166,10 +5157,7 @@ function buildMultiexp(curve, groupName) {
             throw new Error("Scalar size does not match");
         }
 
-        //console.log("buffBases.buffer instanceof SharedArrayBuffer", buffBases.buffer instanceof SharedArrayBuffer);
-        //console.log("buffScalars.buffer instanceof SharedArrayBuffer", buffScalars.buffer instanceof SharedArrayBuffer);
-
-        //let result = [];
+        let result = [];
         const opPromises = [];
         const bitChunkSize = pTSizes[log2(nPoints)];
         let nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) +1;
@@ -5207,7 +5195,7 @@ function buildMultiexp(curve, groupName) {
             }));
         }
 
-        let result = await Promise.all(opPromises);
+        result = await Promise.all(opPromises);
 
         let res = G.zero;
         for (let i=result.length-1; i>=0; i--) {
@@ -5218,10 +5206,10 @@ function buildMultiexp(curve, groupName) {
     }
 
     G.multiExp = async function multiExpAffine(buffBases, buffScalars, logger, logText) {
-        return await _multiExp(buffBases, buffScalars, "jacobian", logger, logText);
+        return _multiExp(buffBases, buffScalars, "jacobian", logger, logText);
     };
     G.multiExpAffine = async function multiExpAffine(buffBases, buffScalars, logger, logText) {
-        return await _multiExp(buffBases, buffScalars, "affine", logger, logText);
+        return _multiExp(buffBases, buffScalars, "affine", logger, logText);
     };
 }
 
@@ -5249,7 +5237,7 @@ function buildFFT(curve, groupName) {
             }
             fnFFTJoin = "g1m_fftJoin";
             fnFFTMix = "g1m_fftMix";
-            fnReversePermutation = "g1m_reversePermutation";
+            fnReversePermutation = "g1m__reversePermutation";
 
             if (outType == "affine") {
                 sOut = G.F.n8*2;
@@ -5271,7 +5259,7 @@ function buildFFT(curve, groupName) {
             }
             fnFFTJoin = "g2m_fftJoin";
             fnFFTMix = "g2m_fftMix";
-            fnReversePermutation = "g2m_reversePermutation";
+            fnReversePermutation = "g2m__reversePermutation";
             if (outType == "affine") {
                 sOut = G.F.n8*2;
                 fnMid2Out = "g2m_batchToAffine";
@@ -5287,7 +5275,7 @@ function buildFFT(curve, groupName) {
             }
             fnFFTMix = "frm_fftMix";
             fnFFTJoin = "frm_fftJoin";
-            fnReversePermutation = "frm_fftReversePermutation";
+            fnReversePermutation = "frm__reversePermutation";
         }
 
 
@@ -5333,19 +5321,26 @@ function buildFFT(curve, groupName) {
 
         let buffOut;
 
-        // TODO: optimize. Move to wasm?
-        //buffReverseBits(buff, sIn);
+        // TODO: optimize. Move to wasm
+        // buffReverseBits(buff, sIn);
 
         console.log("fnReversePermutation:", fnReversePermutation);
 
+        // TODO: try to do reversing for each batch separately and inside of the task
         const task = [];
-        task.push({cmd: "ALLOC", var: 0, len: buff.byteLength});
-        task.push({cmd: "SET", var: 0, buff: buff});
-        task.push({cmd: "CALL", fnName: fnReversePermutation, params: [{var:0}, {val: bits}, {var: 0}]});
-        task.push({cmd: "GET", out:0, var: 0, len: buff.byteLength});
-        const res = await tm.queueAction(task, [buff.buffer]);
+        task.push({cmd: "ALLOCSET", var: 0, buff: buff});
+        task.push({cmd: "CALL", fnName: fnReversePermutation, params: [{var:0}, {val: bits}]});
+        task.push({cmd: "GET", out:0, var: 0, len: nPoints*sOut});
+        const reversedBuff = await tm.queueAction(task, [buff.buffer]);
+        //const reversedBuff = await tm.queueAction(task, []);
 
-        buff.set(res[0]);
+        //console.log("wasm buffReverseBits:", reversedBuff[0]);
+        //buffReverseBits(buff, sIn);
+        //console.log("js buffReverseBits:", buff);
+
+        //exit(1);
+
+        buff = reversedBuff[0];
 
         let chunks;
         let pointsInChunk = Math.min(1 << MAX_BITS_THREAD, nPoints);
@@ -5359,8 +5354,8 @@ function buildFFT(curve, groupName) {
         const l2Chunk = log2(pointsInChunk);
 
         const promises = [];
+        if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix start: ${nChunks}`);
         for (let i = 0; i< nChunks; i++) {
-            if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix start: ${i}/${nChunks}`);
             const task = [];
             task.push({cmd: "ALLOC", var: 0, len: sMid*pointsInChunk});
             const buffChunk = buff.slice( (pointsInChunk * i)*sIn, (pointsInChunk * (i+1))*sIn);
@@ -5388,17 +5383,15 @@ function buildFFT(curve, groupName) {
             } else {
                 task.push({cmd: "GET", out:0, var: 0, len: sMid*pointsInChunk});
             }
-            promises.push(tm.queueAction(task, [buffChunk.buffer]).then( (r) => {
-                if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix end: ${i}/${nChunks}`);
-                return r;
-            }));
+            promises.push(tm.queueAction(task, [buffChunk.buffer]));
         }
 
         chunks = await Promise.all(promises);
+        if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix end: ${nChunks}`);
         for (let i = 0; i< nChunks; i++) chunks[i] = chunks[i][0];
 
         for (let i = l2Chunk+1;   i<=bits; i++) {
-            if (logger) logger.debug(`${loggerTxt}: fft  ${bits}  join: ${i}/${bits}`);
+            if (logger) logger.debug(`${loggerTxt}: fft ${bits} join: ${i}/${bits}`);
             const nGroups = 1 << (bits - i);
             const nChunksPerGroup = nChunks / nGroups;
             const opPromises = [];
@@ -5445,10 +5438,7 @@ function buildFFT(curve, groupName) {
                         task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sMid});
                         task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sMid});
                     }
-                    opPromises.push(tm.queueAction(task, [chunks[o1].buffer, chunks[o2].buffer, first.buffer ]).then( (r) => {
-                        if (logger) logger.debug(`${loggerTxt}: fft ${bits} join  ${i}/${bits}  ${j+1}/${nGroups} ${k}/${nChunksPerGroup/2}`);
-                        return r;
-                    }));
+                    opPromises.push(tm.queueAction(task, [chunks[o1].buffer, chunks[o2].buffer, first.buffer ]));
                 }
             }
 
@@ -6078,8 +6068,8 @@ async function buildBn128(singleThread, plugins) {
         console.log("Using prebuilt bn128 wasm");
 
         //import { bn128_wasm_gzip as bn128wasmPrebuilt } from "wasmcurves";
-        const { bn128_wasm_gzip: bn128wasmPrebuilt } = await import('wasmcurves');
-        //const { default: bn128wasmPrebuilt } = await import("wasmcurves/build/bn128_wasm_gzip.js");
+        //const { bn128_wasm_gzip: bn128wasmPrebuilt } = await import("wasmcurves");
+        const { default: bn128wasmPrebuilt } = await import('wasmcurves/build/bn128_wasm_gzip.js');
 
         //console.log(bn128wasmPrebuilt);
         bn128wasm.pq = bn128wasmPrebuilt.pq;
