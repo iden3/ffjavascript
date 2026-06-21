@@ -305,7 +305,6 @@ export class ThreadManager {
                 }
                 // slot is null: this slot is available to host a new worker
                 if (initializingCount >= this.actionQueue.length) break;
-                console.log(`Worker ${i} not initialized yet. Initializing...`);
                 initializingCount++;
                 this.startWorker(i);
             }

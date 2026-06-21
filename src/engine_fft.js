@@ -76,12 +76,8 @@ export default function buildFFT(curve, groupName) {
             buff = buff.slice(0, buff.byteLength);
         }
 
-        console.log("FFT input size:", buff.byteLength, " bytes");
-
         const nPoints = buff.byteLength / sIn;
         const bits = log2(nPoints);
-
-        console.log("FFT points:", nPoints, " bits:", bits);
 
         if  ((1 << bits) != nPoints) {
             throw new Error("fft must be multiple of 2" );
@@ -112,8 +108,6 @@ export default function buildFFT(curve, groupName) {
 
         // TODO: optimize. Move to wasm
         // buffReverseBits(buff, sIn);
-
-        console.log("fnReversePermutation:", fnReversePermutation);
 
         // TODO: try to do reversing for each batch separately and inside of the task
         const task = [];

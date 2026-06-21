@@ -127,17 +127,12 @@ export default function buildMultiexp(curve, groupName) {
         let chunkSize;
         //chunkSize = Math.floor(nPoints / tm.concurrency) + 1;
 
-        console.log("nChunks_0", nChunks);
-
         // make nChunks multiple of tm.concurrency for optimal load balancing
         nChunks = (Math.floor((nChunks-1) / tm.concurrency) + 1) * tm.concurrency;
         chunkSize = Math.floor(nPoints / nChunks) + 1;
 
         if (chunkSize>MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
         if (chunkSize<MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
-
-        console.log("nChunks", nChunks);
-        console.log("effective nChunks", nPoints / chunkSize);
 
         for (let i=0; i<nPoints; i += chunkSize) {
             if (logger) logger.debug(`Multiexp start: ${logText}: ${i}/${nPoints}`);

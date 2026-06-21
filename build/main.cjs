@@ -4250,7 +4250,7 @@ function thread(self) {
     const MAXMEM = 32767;
     let instance;
     let memory;
-    let terminationTimeout = 200; // milliseconds
+    let terminationTimeout = 1500; // milliseconds
     let terminationTimer;
 
     if (self) {
@@ -4265,7 +4265,6 @@ function thread(self) {
             try {
                 if (data[0].cmd === "INIT") {
                     init(data[0]).then(function() {
-                        console.log("INIT DONE");
                         self.postMessage({status: "initialized"});
                         // Start idle timer only after init completes so it never
                         // fires during async WASM compilation.
@@ -4654,7 +4653,6 @@ class ThreadManager {
     _makeOnError(slotIndex, slot) {
         const tm = this;
         return function(e) {
-            console.log("error event in worker:", e);
             if (tm.pool[slotIndex] === slot) {
                 slot.working     = false;
                 slot.initialized = false;
@@ -4733,7 +4731,6 @@ class ThreadManager {
                 }
                 // slot is null: this slot is available to host a new worker
                 if (initializingCount >= this.actionQueue.length) break;
-                console.log(`Worker ${i} not initialized yet. Initializing...`);
                 initializingCount++;
                 this.startWorker(i);
             }
@@ -5170,17 +5167,12 @@ function buildMultiexp(curve, groupName) {
         let chunkSize;
         //chunkSize = Math.floor(nPoints / tm.concurrency) + 1;
 
-        console.log("nChunks_0", nChunks);
-
         // make nChunks multiple of tm.concurrency for optimal load balancing
         nChunks = (Math.floor((nChunks-1) / tm.concurrency) + 1) * tm.concurrency;
         chunkSize = Math.floor(nPoints / nChunks) + 1;
 
         if (chunkSize>MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
         if (chunkSize<MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
-
-        console.log("nChunks", nChunks);
-        console.log("effective nChunks", nPoints / chunkSize);
 
         for (let i=0; i<nPoints; i += chunkSize) {
             if (logger) logger.debug(`Multiexp start: ${logText}: ${i}/${nPoints}`);
@@ -5287,12 +5279,8 @@ function buildFFT(curve, groupName) {
             buff = buff.slice(0, buff.byteLength);
         }
 
-        console.log("FFT input size:", buff.byteLength, " bytes");
-
         const nPoints = buff.byteLength / sIn;
         const bits = log2(nPoints);
-
-        console.log("FFT points:", nPoints, " bits:", bits);
 
         if  ((1 << bits) != nPoints) {
             throw new Error("fft must be multiple of 2" );
@@ -5323,8 +5311,6 @@ function buildFFT(curve, groupName) {
 
         // TODO: optimize. Move to wasm
         // buffReverseBits(buff, sIn);
-
-        console.log("fnReversePermutation:", fnReversePermutation);
 
         // TODO: try to do reversing for each batch separately and inside of the task
         const task = [];

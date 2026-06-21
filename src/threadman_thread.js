@@ -4,7 +4,7 @@ export default function thread(self) {
     const MAXMEM = 32767;
     let instance;
     let memory;
-    let terminationTimeout = 200; // milliseconds
+    let terminationTimeout = 1500; // milliseconds
     let terminationTimer;
     let wantToTerminate = false;
 
@@ -20,7 +20,6 @@ export default function thread(self) {
             try {
                 if (data[0].cmd === "INIT") {
                     init(data[0]).then(function() {
-                        console.log("INIT DONE");
                         self.postMessage({status: "initialized"});
                         // Start idle timer only after init completes so it never
                         // fires during async WASM compilation.
