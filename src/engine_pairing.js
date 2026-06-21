@@ -59,8 +59,13 @@ export default function buildPairing(curve) {
 
             task.push({cmd: "GET", out: 0, var: 4, len: curve.Gt.n8});
 
+            // Do NOT transfer g1Buff/g2Buff: toJacobian() returns its argument
+            // unchanged when the point is already in jacobian form, so these may
+            // alias caller-owned buffers (e.g. curve.G1.g / curve.G2.g).
+            // Transferring would detach them on the main thread. They are single
+            // points, so the structured-clone copy is negligible.
             opPromises.push(
-                tm.queueAction(task, [g1Buff.buffer, g2Buff.buffer])
+                tm.queueAction(task)
             );
         }
 
