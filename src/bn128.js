@@ -34,13 +34,19 @@ export default async function buildBn128(singleThread, plugins) {
         bn128wasm.q = bn128wasmPrebuilt.q;
         bn128wasm.r = bn128wasmPrebuilt.r;
 
-        const compressedCode = new Uint8Array(Buffer.from(bn128wasmPrebuilt.gzipCode, "base64"));
+        // atob is available in both browsers and Node (>=16); Buffer is Node-only
+        // and breaks browser bundles.
+        const binaryString = atob(bn128wasmPrebuilt.gzipCode);
+        const compressedCode = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) compressedCode[i] = binaryString.charCodeAt(i);
         const blob = new Blob([compressedCode]);
 
         const ds = new DecompressionStream("gzip");
         const decompressedStream = blob.stream().pipeThrough(ds);
 
-        bn128wasm.code = await new Response(decompressedStream).bytes();
+        // arrayBuffer() is universally available; Response.bytes() is too new
+        // for some browser engines.
+        bn128wasm.code = new Uint8Array(await new Response(decompressedStream).arrayBuffer());
     } else {
 
         //import { ModuleBuilder } from "wasmbuilder";
