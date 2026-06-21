@@ -6,13 +6,29 @@ export default function buildFFT(curve, groupName) {
     const G = curve[groupName];
     const Fr = curve.Fr;
     const tm = G.tm;
+
+    // In-place bit-reversal permutation in a worker. The buffer is transferred
+    // in, reversed where it lies via plain typed-array lane swaps (no WASM
+    // linear memory grown, nothing allocated), and transferred back. Both
+    // transfers are pointer moves, so this is zero-copy. The swap is
+    // memory-bandwidth bound, so a single worker is as fast as splitting across
+    // many — which is why no SharedArrayBuffer is needed (only concurrent
+    // multi-worker access to one buffer would require that).
+    async function _reversePermutation(buff, sIn, bits) {
+        const res = await tm.queueAction(
+            [{cmd: "REVERSE", src: buff, sIn, bits}],
+            [buff.buffer]   // transfer in; reversed in place and transferred back
+        );
+        return res[0];
+    }
+
     async function _fft(buff, inverse, inType, outType, logger, loggerTxt) {
 
         inType = inType || "affine";
         outType = outType || "affine";
         const MAX_BITS_THREAD = 14;
 
-        let sIn, sMid, sOut, fnIn2Mid, fnMid2Out, fnFFTMix, fnFFTJoin, fnFFTFinal, fnReversePermutation;
+        let sIn, sMid, sOut, fnIn2Mid, fnMid2Out, fnFFTMix, fnFFTJoin, fnFFTFinal;
         if (groupName == "G1") {
             if (inType == "affine") {
                 sIn = G.F.n8*2;
@@ -26,7 +42,6 @@ export default function buildFFT(curve, groupName) {
             }
             fnFFTJoin = "g1m_fftJoin";
             fnFFTMix = "g1m_fftMix";
-            fnReversePermutation = "g1m__reversePermutation";
 
             if (outType == "affine") {
                 sOut = G.F.n8*2;
@@ -48,7 +63,6 @@ export default function buildFFT(curve, groupName) {
             }
             fnFFTJoin = "g2m_fftJoin";
             fnFFTMix = "g2m_fftMix";
-            fnReversePermutation = "g2m__reversePermutation";
             if (outType == "affine") {
                 sOut = G.F.n8*2;
                 fnMid2Out = "g2m_batchToAffine";
@@ -64,7 +78,6 @@ export default function buildFFT(curve, groupName) {
             }
             fnFFTMix = "frm_fftMix";
             fnFFTJoin = "frm_fftJoin";
-            fnReversePermutation = "frm__reversePermutation";
         }
 
 
@@ -106,24 +119,14 @@ export default function buildFFT(curve, groupName) {
 
         let buffOut;
 
-        // TODO: optimize. Move to wasm
-        // buffReverseBits(buff, sIn);
-
-        // TODO: try to do reversing for each batch separately and inside of the task
-        const task = [];
-        task.push({cmd: "ALLOCSET", var: 0, buff: buff});
-        task.push({cmd: "CALL", fnName: fnReversePermutation, params: [{var:0}, {val: bits}]});
-        task.push({cmd: "GET", out:0, var: 0, len: nPoints*sOut});
-        const reversedBuff = await tm.queueAction(task, [buff.buffer]);
-        //const reversedBuff = await tm.queueAction(task, []);
-
-        //console.log("wasm buffReverseBits:", reversedBuff[0]);
-        //buffReverseBits(buff, sIn);
-        //console.log("js buffReverseBits:", buff);
-
-        //exit(1);
-
-        buff = reversedBuff[0];
+        // Bit-reversal permutation. Like the old pure-JS buffReverseBits, this is
+        // just a permutation of fixed-size (sIn-byte) elements and works for any
+        // element size, so it covers Fr, G1 and G2 alike. Reversed in place in a
+        // worker via typed-array swaps — no WASM linear memory grown, nothing
+        // allocated. (The previous WASM __reversePermutation swapped n8g-sized
+        // elements rather than sIn-sized ones, which was wrong whenever
+        // sIn != n8g, e.g. affine-input G1/G2 FFTs.)
+        buff = await _reversePermutation(buff, sIn, bits);
 
         let chunks;
         let pointsInChunk = Math.min(1 << MAX_BITS_THREAD, nPoints);

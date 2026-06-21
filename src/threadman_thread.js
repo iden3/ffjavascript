@@ -81,6 +81,54 @@ export default function thread(self) {
 
 
 
+    // Reverse the low `bits` of a 32-bit integer (O(1) bit-twiddle).
+    function rev32(x) {
+        x = ((x & 0x55555555) << 1) | ((x >>> 1) & 0x55555555);
+        x = ((x & 0x33333333) << 2) | ((x >>> 2) & 0x33333333);
+        x = ((x & 0x0f0f0f0f) << 4) | ((x >>> 4) & 0x0f0f0f0f);
+        x = ((x & 0x00ff00ff) << 8) | ((x >>> 8) & 0x00ff00ff);
+        x = (x << 16) | (x >>> 16);
+        return x >>> 0;
+    }
+
+    // In-place bit-reversal permutation of fixed-size (sIn-byte) elements.
+    // Works for any element size, like the old pure-JS buffReverseBits. When
+    // the elements are 4-byte aligned it swaps Uint32Array lanes (no BigInt
+    // boxing, no allocation); otherwise it falls back to a byte-wise swap with
+    // a single reused temp buffer. Either way it touches no WASM linear memory.
+    function reverseInPlace(u8, sIn, bits) {
+        const n = u8.byteLength / sIn;
+        const shift = 32 - bits;
+        if (((sIn & 3) === 0) && ((u8.byteOffset & 3) === 0)) {
+            const lanes = sIn >>> 2;
+            const u32 = new Uint32Array(u8.buffer, u8.byteOffset, u8.byteLength >>> 2);
+            for (let i = 0; i < n; i++) {
+                const ri = rev32(i) >>> shift;
+                if (i < ri) {
+                    let a = i * lanes;
+                    let b = ri * lanes;
+                    for (let l = 0; l < lanes; l++) {
+                        const t = u32[a + l];
+                        u32[a + l] = u32[b + l];
+                        u32[b + l] = t;
+                    }
+                }
+            }
+        } else {
+            const tmp = new Uint8Array(sIn);   // one reused temp, not one per swap
+            for (let i = 0; i < n; i++) {
+                const ri = rev32(i) >>> shift;
+                if (i < ri) {
+                    const ao = i * sIn;
+                    const bo = ri * sIn;
+                    tmp.set(u8.subarray(ao, ao + sIn));
+                    u8.copyWithin(ao, bo, bo + sIn);
+                    u8.set(tmp, bo);
+                }
+            }
+        }
+    }
+
     function alloc(length) {
         const u32 = new Uint32Array(memory.buffer, 0, 1);
         while (u32[0] & 3) u32[0]++;  // Return always aligned pointers
@@ -125,6 +173,15 @@ export default function thread(self) {
         const oldAlloc = u32a[0];
         for (let i=0; i<task.length; i++) {
             switch (task[i].cmd) {
+            case "REVERSE": {
+                // Reverse the transferred buffer in place and hand it straight
+                // back. No SharedArrayBuffer and no WASM memory: the buffer is
+                // transferred in and out (zero copy) and reversed where it lies.
+                const t = task[i];
+                reverseInPlace(t.src, t.sIn, t.bits);
+                ctx.out[0] = t.src;
+                break;
+            }
             case "ALLOCSET":
                 if (task[i].len / 1024 / 1024 > 25) {
                     console.log("tasks", task);

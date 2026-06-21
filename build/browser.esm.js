@@ -4317,6 +4317,54 @@ function thread(self) {
 
 
 
+    // Reverse the low `bits` of a 32-bit integer (O(1) bit-twiddle).
+    function rev32(x) {
+        x = ((x & 0x55555555) << 1) | ((x >>> 1) & 0x55555555);
+        x = ((x & 0x33333333) << 2) | ((x >>> 2) & 0x33333333);
+        x = ((x & 0x0f0f0f0f) << 4) | ((x >>> 4) & 0x0f0f0f0f);
+        x = ((x & 0x00ff00ff) << 8) | ((x >>> 8) & 0x00ff00ff);
+        x = (x << 16) | (x >>> 16);
+        return x >>> 0;
+    }
+
+    // In-place bit-reversal permutation of fixed-size (sIn-byte) elements.
+    // Works for any element size, like the old pure-JS buffReverseBits. When
+    // the elements are 4-byte aligned it swaps Uint32Array lanes (no BigInt
+    // boxing, no allocation); otherwise it falls back to a byte-wise swap with
+    // a single reused temp buffer. Either way it touches no WASM linear memory.
+    function reverseInPlace(u8, sIn, bits) {
+        const n = u8.byteLength / sIn;
+        const shift = 32 - bits;
+        if (((sIn & 3) === 0) && ((u8.byteOffset & 3) === 0)) {
+            const lanes = sIn >>> 2;
+            const u32 = new Uint32Array(u8.buffer, u8.byteOffset, u8.byteLength >>> 2);
+            for (let i = 0; i < n; i++) {
+                const ri = rev32(i) >>> shift;
+                if (i < ri) {
+                    let a = i * lanes;
+                    let b = ri * lanes;
+                    for (let l = 0; l < lanes; l++) {
+                        const t = u32[a + l];
+                        u32[a + l] = u32[b + l];
+                        u32[b + l] = t;
+                    }
+                }
+            }
+        } else {
+            const tmp = new Uint8Array(sIn);   // one reused temp, not one per swap
+            for (let i = 0; i < n; i++) {
+                const ri = rev32(i) >>> shift;
+                if (i < ri) {
+                    const ao = i * sIn;
+                    const bo = ri * sIn;
+                    tmp.set(u8.subarray(ao, ao + sIn));
+                    u8.copyWithin(ao, bo, bo + sIn);
+                    u8.set(tmp, bo);
+                }
+            }
+        }
+    }
+
     function alloc(length) {
         const u32 = new Uint32Array(memory.buffer, 0, 1);
         while (u32[0] & 3) u32[0]++;  // Return always aligned pointers
@@ -4360,6 +4408,15 @@ function thread(self) {
         const oldAlloc = u32a[0];
         for (let i=0; i<task.length; i++) {
             switch (task[i].cmd) {
+            case "REVERSE": {
+                // Reverse the transferred buffer in place and hand it straight
+                // back. No SharedArrayBuffer and no WASM memory: the buffer is
+                // transferred in and out (zero copy) and reversed where it lies.
+                const t = task[i];
+                reverseInPlace(t.src, t.sIn, t.bits);
+                ctx.out[0] = t.src;
+                break;
+            }
             case "ALLOCSET":
                 if (task[i].len / 1024 / 1024 > 25) {
                     console.log("tasks", task);
@@ -4474,7 +4531,7 @@ class WorkerSlot {
 
 let workerSource;
 
-const threadStr = `(${"function thread(self) {\n    const MAXMEM = 32767;\n    let instance;\n    let memory;\n    let terminationTimeout = 1500; // milliseconds\n    let terminationTimer;\n    let wantToTerminate = false;\n\n    if (self) {\n        self.onmessage = function(e) {\n            let data;\n            if (e.data) {\n                data = e.data;\n            } else {\n                data = e;\n            }\n\n            try {\n                if (data[0].cmd === \"INIT\") {\n                    init(data[0]).then(function() {\n                        self.postMessage({status: \"initialized\"});\n                        // Start idle timer only after init completes so it never\n                        // fires during async WASM compilation.\n                        scheduleTermination();\n                    });\n                    return; // skip the scheduleTermination() call at the bottom\n                } else if (data[0].cmd === \"TERMINATE\") {\n                    terminate();\n                } else {\n                    let terminateAfterTask = false;\n                    if (data[data.length-1].cmd === \"TERMINATE\") {\n                        terminateAfterTask = true;\n                        data.pop();\n                    }\n                    const res = runTask(data);\n                    let transfers = [];\n                    for (let i=0; i<res.length; i++) {\n                        if (res[i] instanceof Uint8Array) {\n                            transfers.push(res[i].buffer);\n                        }\n                    }\n                    self.postMessage(res, transfers);\n                    if (terminateAfterTask) {\n                        terminate();\n                    }\n                }\n            } catch (err) {\n                // Catch any error and send it back to main thread\n                self.postMessage({error: err.message});\n            }\n            scheduleTermination();\n        };\n    }\n\n    async function init(data) {\n        let wasmModule;\n        if (data.code instanceof WebAssembly.Module) {\n            console.log(\"Using precompiled WebAssembly.Module\");\n            wasmModule = data.code;\n        } else {\n            console.log(\"Compiling WebAssembly.Module\");\n            const code = new Uint8Array(data.code);\n            wasmModule = await WebAssembly.compile(code);\n        }\n        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});\n\n        console.log(\"Initialized thread with memory\", memory.buffer.byteLength / 1024 / 1024, \"MB\");\n\n        instance = await WebAssembly.instantiate(wasmModule, {\n            env: {\n                \"memory\": memory\n            }\n        });\n\n        if (data.terminationTimeout) {\n            terminationTimeout = data.terminationTimeout;\n        }\n    }\n\n\n\n    function alloc(length) {\n        const u32 = new Uint32Array(memory.buffer, 0, 1);\n        while (u32[0] & 3) u32[0]++;  // Return always aligned pointers\n        const res = u32[0];\n        u32[0] += length;\n        if (u32[0] + length > memory.buffer.byteLength) {\n            const currentPages = memory.buffer.byteLength / 0x10000;\n            let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;\n            if (requiredPages>MAXMEM) requiredPages=MAXMEM;\n            memory.grow(requiredPages-currentPages);\n            console.log(\"Growing memory to\", memory.buffer.byteLength / 1024 / 1024, \"MB\");\n        }\n        return res;\n    }\n\n    function allocBuffer(buffer) {\n        const p = alloc(buffer.byteLength);\n        setBuffer(p, buffer);\n        return p;\n    }\n\n    function getBuffer(pointer, length) {\n        return new Uint8Array(memory.buffer, pointer, length);\n    }\n\n    function setBuffer(pointer, buffer) {\n        const u8 = new Uint8Array(memory.buffer);\n        u8.set(new Uint8Array(buffer), pointer);\n    }\n\n    function runTask(task) {\n        clearTimeout(terminationTimer);\n        wantToTerminate = false;\n        if (task[0].cmd === \"INIT\") {\n            return init(task[0]);\n        }\n        const ctx = {\n            vars: [],\n            out: []\n        };\n        const u32a = new Uint32Array(memory.buffer, 0, 1);\n        const oldAlloc = u32a[0];\n        for (let i=0; i<task.length; i++) {\n            switch (task[i].cmd) {\n            case \"ALLOCSET\":\n                if (task[i].len / 1024 / 1024 > 25) {\n                    console.log(\"tasks\", task);\n                    //console.trace();\n                }\n                ctx.vars[task[i].var] = allocBuffer(task[i].buff);\n                break;\n            case \"ALLOC\":\n                if (task[i].len / 1024 / 1024 > 25) {\n                    console.log(\"tasks\", task);\n                    //console.trace();\n                }\n                ctx.vars[task[i].var] = alloc(task[i].len);\n                break;\n            case \"SET\":\n                setBuffer(ctx.vars[task[i].var], task[i].buff);\n                break;\n            case \"CALL\": {\n                const params = [];\n                for (let j=0; j<task[i].params.length; j++) {\n                    const p = task[i].params[j];\n                    if (typeof p.var !== \"undefined\") {\n                        params.push(ctx.vars[p.var] + (p.offset || 0));\n                    } else if (typeof p.val != \"undefined\") {\n                        params.push(p.val);\n                    }\n                }\n                instance.exports[task[i].fnName](...params);\n                break;\n            }\n            case \"GET\":\n                ctx.out[task[i].out] = getBuffer(ctx.vars[task[i].var], task[i].len).slice();\n                break;\n            default:\n                throw new Error(\"Invalid cmd\");\n            }\n        }\n        const u32b = new Uint32Array(memory.buffer, 0, 1);\n        u32b[0] = oldAlloc;\n\n        return ctx.out;\n    }\n\n    function scheduleTermination() {\n        clearTimeout(terminationTimer);\n        if (terminationTimeout > 0) {\n            terminationTimer = setTimeout(() => {\n                // 2-phase termination: notify main thread first; close only after\n                // it acks with TERMINATE. This prevents the race where the main\n                // thread dispatches a task to a worker that has already closed.\n                wantToTerminate = true;\n                if (self) self.postMessage({status: \"want_to_terminate\"});\n            }, terminationTimeout);\n        }\n    }\n\n    function terminate() {\n        clearTimeout(terminationTimer);\n        if (self) {\n            console.log(\"TERMINATE\");\n            self.postMessage({status: \"terminated\"});\n            self.close();\n        }\n    }\n\n    return runTask;\n}"})(self)`;
+const threadStr = `(${"function thread(self) {\n    const MAXMEM = 32767;\n    let instance;\n    let memory;\n    let terminationTimeout = 1500; // milliseconds\n    let terminationTimer;\n    let wantToTerminate = false;\n\n    if (self) {\n        self.onmessage = function(e) {\n            let data;\n            if (e.data) {\n                data = e.data;\n            } else {\n                data = e;\n            }\n\n            try {\n                if (data[0].cmd === \"INIT\") {\n                    init(data[0]).then(function() {\n                        self.postMessage({status: \"initialized\"});\n                        // Start idle timer only after init completes so it never\n                        // fires during async WASM compilation.\n                        scheduleTermination();\n                    });\n                    return; // skip the scheduleTermination() call at the bottom\n                } else if (data[0].cmd === \"TERMINATE\") {\n                    terminate();\n                } else {\n                    let terminateAfterTask = false;\n                    if (data[data.length-1].cmd === \"TERMINATE\") {\n                        terminateAfterTask = true;\n                        data.pop();\n                    }\n                    const res = runTask(data);\n                    let transfers = [];\n                    for (let i=0; i<res.length; i++) {\n                        if (res[i] instanceof Uint8Array) {\n                            transfers.push(res[i].buffer);\n                        }\n                    }\n                    self.postMessage(res, transfers);\n                    if (terminateAfterTask) {\n                        terminate();\n                    }\n                }\n            } catch (err) {\n                // Catch any error and send it back to main thread\n                self.postMessage({error: err.message});\n            }\n            scheduleTermination();\n        };\n    }\n\n    async function init(data) {\n        let wasmModule;\n        if (data.code instanceof WebAssembly.Module) {\n            console.log(\"Using precompiled WebAssembly.Module\");\n            wasmModule = data.code;\n        } else {\n            console.log(\"Compiling WebAssembly.Module\");\n            const code = new Uint8Array(data.code);\n            wasmModule = await WebAssembly.compile(code);\n        }\n        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});\n\n        console.log(\"Initialized thread with memory\", memory.buffer.byteLength / 1024 / 1024, \"MB\");\n\n        instance = await WebAssembly.instantiate(wasmModule, {\n            env: {\n                \"memory\": memory\n            }\n        });\n\n        if (data.terminationTimeout) {\n            terminationTimeout = data.terminationTimeout;\n        }\n    }\n\n\n\n    // Reverse the low `bits` of a 32-bit integer (O(1) bit-twiddle).\n    function rev32(x) {\n        x = ((x & 0x55555555) << 1) | ((x >>> 1) & 0x55555555);\n        x = ((x & 0x33333333) << 2) | ((x >>> 2) & 0x33333333);\n        x = ((x & 0x0f0f0f0f) << 4) | ((x >>> 4) & 0x0f0f0f0f);\n        x = ((x & 0x00ff00ff) << 8) | ((x >>> 8) & 0x00ff00ff);\n        x = (x << 16) | (x >>> 16);\n        return x >>> 0;\n    }\n\n    // In-place bit-reversal permutation of fixed-size (sIn-byte) elements.\n    // Works for any element size, like the old pure-JS buffReverseBits. When\n    // the elements are 4-byte aligned it swaps Uint32Array lanes (no BigInt\n    // boxing, no allocation); otherwise it falls back to a byte-wise swap with\n    // a single reused temp buffer. Either way it touches no WASM linear memory.\n    function reverseInPlace(u8, sIn, bits) {\n        const n = u8.byteLength / sIn;\n        const shift = 32 - bits;\n        if (((sIn & 3) === 0) && ((u8.byteOffset & 3) === 0)) {\n            const lanes = sIn >>> 2;\n            const u32 = new Uint32Array(u8.buffer, u8.byteOffset, u8.byteLength >>> 2);\n            for (let i = 0; i < n; i++) {\n                const ri = rev32(i) >>> shift;\n                if (i < ri) {\n                    let a = i * lanes;\n                    let b = ri * lanes;\n                    for (let l = 0; l < lanes; l++) {\n                        const t = u32[a + l];\n                        u32[a + l] = u32[b + l];\n                        u32[b + l] = t;\n                    }\n                }\n            }\n        } else {\n            const tmp = new Uint8Array(sIn);   // one reused temp, not one per swap\n            for (let i = 0; i < n; i++) {\n                const ri = rev32(i) >>> shift;\n                if (i < ri) {\n                    const ao = i * sIn;\n                    const bo = ri * sIn;\n                    tmp.set(u8.subarray(ao, ao + sIn));\n                    u8.copyWithin(ao, bo, bo + sIn);\n                    u8.set(tmp, bo);\n                }\n            }\n        }\n    }\n\n    function alloc(length) {\n        const u32 = new Uint32Array(memory.buffer, 0, 1);\n        while (u32[0] & 3) u32[0]++;  // Return always aligned pointers\n        const res = u32[0];\n        u32[0] += length;\n        if (u32[0] + length > memory.buffer.byteLength) {\n            const currentPages = memory.buffer.byteLength / 0x10000;\n            let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;\n            if (requiredPages>MAXMEM) requiredPages=MAXMEM;\n            memory.grow(requiredPages-currentPages);\n            console.log(\"Growing memory to\", memory.buffer.byteLength / 1024 / 1024, \"MB\");\n        }\n        return res;\n    }\n\n    function allocBuffer(buffer) {\n        const p = alloc(buffer.byteLength);\n        setBuffer(p, buffer);\n        return p;\n    }\n\n    function getBuffer(pointer, length) {\n        return new Uint8Array(memory.buffer, pointer, length);\n    }\n\n    function setBuffer(pointer, buffer) {\n        const u8 = new Uint8Array(memory.buffer);\n        u8.set(new Uint8Array(buffer), pointer);\n    }\n\n    function runTask(task) {\n        clearTimeout(terminationTimer);\n        wantToTerminate = false;\n        if (task[0].cmd === \"INIT\") {\n            return init(task[0]);\n        }\n        const ctx = {\n            vars: [],\n            out: []\n        };\n        const u32a = new Uint32Array(memory.buffer, 0, 1);\n        const oldAlloc = u32a[0];\n        for (let i=0; i<task.length; i++) {\n            switch (task[i].cmd) {\n            case \"REVERSE\": {\n                // Reverse the transferred buffer in place and hand it straight\n                // back. No SharedArrayBuffer and no WASM memory: the buffer is\n                // transferred in and out (zero copy) and reversed where it lies.\n                const t = task[i];\n                reverseInPlace(t.src, t.sIn, t.bits);\n                ctx.out[0] = t.src;\n                break;\n            }\n            case \"ALLOCSET\":\n                if (task[i].len / 1024 / 1024 > 25) {\n                    console.log(\"tasks\", task);\n                    //console.trace();\n                }\n                ctx.vars[task[i].var] = allocBuffer(task[i].buff);\n                break;\n            case \"ALLOC\":\n                if (task[i].len / 1024 / 1024 > 25) {\n                    console.log(\"tasks\", task);\n                    //console.trace();\n                }\n                ctx.vars[task[i].var] = alloc(task[i].len);\n                break;\n            case \"SET\":\n                setBuffer(ctx.vars[task[i].var], task[i].buff);\n                break;\n            case \"CALL\": {\n                const params = [];\n                for (let j=0; j<task[i].params.length; j++) {\n                    const p = task[i].params[j];\n                    if (typeof p.var !== \"undefined\") {\n                        params.push(ctx.vars[p.var] + (p.offset || 0));\n                    } else if (typeof p.val != \"undefined\") {\n                        params.push(p.val);\n                    }\n                }\n                instance.exports[task[i].fnName](...params);\n                break;\n            }\n            case \"GET\":\n                ctx.out[task[i].out] = getBuffer(ctx.vars[task[i].var], task[i].len).slice();\n                break;\n            default:\n                throw new Error(\"Invalid cmd\");\n            }\n        }\n        const u32b = new Uint32Array(memory.buffer, 0, 1);\n        u32b[0] = oldAlloc;\n\n        return ctx.out;\n    }\n\n    function scheduleTermination() {\n        clearTimeout(terminationTimer);\n        if (terminationTimeout > 0) {\n            terminationTimer = setTimeout(() => {\n                // 2-phase termination: notify main thread first; close only after\n                // it acks with TERMINATE. This prevents the race where the main\n                // thread dispatches a task to a worker that has already closed.\n                wantToTerminate = true;\n                if (self) self.postMessage({status: \"want_to_terminate\"});\n            }, terminationTimeout);\n        }\n    }\n\n    function terminate() {\n        clearTimeout(terminationTimer);\n        if (self) {\n            console.log(\"TERMINATE\");\n            self.postMessage({status: \"terminated\"});\n            self.close();\n        }\n    }\n\n    return runTask;\n}"})(self)`;
 {
     if(globalThis?.Blob) {
         const threadBytes= new TextEncoder().encode(threadStr);
@@ -5196,13 +5253,29 @@ function buildFFT$2(curve, groupName) {
     const G = curve[groupName];
     const Fr = curve.Fr;
     const tm = G.tm;
+
+    // In-place bit-reversal permutation in a worker. The buffer is transferred
+    // in, reversed where it lies via plain typed-array lane swaps (no WASM
+    // linear memory grown, nothing allocated), and transferred back. Both
+    // transfers are pointer moves, so this is zero-copy. The swap is
+    // memory-bandwidth bound, so a single worker is as fast as splitting across
+    // many — which is why no SharedArrayBuffer is needed (only concurrent
+    // multi-worker access to one buffer would require that).
+    async function _reversePermutation(buff, sIn, bits) {
+        const res = await tm.queueAction(
+            [{cmd: "REVERSE", src: buff, sIn, bits}],
+            [buff.buffer]   // transfer in; reversed in place and transferred back
+        );
+        return res[0];
+    }
+
     async function _fft(buff, inverse, inType, outType, logger, loggerTxt) {
 
         inType = inType || "affine";
         outType = outType || "affine";
         const MAX_BITS_THREAD = 14;
 
-        let sIn, sMid, sOut, fnIn2Mid, fnMid2Out, fnFFTMix, fnFFTJoin, fnFFTFinal, fnReversePermutation;
+        let sIn, sMid, sOut, fnIn2Mid, fnMid2Out, fnFFTMix, fnFFTJoin, fnFFTFinal;
         if (groupName == "G1") {
             if (inType == "affine") {
                 sIn = G.F.n8*2;
@@ -5216,7 +5289,6 @@ function buildFFT$2(curve, groupName) {
             }
             fnFFTJoin = "g1m_fftJoin";
             fnFFTMix = "g1m_fftMix";
-            fnReversePermutation = "g1m__reversePermutation";
 
             if (outType == "affine") {
                 sOut = G.F.n8*2;
@@ -5238,7 +5310,6 @@ function buildFFT$2(curve, groupName) {
             }
             fnFFTJoin = "g2m_fftJoin";
             fnFFTMix = "g2m_fftMix";
-            fnReversePermutation = "g2m__reversePermutation";
             if (outType == "affine") {
                 sOut = G.F.n8*2;
                 fnMid2Out = "g2m_batchToAffine";
@@ -5254,7 +5325,6 @@ function buildFFT$2(curve, groupName) {
             }
             fnFFTMix = "frm_fftMix";
             fnFFTJoin = "frm_fftJoin";
-            fnReversePermutation = "frm__reversePermutation";
         }
 
 
@@ -5296,24 +5366,14 @@ function buildFFT$2(curve, groupName) {
 
         let buffOut;
 
-        // TODO: optimize. Move to wasm
-        // buffReverseBits(buff, sIn);
-
-        // TODO: try to do reversing for each batch separately and inside of the task
-        const task = [];
-        task.push({cmd: "ALLOCSET", var: 0, buff: buff});
-        task.push({cmd: "CALL", fnName: fnReversePermutation, params: [{var:0}, {val: bits}]});
-        task.push({cmd: "GET", out:0, var: 0, len: nPoints*sOut});
-        const reversedBuff = await tm.queueAction(task, [buff.buffer]);
-        //const reversedBuff = await tm.queueAction(task, []);
-
-        //console.log("wasm buffReverseBits:", reversedBuff[0]);
-        //buffReverseBits(buff, sIn);
-        //console.log("js buffReverseBits:", buff);
-
-        //exit(1);
-
-        buff = reversedBuff[0];
+        // Bit-reversal permutation. Like the old pure-JS buffReverseBits, this is
+        // just a permutation of fixed-size (sIn-byte) elements and works for any
+        // element size, so it covers Fr, G1 and G2 alike. Reversed in place in a
+        // worker via typed-array swaps — no WASM linear memory grown, nothing
+        // allocated. (The previous WASM __reversePermutation swapped n8g-sized
+        // elements rather than sIn-sized ones, which was wrong whenever
+        // sIn != n8g, e.g. affine-input G1/G2 FFTs.)
+        buff = await _reversePermutation(buff, sIn, bits);
 
         let chunks;
         let pointsInChunk = Math.min(1 << MAX_BITS_THREAD, nPoints);
