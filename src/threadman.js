@@ -59,17 +59,23 @@ class WorkerSlot {
     }
 }
 
+// Computed lazily on first worker creation, NOT at module load: a SES/Snap
+// realm (which runs single-threaded) has no Blob/btoa/URL.createObjectURL, and
+// touching them at import time would throw before a curve could even be built.
 let workerSource;
-
-const threadStr = `(${thread.toString()})(self)`;
-if (isNode) {
-    workerSource = "data:application/javascript;base64," + Buffer.from(threadStr).toString("base64");
-} else if (globalThis?.Blob && globalThis.URL && globalThis.URL.createObjectURL) {
-    const threadBytes = new TextEncoder().encode(threadStr);
-    const workerBlob = new Blob([threadBytes], { type: "application/javascript" });
-    workerSource = URL.createObjectURL(workerBlob);
-} else {
-    workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
+function getWorkerSource() {
+    if (workerSource !== undefined) return workerSource;
+    const threadStr = `(${thread.toString()})(self)`;
+    if (isNode) {
+        workerSource = "data:application/javascript;base64," + Buffer.from(threadStr).toString("base64");
+    } else if (globalThis?.Blob && globalThis.URL && globalThis.URL.createObjectURL) {
+        const threadBytes = new TextEncoder().encode(threadStr);
+        const workerBlob = new Blob([threadBytes], { type: "application/javascript" });
+        workerSource = URL.createObjectURL(workerBlob);
+    } else {
+        workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
+    }
+    return workerSource;
 }
 
 
@@ -89,6 +95,11 @@ export default async function buildThreadManager(wasm, singleThread) {
         }
     });
 
+    // Force single-thread when no Worker is available. Covers SES/Snap realms
+    // (no Worker, frozen globals) and old/limited browsers, regardless of what
+    // the caller requested -- the worker path (and getWorkerSource's
+    // Blob/btoa) would otherwise fail. Node uses the web-worker import, so it
+    // keeps multi-threading.
     if(!isNode && !globalThis?.Worker) {
         singleThread = true;
     }
@@ -239,7 +250,7 @@ export class ThreadManager {
     }
 
     startWorker(slotIndex) {
-        const nativeWorker = new Worker(workerSource);
+        const nativeWorker = new Worker(getWorkerSource());
         const slot = new WorkerSlot(nativeWorker);
         this.pool[slotIndex] = slot;
 

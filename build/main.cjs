@@ -4544,17 +4544,23 @@ class WorkerSlot {
     }
 }
 
+// Computed lazily on first worker creation, NOT at module load: a SES/Snap
+// realm (which runs single-threaded) has no Blob/btoa/URL.createObjectURL, and
+// touching them at import time would throw before a curve could even be built.
 let workerSource;
-
-const threadStr = `(${thread.toString()})(self)`;
-if (isNode) {
-    workerSource = "data:application/javascript;base64," + Buffer.from(threadStr).toString("base64");
-} else if (globalThis?.Blob && globalThis.URL && globalThis.URL.createObjectURL) {
-    const threadBytes = new TextEncoder().encode(threadStr);
-    const workerBlob = new Blob([threadBytes], { type: "application/javascript" });
-    workerSource = URL.createObjectURL(workerBlob);
-} else {
-    workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
+function getWorkerSource() {
+    if (workerSource !== undefined) return workerSource;
+    const threadStr = `(${thread.toString()})(self)`;
+    if (isNode) {
+        workerSource = "data:application/javascript;base64," + Buffer.from(threadStr).toString("base64");
+    } else if (globalThis?.Blob && globalThis.URL && globalThis.URL.createObjectURL) {
+        const threadBytes = new TextEncoder().encode(threadStr);
+        const workerBlob = new Blob([threadBytes], { type: "application/javascript" });
+        workerSource = URL.createObjectURL(workerBlob);
+    } else {
+        workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
+    }
+    return workerSource;
 }
 
 
@@ -4574,6 +4580,11 @@ async function buildThreadManager(wasm, singleThread) {
         }
     });
 
+    // Force single-thread when no Worker is available. Covers SES/Snap realms
+    // (no Worker, frozen globals) and old/limited browsers, regardless of what
+    // the caller requested -- the worker path (and getWorkerSource's
+    // Blob/btoa) would otherwise fail. Node uses the web-worker import, so it
+    // keeps multi-threading.
     if(!isNode && !globalThis?.Worker) {
         singleThread = true;
     }
@@ -4724,7 +4735,7 @@ class ThreadManager {
     }
 
     startWorker(slotIndex) {
-        const nativeWorker = new Worker(workerSource);
+        const nativeWorker = new Worker(getWorkerSource());
         const slot = new WorkerSlot(nativeWorker);
         this.pool[slotIndex] = slot;
 
@@ -6125,14 +6136,21 @@ const preQSize$1 = 19776;
 const q$1 = "21888242871839275222246405745257275088696311157297823662689037894645226208583";
 const r$1 = "21888242871839275222246405745257275088548364400416034343698204186575808495617";
 
-// Pure-JS base64 -> Uint8Array. Uses neither atob nor Buffer, so it resolves the
-// same in Node, browsers, extensions, and SES/Snap realms. Used once at curve
-// load to decode the vendored (uncompressed) wasm bytes.
-const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-const LOOKUP = new Uint8Array(256);
-for (let i = 0; i < CHARS.length; i++) LOOKUP[CHARS.charCodeAt(i)] = i;
+// base64 -> Uint8Array, used once at curve load to decode the vendored wasm.
+//
+// Prefer the platform decoder (Buffer in Node, atob in browsers/extensions) for
+// speed, and fall back to a pure-JS implementation only where neither exists --
+// e.g. a SES/Snap realm that has not endowed atob/Buffer. The fallback keeps the
+// curve loadable everywhere without depending on any host base64 primitive.
 
-function base64ToUint8Array(b64) {
+const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+let LOOKUP;
+
+function decodePureJs(b64) {
+    if (!LOOKUP) {
+        LOOKUP = new Uint8Array(256);
+        for (let i = 0; i < CHARS.length; i++) LOOKUP[CHARS.charCodeAt(i)] = i;
+    }
     const len = b64.length;
     let pad = 0;
     if (len > 0 && b64[len - 1] === "=") pad++;
@@ -6150,6 +6168,22 @@ function base64ToUint8Array(b64) {
         if (o < outLen) out[o++] = ((c & 3) << 6) | d;
     }
     return out;
+}
+
+function base64ToUint8Array(b64) {
+    if (typeof Buffer !== "undefined" && typeof Buffer.from === "function") {
+        // Node (and Node-compatible runtimes) — fastest.
+        return new Uint8Array(Buffer.from(b64, "base64"));
+    }
+    if (typeof atob === "function") {
+        // Browsers, extensions, modern Node, Deno.
+        const bin = atob(b64);
+        const out = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+        return out;
+    }
+    // SES/Snap or any host without a base64 primitive.
+    return decodePureJs(b64);
 }
 
 // Module-local singleton cache. Must NOT be on globalThis: assigning to a frozen
@@ -6212,8 +6246,6 @@ async function buildBn128(singleThread, plugins) {
         bn128wasm.q = moduleBuilder.modules.bn128.q;
         bn128wasm.r = moduleBuilder.modules.bn128.r;
     }
-
-    //console.log("bn128wasm:", bn128wasm);
 
     const params = {
         name: "bn128",
