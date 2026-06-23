@@ -14,6 +14,10 @@
       "browser": "./build/browser.esm.js"
     }
   },
+  "browser": {
+    "os": false,
+    "crypto": false
+  },
   "scripts": {
     "test": "mocha",
     "build:node": "rollup -c rollup.cjs.config.js",

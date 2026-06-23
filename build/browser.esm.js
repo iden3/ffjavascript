@@ -1,6 +1,3 @@
-import crypto from 'crypto';
-import os from 'os';
-
 /* global BigInt */
 const hexLen = [ 0, 1, 2, 2, 3, 3, 3, 3, 4 ,4 ,4 ,4 ,4 ,4 ,4 ,4];
 
@@ -1264,13 +1261,15 @@ class ChaCha {
     }
 }
 
+var os = {};
+
 function getRandomBytes(n) {
     let array = new Uint8Array(n);
     // Feature-detect rather than rely on `true` (undefined under
     // Vite/esbuild/SES -> ReferenceError). Prefer Node crypto (no per-call size
     // limit); fall back to Web Crypto chunked to its 65536-byte cap.
-    if (crypto && crypto.randomFillSync) { // Node
-        crypto.randomFillSync(array);
+    if (os && os.randomFillSync) { // Node
+        os.randomFillSync(array);
     } else if (typeof globalThis.crypto !== "undefined" && globalThis.crypto.getRandomValues) {
         for (let i = 0; i < n; i += 65536) {
             globalThis.crypto.getRandomValues(array.subarray(i, Math.min(i + 65536, n)));
