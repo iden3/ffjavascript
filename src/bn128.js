@@ -2,10 +2,12 @@
 import buildEngine from "./engine.js";
 import * as Scalar from "./scalar.js";
 
-globalThis.curve_bn128 = null;
+// Module-local singleton cache. Must NOT be on globalThis: assigning to a frozen
+// globalThis (e.g. a MetaMask Snap / SES lockdown realm) throws at module load.
+let curve_bn128 = null;
 
 export default async function buildBn128(singleThread, plugins) {
-    if ((!singleThread) && (globalThis.curve_bn128)) return globalThis.curve_bn128;
+    if ((!singleThread) && (curve_bn128)) return curve_bn128;
 
     let bn128wasm = {};
 
@@ -94,13 +96,13 @@ export default async function buildBn128(singleThread, plugins) {
     const curve = await buildEngine(params);
     curve.terminate = async function () {
         if (!params.singleThread) {
-            globalThis.curve_bn128 = null;
+            curve_bn128 = null;
             await this.tm.terminate();
         }
     };
 
     if (!singleThread) {
-        globalThis.curve_bn128 = curve;
+        curve_bn128 = curve;
     }
 
     return curve;

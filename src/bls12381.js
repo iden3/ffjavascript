@@ -1,10 +1,12 @@
 import buildEngine from "./engine.js";
 import * as Scalar from "./scalar.js";
 
-globalThis.curve_bls12381 = null;
+// Module-local singleton cache. Must NOT be on globalThis: assigning to a frozen
+// globalThis (e.g. a MetaMask Snap / SES lockdown realm) throws at module load.
+let curve_bls12381 = null;
 
 export default async function buildBls12381(singleThread, plugins) {
-    if ((!singleThread) && (globalThis.curve_bls12381)) return globalThis.curve_bls12381;
+    if ((!singleThread) && (curve_bls12381)) return curve_bls12381;
 
     const { ModuleBuilder } = await import("wasmbuilder");
     const { buildBls12381: buildBls12381wasm } = await import("wasmcurves");
@@ -50,13 +52,13 @@ export default async function buildBls12381(singleThread, plugins) {
     const curve = await buildEngine(params);
     curve.terminate = async function () {
         if (!params.singleThread) {
-            globalThis.curve_bls12381 = null;
+            curve_bls12381 = null;
             await this.tm.terminate();
         }
     };
 
     if (!singleThread) {
-        globalThis.curve_bls12381 = curve;
+        curve_bls12381 = curve;
     }
 
     return curve;

@@ -1,3 +1,6 @@
+import crypto from 'crypto';
+import os from 'os';
+
 /* global BigInt */
 const hexLen = [ 0, 1, 2, 2, 3, 3, 3, 3, 4 ,4 ,4 ,4 ,4 ,4 ,4 ,4];
 
@@ -1263,13 +1266,18 @@ class ChaCha {
 
 function getRandomBytes(n) {
     let array = new Uint8Array(n);
-    { // Browser
-        if (typeof globalThis.crypto !== "undefined") { // Supported
-            globalThis.crypto.getRandomValues(array);
-        } else { // fallback
-            for (let i=0; i<n; i++) {
-                array[i] = (Math.random()*4294967296)>>>0;
-            }
+    // Feature-detect rather than rely on `true` (undefined under
+    // Vite/esbuild/SES -> ReferenceError). Prefer Node crypto (no per-call size
+    // limit); fall back to Web Crypto chunked to its 65536-byte cap.
+    if (crypto && crypto.randomFillSync) { // Node
+        crypto.randomFillSync(array);
+    } else if (typeof globalThis.crypto !== "undefined" && globalThis.crypto.getRandomValues) {
+        for (let i = 0; i < n; i += 65536) {
+            globalThis.crypto.getRandomValues(array.subarray(i, Math.min(i + 65536, n)));
+        }
+    } else { // insecure last resort
+        for (let i=0; i<n; i++) {
+            array[i] = (Math.random()*4294967296)>>>0;
         }
     }
     return array;
@@ -4503,6 +4511,10 @@ function thread(self) {
 // const MEM_SIZE = 1000;  // Memory size in 64K Pakes (512Mb)
 const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
 
+// Robust Node detection that never throws (unlike `true`, which is a
+// webpack-ism and is undefined under Vite/esbuild/SES).
+const isNode = typeof process !== "undefined" && process.versions != null && process.versions.node != null;
+
 class Deferred {
     constructor() {
         this.promise = new Promise((resolve, reject)=> {
@@ -4532,14 +4544,14 @@ class WorkerSlot {
 let workerSource;
 
 const threadStr = `(${"function thread(self) {\n    const MAXMEM = 32767;\n    let instance;\n    let memory;\n    let terminationTimeout = 1500; // milliseconds\n    let terminationTimer;\n    let wantToTerminate = false;\n\n    if (self) {\n        self.onmessage = function(e) {\n            let data;\n            if (e.data) {\n                data = e.data;\n            } else {\n                data = e;\n            }\n\n            try {\n                if (data[0].cmd === \"INIT\") {\n                    init(data[0]).then(function() {\n                        self.postMessage({status: \"initialized\"});\n                        // Start idle timer only after init completes so it never\n                        // fires during async WASM compilation.\n                        scheduleTermination();\n                    });\n                    return; // skip the scheduleTermination() call at the bottom\n                } else if (data[0].cmd === \"TERMINATE\") {\n                    terminate();\n                } else {\n                    let terminateAfterTask = false;\n                    if (data[data.length-1].cmd === \"TERMINATE\") {\n                        terminateAfterTask = true;\n                        data.pop();\n                    }\n                    const res = runTask(data);\n                    let transfers = [];\n                    for (let i=0; i<res.length; i++) {\n                        if (res[i] instanceof Uint8Array) {\n                            transfers.push(res[i].buffer);\n                        }\n                    }\n                    self.postMessage(res, transfers);\n                    if (terminateAfterTask) {\n                        terminate();\n                    }\n                }\n            } catch (err) {\n                // Catch any error and send it back to main thread\n                self.postMessage({error: err.message});\n            }\n            scheduleTermination();\n        };\n    }\n\n    async function init(data) {\n        let wasmModule;\n        if (data.code instanceof WebAssembly.Module) {\n            console.log(\"Using precompiled WebAssembly.Module\");\n            wasmModule = data.code;\n        } else {\n            console.log(\"Compiling WebAssembly.Module\");\n            const code = new Uint8Array(data.code);\n            wasmModule = await WebAssembly.compile(code);\n        }\n        memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});\n\n        console.log(\"Initialized thread with memory\", memory.buffer.byteLength / 1024 / 1024, \"MB\");\n\n        instance = await WebAssembly.instantiate(wasmModule, {\n            env: {\n                \"memory\": memory\n            }\n        });\n\n        if (data.terminationTimeout) {\n            terminationTimeout = data.terminationTimeout;\n        }\n    }\n\n\n\n    // Reverse the low `bits` of a 32-bit integer (O(1) bit-twiddle).\n    function rev32(x) {\n        x = ((x & 0x55555555) << 1) | ((x >>> 1) & 0x55555555);\n        x = ((x & 0x33333333) << 2) | ((x >>> 2) & 0x33333333);\n        x = ((x & 0x0f0f0f0f) << 4) | ((x >>> 4) & 0x0f0f0f0f);\n        x = ((x & 0x00ff00ff) << 8) | ((x >>> 8) & 0x00ff00ff);\n        x = (x << 16) | (x >>> 16);\n        return x >>> 0;\n    }\n\n    // In-place bit-reversal permutation of fixed-size (sIn-byte) elements.\n    // Works for any element size, like the old pure-JS buffReverseBits. When\n    // the elements are 4-byte aligned it swaps Uint32Array lanes (no BigInt\n    // boxing, no allocation); otherwise it falls back to a byte-wise swap with\n    // a single reused temp buffer. Either way it touches no WASM linear memory.\n    function reverseInPlace(u8, sIn, bits) {\n        const n = u8.byteLength / sIn;\n        const shift = 32 - bits;\n        if (((sIn & 3) === 0) && ((u8.byteOffset & 3) === 0)) {\n            const lanes = sIn >>> 2;\n            const u32 = new Uint32Array(u8.buffer, u8.byteOffset, u8.byteLength >>> 2);\n            for (let i = 0; i < n; i++) {\n                const ri = rev32(i) >>> shift;\n                if (i < ri) {\n                    let a = i * lanes;\n                    let b = ri * lanes;\n                    for (let l = 0; l < lanes; l++) {\n                        const t = u32[a + l];\n                        u32[a + l] = u32[b + l];\n                        u32[b + l] = t;\n                    }\n                }\n            }\n        } else {\n            const tmp = new Uint8Array(sIn);   // one reused temp, not one per swap\n            for (let i = 0; i < n; i++) {\n                const ri = rev32(i) >>> shift;\n                if (i < ri) {\n                    const ao = i * sIn;\n                    const bo = ri * sIn;\n                    tmp.set(u8.subarray(ao, ao + sIn));\n                    u8.copyWithin(ao, bo, bo + sIn);\n                    u8.set(tmp, bo);\n                }\n            }\n        }\n    }\n\n    function alloc(length) {\n        const u32 = new Uint32Array(memory.buffer, 0, 1);\n        while (u32[0] & 3) u32[0]++;  // Return always aligned pointers\n        const res = u32[0];\n        u32[0] += length;\n        if (u32[0] + length > memory.buffer.byteLength) {\n            const currentPages = memory.buffer.byteLength / 0x10000;\n            let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;\n            if (requiredPages>MAXMEM) requiredPages=MAXMEM;\n            memory.grow(requiredPages-currentPages);\n            console.log(\"Growing memory to\", memory.buffer.byteLength / 1024 / 1024, \"MB\");\n        }\n        return res;\n    }\n\n    function allocBuffer(buffer) {\n        const p = alloc(buffer.byteLength);\n        setBuffer(p, buffer);\n        return p;\n    }\n\n    function getBuffer(pointer, length) {\n        return new Uint8Array(memory.buffer, pointer, length);\n    }\n\n    function setBuffer(pointer, buffer) {\n        const u8 = new Uint8Array(memory.buffer);\n        u8.set(new Uint8Array(buffer), pointer);\n    }\n\n    function runTask(task) {\n        clearTimeout(terminationTimer);\n        wantToTerminate = false;\n        if (task[0].cmd === \"INIT\") {\n            return init(task[0]);\n        }\n        const ctx = {\n            vars: [],\n            out: []\n        };\n        const u32a = new Uint32Array(memory.buffer, 0, 1);\n        const oldAlloc = u32a[0];\n        for (let i=0; i<task.length; i++) {\n            switch (task[i].cmd) {\n            case \"REVERSE\": {\n                // Reverse the transferred buffer in place and hand it straight\n                // back. No SharedArrayBuffer and no WASM memory: the buffer is\n                // transferred in and out (zero copy) and reversed where it lies.\n                const t = task[i];\n                reverseInPlace(t.src, t.sIn, t.bits);\n                ctx.out[0] = t.src;\n                break;\n            }\n            case \"ALLOCSET\":\n                if (task[i].len / 1024 / 1024 > 25) {\n                    console.log(\"tasks\", task);\n                    //console.trace();\n                }\n                ctx.vars[task[i].var] = allocBuffer(task[i].buff);\n                break;\n            case \"ALLOC\":\n                if (task[i].len / 1024 / 1024 > 25) {\n                    console.log(\"tasks\", task);\n                    //console.trace();\n                }\n                ctx.vars[task[i].var] = alloc(task[i].len);\n                break;\n            case \"SET\":\n                setBuffer(ctx.vars[task[i].var], task[i].buff);\n                break;\n            case \"CALL\": {\n                const params = [];\n                for (let j=0; j<task[i].params.length; j++) {\n                    const p = task[i].params[j];\n                    if (typeof p.var !== \"undefined\") {\n                        params.push(ctx.vars[p.var] + (p.offset || 0));\n                    } else if (typeof p.val != \"undefined\") {\n                        params.push(p.val);\n                    }\n                }\n                instance.exports[task[i].fnName](...params);\n                break;\n            }\n            case \"GET\":\n                ctx.out[task[i].out] = getBuffer(ctx.vars[task[i].var], task[i].len).slice();\n                break;\n            default:\n                throw new Error(\"Invalid cmd\");\n            }\n        }\n        const u32b = new Uint32Array(memory.buffer, 0, 1);\n        u32b[0] = oldAlloc;\n\n        return ctx.out;\n    }\n\n    function scheduleTermination() {\n        clearTimeout(terminationTimer);\n        if (terminationTimeout > 0) {\n            terminationTimer = setTimeout(() => {\n                // 2-phase termination: notify main thread first; close only after\n                // it acks with TERMINATE. This prevents the race where the main\n                // thread dispatches a task to a worker that has already closed.\n                wantToTerminate = true;\n                if (self) self.postMessage({status: \"want_to_terminate\"});\n            }, terminationTimeout);\n        }\n    }\n\n    function terminate() {\n        clearTimeout(terminationTimer);\n        if (self) {\n            console.log(\"TERMINATE\");\n            self.postMessage({status: \"terminated\"});\n            self.close();\n        }\n    }\n\n    return runTask;\n}"})(self)`;
-{
-    if(globalThis?.Blob) {
-        const threadBytes= new TextEncoder().encode(threadStr);
-        const workerBlob = new Blob([threadBytes], { type: "application/javascript" }) ;
-        workerSource = URL.createObjectURL(workerBlob);
-    } else {
-        workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
-    }
+if (isNode) {
+    workerSource = "data:application/javascript;base64," + Buffer.from(threadStr).toString("base64");
+} else if (globalThis?.Blob && globalThis.URL && globalThis.URL.createObjectURL) {
+    const threadBytes = new TextEncoder().encode(threadStr);
+    const workerBlob = new Blob([threadBytes], { type: "application/javascript" });
+    workerSource = URL.createObjectURL(workerBlob);
+} else {
+    workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
 }
 
 
@@ -4559,7 +4571,7 @@ async function buildThreadManager(wasm, singleThread) {
         }
     });
 
-    if(!globalThis?.Worker) {
+    if(!isNode && !globalThis?.Worker) {
         singleThread = true;
     }
 
@@ -4589,10 +4601,10 @@ async function buildThreadManager(wasm, singleThread) {
         tm.pool = [];
 
         let concurrency = 2;
-        {
-            if (typeof navigator === "object" && navigator.hardwareConcurrency) {
-                concurrency = navigator.hardwareConcurrency;
-            }
+        if (typeof navigator === "object" && navigator.hardwareConcurrency) {
+            concurrency = navigator.hardwareConcurrency;
+        } else if (os && os.cpus) {
+            concurrency = os.cpus().length;
         }
 
         if(concurrency === 0){
@@ -6094,10 +6106,12 @@ async function buildEngine(params) {
 
 //import { bn128_wasm_gzip as bn128wasmPrebuilt } from "wasmcurves";
 
-globalThis.curve_bn128 = null;
+// Module-local singleton cache. Must NOT be on globalThis: assigning to a frozen
+// globalThis (e.g. a MetaMask Snap / SES lockdown realm) throws at module load.
+let curve_bn128 = null;
 
 async function buildBn128$1(singleThread, plugins) {
-    if ((!singleThread) && (globalThis.curve_bn128)) return globalThis.curve_bn128;
+    if ((!singleThread) && (curve_bn128)) return curve_bn128;
 
     let bn128wasm = {};
 
@@ -6186,22 +6200,24 @@ async function buildBn128$1(singleThread, plugins) {
     const curve = await buildEngine(params);
     curve.terminate = async function () {
         if (!params.singleThread) {
-            globalThis.curve_bn128 = null;
+            curve_bn128 = null;
             await this.tm.terminate();
         }
     };
 
     if (!singleThread) {
-        globalThis.curve_bn128 = curve;
+        curve_bn128 = curve;
     }
 
     return curve;
 }
 
-globalThis.curve_bls12381 = null;
+// Module-local singleton cache. Must NOT be on globalThis: assigning to a frozen
+// globalThis (e.g. a MetaMask Snap / SES lockdown realm) throws at module load.
+let curve_bls12381 = null;
 
 async function buildBls12381$1(singleThread, plugins) {
-    if ((!singleThread) && (globalThis.curve_bls12381)) return globalThis.curve_bls12381;
+    if ((!singleThread) && (curve_bls12381)) return curve_bls12381;
 
     const { ModuleBuilder } = await Promise.resolve().then(function () { return main; });
     const { buildBls12381: buildBls12381wasm } = await Promise.resolve().then(function () { return index; });
@@ -6247,13 +6263,13 @@ async function buildBls12381$1(singleThread, plugins) {
     const curve = await buildEngine(params);
     curve.terminate = async function () {
         if (!params.singleThread) {
-            globalThis.curve_bls12381 = null;
+            curve_bls12381 = null;
             await this.tm.terminate();
         }
     };
 
     if (!singleThread) {
-        globalThis.curve_bls12381 = curve;
+        curve_bls12381 = curve;
     }
 
     return curve;

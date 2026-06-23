@@ -25,6 +25,10 @@ import thread from "./threadman_thread.js";
 import os from "os";
 import Worker from "web-worker";
 
+// Robust Node detection that never throws (unlike `process.browser`, which is a
+// webpack-ism and is undefined under Vite/esbuild/SES).
+const isNode = typeof process !== "undefined" && process.versions != null && process.versions.node != null;
+
 class Deferred {
     constructor() {
         this.promise = new Promise((resolve, reject)=> {
@@ -58,16 +62,14 @@ class WorkerSlot {
 let workerSource;
 
 const threadStr = `(${thread.toString()})(self)`;
-if(process.browser) {
-    if(globalThis?.Blob) {
-        const threadBytes= new TextEncoder().encode(threadStr);
-        const workerBlob = new Blob([threadBytes], { type: "application/javascript" }) ;
-        workerSource = URL.createObjectURL(workerBlob);
-    } else {
-        workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
-    }
-} else {
+if (isNode) {
     workerSource = "data:application/javascript;base64," + Buffer.from(threadStr).toString("base64");
+} else if (globalThis?.Blob && globalThis.URL && globalThis.URL.createObjectURL) {
+    const threadBytes = new TextEncoder().encode(threadStr);
+    const workerBlob = new Blob([threadBytes], { type: "application/javascript" });
+    workerSource = URL.createObjectURL(workerBlob);
+} else {
+    workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
 }
 
 
@@ -87,7 +89,7 @@ export default async function buildThreadManager(wasm, singleThread) {
         }
     });
 
-    if(process.browser && !globalThis?.Worker) {
+    if(!isNode && !globalThis?.Worker) {
         singleThread = true;
     }
 
@@ -117,11 +119,9 @@ export default async function buildThreadManager(wasm, singleThread) {
         tm.pool = [];
 
         let concurrency = 2;
-        if (process.browser) {
-            if (typeof navigator === "object" && navigator.hardwareConcurrency) {
-                concurrency = navigator.hardwareConcurrency;
-            }
-        } else {
+        if (typeof navigator === "object" && navigator.hardwareConcurrency) {
+            concurrency = navigator.hardwareConcurrency;
+        } else if (os && os.cpus) {
             concurrency = os.cpus().length;
         }
 

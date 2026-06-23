@@ -1269,17 +1269,19 @@ class ChaCha {
 
 function getRandomBytes(n) {
     let array = new Uint8Array(n);
-    if (process.browser) { // Browser
-        if (typeof globalThis.crypto !== "undefined") { // Supported
-            globalThis.crypto.getRandomValues(array);
-        } else { // fallback
-            for (let i=0; i<n; i++) {
-                array[i] = (Math.random()*4294967296)>>>0;
-            }
-        }
-    }
-    else { // NodeJS
+    // Feature-detect rather than rely on `process.browser` (undefined under
+    // Vite/esbuild/SES -> ReferenceError). Prefer Node crypto (no per-call size
+    // limit); fall back to Web Crypto chunked to its 65536-byte cap.
+    if (crypto && crypto.randomFillSync) { // Node
         crypto.randomFillSync(array);
+    } else if (typeof globalThis.crypto !== "undefined" && globalThis.crypto.getRandomValues) {
+        for (let i = 0; i < n; i += 65536) {
+            globalThis.crypto.getRandomValues(array.subarray(i, Math.min(i + 65536, n)));
+        }
+    } else { // insecure last resort
+        for (let i=0; i<n; i++) {
+            array[i] = (Math.random()*4294967296)>>>0;
+        }
     }
     return array;
 }
@@ -4512,6 +4514,10 @@ function thread(self) {
 // const MEM_SIZE = 1000;  // Memory size in 64K Pakes (512Mb)
 const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
 
+// Robust Node detection that never throws (unlike `process.browser`, which is a
+// webpack-ism and is undefined under Vite/esbuild/SES).
+const isNode = typeof process !== "undefined" && process.versions != null && process.versions.node != null;
+
 class Deferred {
     constructor() {
         this.promise = new Promise((resolve, reject)=> {
@@ -4541,16 +4547,14 @@ class WorkerSlot {
 let workerSource;
 
 const threadStr = `(${thread.toString()})(self)`;
-if(process.browser) {
-    if(globalThis?.Blob) {
-        const threadBytes= new TextEncoder().encode(threadStr);
-        const workerBlob = new Blob([threadBytes], { type: "application/javascript" }) ;
-        workerSource = URL.createObjectURL(workerBlob);
-    } else {
-        workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
-    }
-} else {
+if (isNode) {
     workerSource = "data:application/javascript;base64," + Buffer.from(threadStr).toString("base64");
+} else if (globalThis?.Blob && globalThis.URL && globalThis.URL.createObjectURL) {
+    const threadBytes = new TextEncoder().encode(threadStr);
+    const workerBlob = new Blob([threadBytes], { type: "application/javascript" });
+    workerSource = URL.createObjectURL(workerBlob);
+} else {
+    workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
 }
 
 
@@ -4570,7 +4574,7 @@ async function buildThreadManager(wasm, singleThread) {
         }
     });
 
-    if(process.browser && !globalThis?.Worker) {
+    if(!isNode && !globalThis?.Worker) {
         singleThread = true;
     }
 
@@ -4600,11 +4604,9 @@ async function buildThreadManager(wasm, singleThread) {
         tm.pool = [];
 
         let concurrency = 2;
-        if (process.browser) {
-            if (typeof navigator === "object" && navigator.hardwareConcurrency) {
-                concurrency = navigator.hardwareConcurrency;
-            }
-        } else {
+        if (typeof navigator === "object" && navigator.hardwareConcurrency) {
+            concurrency = navigator.hardwareConcurrency;
+        } else if (os && os.cpus) {
             concurrency = os.cpus().length;
         }
 
@@ -6107,10 +6109,12 @@ async function buildEngine(params) {
 
 //import { bn128_wasm_gzip as bn128wasmPrebuilt } from "wasmcurves";
 
-globalThis.curve_bn128 = null;
+// Module-local singleton cache. Must NOT be on globalThis: assigning to a frozen
+// globalThis (e.g. a MetaMask Snap / SES lockdown realm) throws at module load.
+let curve_bn128 = null;
 
 async function buildBn128(singleThread, plugins) {
-    if ((!singleThread) && (globalThis.curve_bn128)) return globalThis.curve_bn128;
+    if ((!singleThread) && (curve_bn128)) return curve_bn128;
 
     let bn128wasm = {};
 
@@ -6199,22 +6203,24 @@ async function buildBn128(singleThread, plugins) {
     const curve = await buildEngine(params);
     curve.terminate = async function () {
         if (!params.singleThread) {
-            globalThis.curve_bn128 = null;
+            curve_bn128 = null;
             await this.tm.terminate();
         }
     };
 
     if (!singleThread) {
-        globalThis.curve_bn128 = curve;
+        curve_bn128 = curve;
     }
 
     return curve;
 }
 
-globalThis.curve_bls12381 = null;
+// Module-local singleton cache. Must NOT be on globalThis: assigning to a frozen
+// globalThis (e.g. a MetaMask Snap / SES lockdown realm) throws at module load.
+let curve_bls12381 = null;
 
 async function buildBls12381(singleThread, plugins) {
-    if ((!singleThread) && (globalThis.curve_bls12381)) return globalThis.curve_bls12381;
+    if ((!singleThread) && (curve_bls12381)) return curve_bls12381;
 
     const { ModuleBuilder } = await import('wasmbuilder');
     const { buildBls12381: buildBls12381wasm } = await import('wasmcurves');
@@ -6260,13 +6266,13 @@ async function buildBls12381(singleThread, plugins) {
     const curve = await buildEngine(params);
     curve.terminate = async function () {
         if (!params.singleThread) {
-            globalThis.curve_bls12381 = null;
+            curve_bls12381 = null;
             await this.tm.terminate();
         }
     };
 
     if (!singleThread) {
-        globalThis.curve_bls12381 = curve;
+        curve_bls12381 = curve;
     }
 
     return curve;
