@@ -1,5 +1,7 @@
 import buildEngine from "./engine.js";
 import * as Scalar from "./scalar.js";
+import * as bls12381wasmPrebuilt from "./wasm/bls12381_wasm.js";
+import { base64ToUint8Array } from "./wasm/base64.js";
 
 // Module-local singleton cache. Must NOT be on globalThis: assigning to a frozen
 // globalThis (e.g. a MetaMask Snap / SES lockdown realm) throws at module load.
@@ -8,33 +10,60 @@ let curve_bls12381 = null;
 export default async function buildBls12381(singleThread, plugins) {
     if ((!singleThread) && (curve_bls12381)) return curve_bls12381;
 
-    const { ModuleBuilder } = await import("wasmbuilder");
-    const { buildBls12381: buildBls12381wasm } = await import("wasmcurves");
-
-    const moduleBuilder = new ModuleBuilder();
-    moduleBuilder.setMemory(25);
-    buildBls12381wasm(moduleBuilder);
-
-    if (plugins) plugins(moduleBuilder);
-
     const bls12381wasm = {};
 
-    bls12381wasm.code = moduleBuilder.build();
-    bls12381wasm.pq = moduleBuilder.modules.f1m.pq;
-    bls12381wasm.pr = moduleBuilder.modules.frm.pq;
-    bls12381wasm.pG1gen = moduleBuilder.modules.bls12381.pG1gen;
-    bls12381wasm.pG1zero = moduleBuilder.modules.bls12381.pG1zero;
-    bls12381wasm.pG1b = moduleBuilder.modules.bls12381.pG1b;
-    bls12381wasm.pG2gen = moduleBuilder.modules.bls12381.pG2gen;
-    bls12381wasm.pG2zero = moduleBuilder.modules.bls12381.pG2zero;
-    bls12381wasm.pG2b = moduleBuilder.modules.bls12381.pG2b;
-    bls12381wasm.pOneT = moduleBuilder.modules.bls12381.pOneT;
-    bls12381wasm.prePSize = moduleBuilder.modules.bls12381.prePSize;
-    bls12381wasm.preQSize = moduleBuilder.modules.bls12381.preQSize;
-    bls12381wasm.n8q = 48;
-    bls12381wasm.n8r = 32;
-    bls12381wasm.q = moduleBuilder.modules.bls12381.q;
-    bls12381wasm.r = moduleBuilder.modules.bls12381.r;
+    if (!plugins) {
+        // Vendored, uncompressed prebuilt wasm: static import (no runtime
+        // wasmcurves dependency, no dynamic import) and base64-decoded without
+        // atob/DecompressionStream, so it loads in Node, browsers and SES/Snap
+        // realms alike. Also avoids recompiling the wasm on every load.
+        // Regenerate the vendored module with `npm run gen-wasm`.
+        bls12381wasm.code = base64ToUint8Array(bls12381wasmPrebuilt.code);
+        bls12381wasm.pq = bls12381wasmPrebuilt.pq;
+        bls12381wasm.pr = bls12381wasmPrebuilt.pr;
+        bls12381wasm.pG1gen = bls12381wasmPrebuilt.pG1gen;
+        bls12381wasm.pG1zero = bls12381wasmPrebuilt.pG1zero;
+        bls12381wasm.pG1b = bls12381wasmPrebuilt.pG1b;
+        bls12381wasm.pG2gen = bls12381wasmPrebuilt.pG2gen;
+        bls12381wasm.pG2zero = bls12381wasmPrebuilt.pG2zero;
+        bls12381wasm.pG2b = bls12381wasmPrebuilt.pG2b;
+        bls12381wasm.pOneT = bls12381wasmPrebuilt.pOneT;
+        bls12381wasm.prePSize = bls12381wasmPrebuilt.prePSize;
+        bls12381wasm.preQSize = bls12381wasmPrebuilt.preQSize;
+        bls12381wasm.n8q = 48;
+        bls12381wasm.n8r = 32;
+        bls12381wasm.q = bls12381wasmPrebuilt.q;
+        bls12381wasm.r = bls12381wasmPrebuilt.r;
+    } else {
+        // Custom-plugin build path: builds the wasm at runtime, so it needs the
+        // wasm toolchain. Kept as a dynamic import so wasmbuilder/wasmcurves stay
+        // OPTIONAL dependencies (only required when a caller passes `plugins`).
+        const { ModuleBuilder } = await import("wasmbuilder");
+        const { buildBls12381: buildBls12381wasm } = await import("wasmcurves");
+
+        const moduleBuilder = new ModuleBuilder();
+        moduleBuilder.setMemory(25);
+        buildBls12381wasm(moduleBuilder);
+
+        if (plugins) plugins(moduleBuilder);
+
+        bls12381wasm.code = moduleBuilder.build();
+        bls12381wasm.pq = moduleBuilder.modules.f1m.pq;
+        bls12381wasm.pr = moduleBuilder.modules.frm.pq;
+        bls12381wasm.pG1gen = moduleBuilder.modules.bls12381.pG1gen;
+        bls12381wasm.pG1zero = moduleBuilder.modules.bls12381.pG1zero;
+        bls12381wasm.pG1b = moduleBuilder.modules.bls12381.pG1b;
+        bls12381wasm.pG2gen = moduleBuilder.modules.bls12381.pG2gen;
+        bls12381wasm.pG2zero = moduleBuilder.modules.bls12381.pG2zero;
+        bls12381wasm.pG2b = moduleBuilder.modules.bls12381.pG2b;
+        bls12381wasm.pOneT = moduleBuilder.modules.bls12381.pOneT;
+        bls12381wasm.prePSize = moduleBuilder.modules.bls12381.prePSize;
+        bls12381wasm.preQSize = moduleBuilder.modules.bls12381.preQSize;
+        bls12381wasm.n8q = 48;
+        bls12381wasm.n8r = 32;
+        bls12381wasm.q = moduleBuilder.modules.bls12381.q;
+        bls12381wasm.r = moduleBuilder.modules.bls12381.r;
+    }
 
 
     const params = {

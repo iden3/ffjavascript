@@ -20,6 +20,7 @@
   },
   "scripts": {
     "test": "mocha",
+    "gen-wasm": "node scripts/gen-wasm.js",
     "build:node": "rollup -c rollup.cjs.config.js",
     "build:browser": "rollup -c rollup.browser.esm.config.js",
     "build": "npm run build:node && npm run build:browser"
@@ -43,9 +44,11 @@
   },
   "homepage": "https://github.com/iden3/ffjavascript",
   "dependencies": {
-    "wasmbuilder": "0.0.16",
-    "wasmcurves": "file:../wasmcurves",
     "web-worker": "1.5.0"
+  },
+  "optionalDependencies": {
+    "wasmbuilder": "0.0.16",
+    "wasmcurves": "file:../wasmcurves"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^25.0.4",

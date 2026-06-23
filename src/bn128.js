@@ -1,6 +1,7 @@
-//import { bn128_wasm_gzip as bn128wasmPrebuilt } from "wasmcurves";
 import buildEngine from "./engine.js";
 import * as Scalar from "./scalar.js";
+import * as bn128wasmPrebuilt from "./wasm/bn128_wasm.js";
+import { base64ToUint8Array } from "./wasm/base64.js";
 
 // Module-local singleton cache. Must NOT be on globalThis: assigning to a frozen
 // globalThis (e.g. a MetaMask Snap / SES lockdown realm) throws at module load.
@@ -12,14 +13,11 @@ export default async function buildBn128(singleThread, plugins) {
     let bn128wasm = {};
 
     if (!plugins) {
-
-        console.log("Using prebuilt bn128 wasm");
-
-        //import { bn128_wasm_gzip as bn128wasmPrebuilt } from "wasmcurves";
-        //const { bn128_wasm_gzip: bn128wasmPrebuilt } = await import("wasmcurves");
-        const { default: bn128wasmPrebuilt } = await import("wasmcurves/build/bn128_wasm_gzip.js");
-
-        //console.log(bn128wasmPrebuilt);
+        // Vendored, uncompressed prebuilt wasm: statically imported (no runtime
+        // wasmcurves dependency, no dynamic import) and base64-decoded without
+        // atob/DecompressionStream, so it loads in Node, browsers and SES/Snap
+        // realms alike. Regenerate the vendored module with `npm run gen-wasm`.
+        bn128wasm.code = base64ToUint8Array(bn128wasmPrebuilt.code);
         bn128wasm.pq = bn128wasmPrebuilt.pq;
         bn128wasm.pr = bn128wasmPrebuilt.pq;
         bn128wasm.pG1gen = bn128wasmPrebuilt.pG1gen;
@@ -35,24 +33,10 @@ export default async function buildBn128(singleThread, plugins) {
         bn128wasm.n8r = 32;
         bn128wasm.q = bn128wasmPrebuilt.q;
         bn128wasm.r = bn128wasmPrebuilt.r;
-
-        // atob is available in both browsers and Node (>=16); Buffer is Node-only
-        // and breaks browser bundles.
-        const binaryString = atob(bn128wasmPrebuilt.gzipCode);
-        const compressedCode = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) compressedCode[i] = binaryString.charCodeAt(i);
-        const blob = new Blob([compressedCode]);
-
-        const ds = new DecompressionStream("gzip");
-        const decompressedStream = blob.stream().pipeThrough(ds);
-
-        // arrayBuffer() is universally available; Response.bytes() is too new
-        // for some browser engines.
-        bn128wasm.code = new Uint8Array(await new Response(decompressedStream).arrayBuffer());
     } else {
-
-        //import { ModuleBuilder } from "wasmbuilder";
-        //import { buildBn128 as buildBn128wasm } from "wasmcurves";
+        // Custom-plugin build path: builds the wasm at runtime, so it needs the
+        // wasm toolchain. Kept as a dynamic import so wasmbuilder/wasmcurves stay
+        // OPTIONAL dependencies (only required when a caller passes `plugins`).
         const { ModuleBuilder } = await import("wasmbuilder");
         const { buildBn128: buildBn128wasm } = await import("wasmcurves");
 
@@ -79,8 +63,6 @@ export default async function buildBn128(singleThread, plugins) {
         bn128wasm.q = moduleBuilder.modules.bn128.q;
         bn128wasm.r = moduleBuilder.modules.bn128.r;
     }
-
-    //console.log("bn128wasm:", bn128wasm);
 
     const params = {
         name: "bn128",
