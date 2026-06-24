@@ -4,7 +4,7 @@ import * as bn128wasmPrebuilt from "./wasm/bn128_wasm.js";
 import { base64ToUint8Array } from "./wasm/base64.js";
 
 // Module-local singleton cache. Must NOT be on globalThis: assigning to a frozen
-// globalThis (e.g. a MetaMask Snap / SES lockdown realm) throws at module load.
+// globalThis (e.g. a SES hardened-profile realm) throws at module load.
 let curve_bn128 = null;
 
 export default async function buildBn128(singleThread, plugins) {
@@ -15,8 +15,8 @@ export default async function buildBn128(singleThread, plugins) {
     if (!plugins) {
         // Vendored, uncompressed prebuilt wasm: statically imported (no runtime
         // wasmcurves dependency, no dynamic import) and base64-decoded without
-        // atob/DecompressionStream, so it loads in Node, browsers and SES/Snap
-        // realms alike. Regenerate the vendored module with `npm run gen-wasm`.
+        // atob/DecompressionStream, so it loads in Node, browsers and SES
+        // hardened realms alike. Regenerate the vendored module with `npm run gen-wasm`.
         bn128wasm.code = base64ToUint8Array(bn128wasmPrebuilt.code);
         bn128wasm.pq = bn128wasmPrebuilt.pq;
         bn128wasm.pr = bn128wasmPrebuilt.pq;

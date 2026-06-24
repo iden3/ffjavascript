@@ -2,7 +2,7 @@
 //
 // Prefer the platform decoder (Buffer in Node, atob in browsers/extensions) for
 // speed, and fall back to a pure-JS implementation only where neither exists --
-// e.g. a SES/Snap realm that has not endowed atob/Buffer. The fallback keeps the
+// e.g. a SES hardened realm that has not endowed atob/Buffer. The fallback keeps the
 // curve loadable everywhere without depending on any host base64 primitive.
 
 const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -44,6 +44,6 @@ export function base64ToUint8Array(b64) {
         for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
         return out;
     }
-    // SES/Snap or any host without a base64 primitive.
+    // SES hardened realm or any host without a base64 primitive.
     return decodePureJs(b64);
 }

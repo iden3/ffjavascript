@@ -59,8 +59,8 @@ class WorkerSlot {
     }
 }
 
-// Computed lazily on first worker creation, NOT at module load: a SES/Snap
-// realm (which runs single-threaded) has no Blob/btoa/URL.createObjectURL, and
+// Computed lazily on first worker creation, NOT at module load: a SES
+// hardened realm (which runs single-threaded) has no Blob/btoa/URL.createObjectURL, and
 // touching them at import time would throw before a curve could even be built.
 let workerSource;
 function getWorkerSource() {
@@ -95,7 +95,7 @@ export default async function buildThreadManager(wasm, singleThread) {
         }
     });
 
-    // Force single-thread when no Worker is available. Covers SES/Snap realms
+    // Force single-thread when no Worker is available. Covers SES hardened realms
     // (no Worker, frozen globals) and old/limited browsers, regardless of what
     // the caller requested -- the worker path (and getWorkerSource's
     // Blob/btoa) would otherwise fail. Node uses the web-worker import, so it

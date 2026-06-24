@@ -4,7 +4,7 @@ import * as bls12381wasmPrebuilt from "./wasm/bls12381_wasm.js";
 import { base64ToUint8Array } from "./wasm/base64.js";
 
 // Module-local singleton cache. Must NOT be on globalThis: assigning to a frozen
-// globalThis (e.g. a MetaMask Snap / SES lockdown realm) throws at module load.
+// globalThis (e.g. a SES hardened-profile realm) throws at module load.
 let curve_bls12381 = null;
 
 export default async function buildBls12381(singleThread, plugins) {
@@ -15,8 +15,8 @@ export default async function buildBls12381(singleThread, plugins) {
     if (!plugins) {
         // Vendored, uncompressed prebuilt wasm: static import (no runtime
         // wasmcurves dependency, no dynamic import) and base64-decoded without
-        // atob/DecompressionStream, so it loads in Node, browsers and SES/Snap
-        // realms alike. Also avoids recompiling the wasm on every load.
+        // atob/DecompressionStream, so it loads in Node, browsers and SES
+        // hardened realms alike. Also avoids recompiling the wasm on every load.
         // Regenerate the vendored module with `npm run gen-wasm`.
         bls12381wasm.code = base64ToUint8Array(bls12381wasmPrebuilt.code);
         bls12381wasm.pq = bls12381wasmPrebuilt.pq;
