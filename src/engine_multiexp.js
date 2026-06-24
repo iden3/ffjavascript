@@ -11,156 +11,130 @@ export default function buildMultiexp(curve, groupName) {
     const G = curve[groupName];
     const tm = G.tm;
 
-    async function _multiExpChunk(buffBases, buffScalars, inType, logger, logText) {
-        if ( ! (buffBases instanceof Uint8Array) ) {
-            if (logger) logger.error(`${logText} _multiExpChunk buffBases is not Uint8Array`);
-            throw new Error(`${logText} _multiExpChunk buffBases is not Uint8Array`);
-        }
-        if ( ! (buffScalars instanceof Uint8Array) ) {
-            if (logger) logger.error(`${logText} _multiExpChunk buffScalars is not Uint8Array`);
-            throw new Error(`${logText} _multiExpChunk buffScalars is not Uint8Array`);
-        }
-        inType = inType || "affine";
+    const MAX_CHUNK_SIZE = 1 << 22;
+    const MIN_CHUNK_SIZE = 1 << 12;
 
-        let sGIn;
-        let fnName;
-        if (groupName === "G1") {
-            if (inType === "affine") {
-                fnName = "g1m_multiexpAffine";
-                sGIn = G.F.n8*2;
-            } else {
-                fnName = "g1m_multiexp";
-                sGIn = G.F.n8*3;
-            }
-        } else if (groupName === "G2") {
-            if (inType === "affine") {
-                fnName = "g2m_multiexpAffine";
-                sGIn = G.F.n8*2;
-            } else {
-                fnName = "g2m_multiexp";
-                sGIn = G.F.n8*3;
-            }
-        } else {
-            throw new Error("Invalid group");
-        }
+    // Byte size of one input point: affine = 2 coordinates, jacobian = 3.
+    function pointSize(inType) {
+        return inType === "affine" ? G.F.n8*2 : G.F.n8*3;
+    }
+
+    // WASM export name for this group + input representation.
+    function fnNameFor(inType) {
+        const g = groupName === "G1" ? "g1m" : "g2m";
+        return inType === "affine" ? `${g}_multiexpAffine` : `${g}_multiexp`;
+    }
+
+    // Points per chunk. nChunks is derived from the scalar bit-width and rounded up
+    // to a multiple of the worker count for even load balancing (G2 points are
+    // larger, so we halve the chunk / double the count). Clamped to a sane range.
+    function chunkSizeFor(nPoints, sScalar) {
+        const bitChunkSize = pTSizes[log2(nPoints)];
+        let nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) + 1;
+        if (groupName === "G2") nChunks *= 2;
+        nChunks = (Math.floor((nChunks-1) / tm.concurrency) + 1) * tm.concurrency;
+        let chunkSize = Math.floor(nPoints / nChunks) + 1;
+        if (chunkSize > MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
+        if (chunkSize < MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
+        return chunkSize;
+    }
+
+    // Run the multiexp of one chunk on a worker; returns the partial point.
+    async function _multiExpChunk(buffBases, buffScalars, inType, logText) {
+        if (!(buffBases instanceof Uint8Array)) throw new Error(`${logText} _multiExpChunk buffBases is not Uint8Array`);
+        if (!(buffScalars instanceof Uint8Array)) throw new Error(`${logText} _multiExpChunk buffScalars is not Uint8Array`);
+        const sGIn = pointSize(inType);
         const nPoints = Math.floor(buffBases.byteLength / sGIn);
-
         if (nPoints === 0) return G.zero;
         const sScalar = Math.floor(buffScalars.byteLength / nPoints);
-        if( sScalar * nPoints !== buffScalars.byteLength) {
-            throw new Error("Scalar size does not match");
-        }
-
-        const bitChunkSize = pTSizes[log2(nPoints)];
-
-        const opPromises = [];
+        if (sScalar * nPoints !== buffScalars.byteLength) throw new Error(`${logText} Scalar size does not match`);
 
         const task = [
             {cmd: "ALLOCSET", var: 0, buff: buffBases},
             {cmd: "ALLOCSET", var: 1, buff: buffScalars},
-            {cmd: "ALLOC", var: 2, len: G.F.n8*3},
-            {cmd: "CALL", fnName: fnName, params: [
-                {var: 0}, //pBases
-                {var: 1}, // pScalars
-                {val: sScalar}, // scalarSize
-                {val: nPoints}, // nPoints
-                {var: 2} // pr
+            {cmd: "ALLOC",    var: 2, len: G.F.n8*3},
+            {cmd: "CALL", fnName: fnNameFor(inType), params: [
+                {var: 0}, {var: 1}, {val: sScalar}, {val: nPoints}, {var: 2}
             ]},
-            {cmd: "GET", out: 0, var: 2, len: G.F.n8*3}
+            {cmd: "GET", out: 0, var: 2, len: G.F.n8*3},
         ];
-        opPromises.push(
-            // transfer ownership of the buffers to the worker thread
-            G.tm.queueAction(task, [buffBases.buffer, buffScalars.buffer])
-        );
-
-        const result = await Promise.all(opPromises);
-
-        let res = G.zero;
-        for (let i=result.length-1; i>=0; i--) {
-            if (!G.isZero(res)) {
-                for (let j=0; j<bitChunkSize; j++) res = G.double(res);
-            }
-            res = G.add(res, result[i][0]);
-        }
-
-        return res;
+        // transfer the chunk buffers to the worker (zero-copy); one GET -> one point
+        const out = await tm.queueAction(task, [buffBases.buffer, buffScalars.buffer]);
+        return out[0];
     }
 
-    async function _multiExp(buffBases, buffScalars, inType, logger, logText) {
-        const MAX_CHUNK_SIZE = 1 << 22;
-        const MIN_CHUNK_SIZE = 1 << 12;
-        let sGIn;
-
-        if (groupName === "G1") {
-            if (inType === "affine") {
-                sGIn = G.F.n8*2;
-            } else {
-                sGIn = G.F.n8*3;
-            }
-        } else if (groupName === "G2") {
-            if (inType === "affine") {
-                sGIn = G.F.n8*2;
-            } else {
-                sGIn = G.F.n8*3;
-            }
-        } else {
-            throw new Error("Invalid group");
-        }
-
-        const nPoints = Math.floor(buffBases.byteLength / sGIn);
+    // Shared driver. `getChunk(byteOffset, byteLength)` supplies each bases chunk --
+    // a synchronous slice of an in-memory buffer, or an async sub-range read. At most
+    // `maxInFlight` chunks are sourced at once (Infinity = dispatch them all). The
+    // point set is partitioned across chunks, so the full multiexp is the sum of the
+    // per-chunk multiexps.
+    async function _multiExpDispatch(getChunk, buffScalars, nPoints, sGIn, sScalar, inType, maxInFlight, logger, logText) {
         if (nPoints === 0) return G.zero;
-        const sScalar = Math.floor(buffScalars.byteLength / nPoints);
-        if( sScalar * nPoints !== buffScalars.byteLength) {
-            throw new Error("Scalar size does not match");
-        }
+        const chunkSize = chunkSizeFor(nPoints, sScalar);
+        const inFlight = new Set();
+        const partials = [];
 
-        let result = [];
-        const opPromises = [];
-        const bitChunkSize = pTSizes[log2(nPoints)];
-        let nChunks = Math.floor((sScalar*8 - 1) / bitChunkSize) +1;
-
-        if (groupName === "G2") {
-            // G2 has bigger points, so we reduce chunk size to optimize memory usage
-            nChunks *= 2;
-        }
-
-        let chunkSize;
-        //chunkSize = Math.floor(nPoints / tm.concurrency) + 1;
-
-        // make nChunks multiple of tm.concurrency for optimal load balancing
-        nChunks = (Math.floor((nChunks-1) / tm.concurrency) + 1) * tm.concurrency;
-        chunkSize = Math.floor(nPoints / nChunks) + 1;
-
-        if (chunkSize>MAX_CHUNK_SIZE) chunkSize = MAX_CHUNK_SIZE;
-        if (chunkSize<MIN_CHUNK_SIZE) chunkSize = MIN_CHUNK_SIZE;
-
-        for (let i=0; i<nPoints; i += chunkSize) {
-            if (logger) logger.debug(`Multiexp start: ${logText}: ${i}/${nPoints}`);
-            const n = Math.min(nPoints - i, chunkSize);
-
-            const buffBasesChunk = buffBases.slice(i*sGIn, (i+n)*sGIn);
-            const buffScalarsChunk = buffScalars.slice(i*sScalar, (i+n)*sScalar);
-
-            opPromises.push(_multiExpChunk(buffBasesChunk, buffScalarsChunk, inType, logger, logText).then((r) => {
-                if (logger) logger.debug(`Multiexp end: ${logText}: ${i}/${nPoints}`);
+        for (let off = 0; off < nPoints; off += chunkSize) {
+            const n = Math.min(nPoints - off, chunkSize);
+            const at = off;
+            // Backpressure: block until a slot frees (Promise.race also surfaces a
+            // failed chunk promptly). With maxInFlight = Infinity this never blocks.
+            while (inFlight.size >= maxInFlight) await Promise.race(inFlight);
+            if (logger) logger.debug(`Multiexp start: ${logText}: ${at}/${nPoints}`);
+            const op = (async () => {
+                const basesChunk = await getChunk(at*sGIn, n*sGIn);
+                const scalarsChunk = buffScalars.slice(at*sScalar, (at+n)*sScalar);
+                const r = await _multiExpChunk(basesChunk, scalarsChunk, inType, logText);
+                if (logger) logger.debug(`Multiexp end: ${logText}: ${at}/${nPoints}`);
                 return r;
-            }));
+            })();
+            // settle-either-way cleanup so a rejected chunk can't wedge the set
+            const slot = op.finally(() => inFlight.delete(slot));
+            inFlight.add(slot);
+            partials.push(slot);
         }
 
-        result = await Promise.all(opPromises);
-
+        const result = await Promise.all(partials);
         let res = G.zero;
-        for (let i=result.length-1; i>=0; i--) {
-            res = G.add(res, result[i]);
-        }
-
+        for (let i = result.length-1; i >= 0; i--) res = G.add(res, result[i]);
         return res;
     }
 
-    G.multiExp = async function multiExpAffine(buffBases, buffScalars, logger, logText) {
+    // Derive nPoints/sScalar and validate before dispatching.
+    function geometry(totalBasesBytes, buffScalars, inType) {
+        const sGIn = pointSize(inType);
+        const nPoints = Math.floor(totalBasesBytes / sGIn);
+        let sScalar = 0;
+        if (nPoints > 0) {
+            sScalar = Math.floor(buffScalars.byteLength / nPoints);
+            if (sScalar * nPoints !== buffScalars.byteLength) throw new Error("Scalar size does not match");
+        }
+        return { sGIn, nPoints, sScalar };
+    }
+
+    // multiexp over an in-memory bases buffer (sliced per chunk, all dispatched at once).
+    async function _multiExp(buffBases, buffScalars, inType, logger, logText) {
+        const { sGIn, nPoints, sScalar } = geometry(buffBases.byteLength, buffScalars, inType);
+        const getChunk = (off, len) => buffBases.slice(off, off + len);
+        return _multiExpDispatch(getChunk, buffScalars, nPoints, sGIn, sScalar, inType, Infinity, logger, logText);
+    }
+
+    G.multiExp = async function multiExp(buffBases, buffScalars, logger, logText) {
         return _multiExp(buffBases, buffScalars, "jacobian", logger, logText);
     };
     G.multiExpAffine = async function multiExpAffine(buffBases, buffScalars, logger, logText) {
         return _multiExp(buffBases, buffScalars, "affine", logger, logText);
+    };
+
+    // Streaming affine multiexp: bases are produced chunk-by-chunk by `basesReader`
+    // (e.g. a direct sub-range file read) instead of being read whole and sliced --
+    // no main-thread slice copy, and the full section never sits in RAM (reads are
+    // bounded to a few in-flight chunks). Result is identical to multiExpAffine.
+    G.multiExpAffineChunked = async function multiExpAffineChunked(basesReader, totalBasesBytes, buffScalars, logger, logText) {
+        if (typeof basesReader !== "function") {
+            throw new Error(`${logText || "multiExpAffineChunked"}: basesReader must be a function (byteOffset, byteLength) => Promise<Uint8Array>`);
+        }
+        const { sGIn, nPoints, sScalar } = geometry(totalBasesBytes, buffScalars, "affine");
+        return _multiExpDispatch(basesReader, buffScalars, nPoints, sGIn, sScalar, "affine", tm.concurrency + 2, logger, logText);
     };
 }

@@ -179,6 +179,41 @@ describe("bn128", async function () {
         assert(G1.eq(accG, accG2 ));
     });
 
+    // multiExpAffineChunked must produce the exact same point as multiExpAffine,
+    // exercising the multi-chunk partition+sum and the backpressured reader path.
+    async function checkChunkedMatches(G, Fr, N) {
+        const sG = G.F.n8*2;
+        const scalars = new Uint8Array(N*Fr.n8);
+        const bases = new Uint8Array(N*sG);
+        for (let i=0; i<N; i++) {
+            const num = Fr.e(i+1);
+            scalars.set(Fr.fromMontgomery(num), i*Fr.n8);
+            bases.set(G.toAffine(G.timesFr(G.g, num)), i*sG);
+        }
+        const expected = await G.multiExpAffine(bases, scalars, null, "ref");
+        // reader returns each sub-range as a FRESH copy (.slice), mirroring a file
+        // read — so the chunk is safely transferable to a worker without detaching
+        // the source buffer.
+        const reader = async (off, len) => bases.slice(off, off+len);
+        const got = await G.multiExpAffineChunked(reader, bases.byteLength, scalars, null, "chunked");
+        assert(G.eq(expected, got));
+    }
+
+    it("multiExpAffineChunked (G1) matches multiExpAffine", async () => {
+        await checkChunkedMatches(bn128.G1, bn128.Fr, 1 << 14); // ~4 chunks
+    });
+
+    it("multiExpAffineChunked (G2) matches multiExpAffine", async () => {
+        await checkChunkedMatches(bn128.G2, bn128.Fr, 1 << 13); // ~2 chunks
+    });
+
+    it("multiExpAffineChunked rejects a non-function reader", async () => {
+        let threw = false;
+        try { await bn128.G1.multiExpAffineChunked(null, 64, new Uint8Array(32), null, "bad"); }
+        catch (e) { threw = true; }
+        assert(threw, "should throw when basesReader is not a function");
+    });
+
 
 });
 
