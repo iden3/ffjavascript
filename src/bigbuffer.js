@@ -1,5 +1,8 @@
 
-const PAGE_SIZE = ( typeof Buffer !== "undefined" && Buffer.constants && Buffer.constants.MAX_LENGTH ) ? Buffer.constants.MAX_LENGTH : (1 << 30);
+// 1 GiB page size: a deliberately conservative, fragmentation-friendly page -- not
+// the engine's max single-buffer length (~8 GiB+), which would defeat paging and
+// risk OOM on the multi-GiB G1/G2 buffers large circuits produce.
+const PAGE_SIZE = 1 << 30;
 
 export default class BigBuffer {
 
