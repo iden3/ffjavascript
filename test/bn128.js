@@ -73,6 +73,20 @@ describe("bn128", async function () {
         }
     });
 
+    it("Fr.fft consume matches non-consume and detaches the input", async () => {
+        const Fr = bn128.Fr;
+        const N = 1 << 10;
+        const a = new Uint8Array(N * Fr.n8);
+        for (let i = 0; i < N; i++) a.set(Fr.e(i + 1), i * Fr.n8);
+
+        const ref = await Fr.fft(a.slice(), "", "", null, "ref");          // copy, non-consume
+        const got = await Fr.fft(a, "", "", null, "consume", true);        // flat Uint8Array -> consumed
+
+        assert.equal(got.byteLength, ref.byteLength);
+        for (let i = 0; i < ref.byteLength; i++) assert.equal(got[i], ref[i]);
+        assert.equal(a.byteLength, 0, "consumed input buffer should be detached");
+    });
+
 
 
     it("It shoud do a big FFT/IFFT in Fr", async () => {

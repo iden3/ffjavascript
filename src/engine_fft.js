@@ -22,7 +22,12 @@ export default function buildFFT(curve, groupName) {
         return res[0];
     }
 
-    async function _fft(buff, inverse, inType, outType, logger, loggerTxt) {
+    // `consume`: when true the caller cedes ownership of `buff` -- we skip the
+    // defensive full-copy below and reverse/transfer the caller's buffer in place
+    // (its backing ArrayBuffer is detached as a result). Only pass it when the
+    // input is discarded right after the call (e.g. the groth16 IFFT->applyKey->FFT
+    // pipeline). Default false preserves the input.
+    async function _fft(buff, inverse, inType, outType, logger, loggerTxt, consume) {
 
         inType = inType || "affine";
         outType = outType || "affine";
@@ -85,7 +90,11 @@ export default function buildFFT(curve, groupName) {
         if (Array.isArray(buff)) {
             buff = array2buffer(buff, sIn);
             returnArray = true;
-        } else {
+        } else if (!consume || !ArrayBuffer.isView(buff)) {
+            // Defensive copy: the bit-reversal runs in place and chunks are
+            // transferred, so without consume we must not touch the caller's buffer.
+            // It also flattens a BigBuffer (no single .buffer to transfer) to a
+            // Uint8Array, so consume can only be honoured for an ArrayBuffer view.
             buff = buff.slice(0, buff.byteLength);
         }
 
@@ -450,12 +459,12 @@ export default function buildFFT(curve, groupName) {
     }
 
 
-    G.fft = async function(buff, inType, outType, logger, loggerTxt) {
-        return await _fft(buff, false, inType, outType, logger, loggerTxt);
+    G.fft = async function(buff, inType, outType, logger, loggerTxt, consume) {
+        return await _fft(buff, false, inType, outType, logger, loggerTxt, consume);
     };
 
-    G.ifft = async function(buff, inType, outType, logger, loggerTxt) {
-        return await _fft(buff, true, inType, outType, logger, loggerTxt);
+    G.ifft = async function(buff, inType, outType, logger, loggerTxt, consume) {
+        return await _fft(buff, true, inType, outType, logger, loggerTxt, consume);
     };
 
     G.lagrangeEvaluations = async function (buff, inType, outType, logger, loggerTxt) {
