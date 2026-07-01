@@ -19,10 +19,13 @@ export default function buildMultiexp(curve, groupName) {
         return inType === "affine" ? G.F.n8*2 : G.F.n8*3;
     }
 
-    // WASM export name for this group + input representation.
+    // WASM export name for this group + input representation. Affine input
+    // routes to the batch-affine MSM module ("...Batch"); the worker falls
+    // back to the plain in-module variant when the batch module is absent.
     function fnNameFor(inType) {
         const g = groupName === "G1" ? "g1m" : "g2m";
-        return inType === "affine" ? `${g}_multiexpAffine` : `${g}_multiexp`;
+        const noBatch = (typeof process !== "undefined" && process.env && process.env.FF_NO_BATCH);
+        return inType === "affine" ? `${g}_multiexpAffine${noBatch ? "" : "Batch"}` : `${g}_multiexp`;
     }
 
     // Points per chunk. nChunks is derived from the scalar bit-width and rounded up

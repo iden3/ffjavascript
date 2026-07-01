@@ -39,6 +39,20 @@ function optimize(b64, name) {
     }
 }
 
+// Batch-affine MSM helper module (AssemblyScript). Curve-independent: it
+// imports the field/group ops and shares the main module's memory, so one
+// binary serves bn128 and bls12381.
+{
+    const raw = readFileSync(require.resolve("wasmcurves/build/msm_batch.wasm"));
+    const { b64, before, after } = optimize(raw.toString("base64"), "msm_batch");
+    const header =
+        "// AUTO-GENERATED from wasmcurves/build/msm_batch.wasm — do not edit.\n" +
+        "// Regenerate with: npm run gen-wasm\n" +
+        "// Batch-affine MSM module; links against the main curve module at runtime.\n";
+    writeFileSync(join(outDir, "msm_batch_wasm.js"), header + `export const code = ${JSON.stringify(b64)};\n`);
+    console.log(`wrote src/wasm/msm_batch_wasm.js (wasm ${before} -> ${after} bytes)`);
+}
+
 for (const name of ["bn128", "bls12381"]) {
     const m = require(`wasmcurves/build/${name}_wasm.js`); // uncompressed prebuilt (CJS)
     const { b64, before, after } = optimize(m.code, name);

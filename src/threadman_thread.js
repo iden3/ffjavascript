@@ -4,6 +4,7 @@ export default function thread(self) {
     const MAXMEM = 32767;
     let instance;
     let memory;
+    let batchFns = null;   // batch-affine MSM entry points (per-group wrappers)
     let terminationTimeout = 1500; // milliseconds
     let terminationTimer;
     let wantToTerminate = false;
@@ -73,6 +74,39 @@ export default function thread(self) {
                 "memory": memory
             }
         });
+
+        // Optional batch-affine MSM helper module. It is curve-independent:
+        // it imports the base-field/group ops from the main instance and works
+        // on the same memory, so one binary serves G1 (f1m/g1m) and, over the
+        // quadratic extension, G2 (f2m/g2m). Instantiated once per group.
+        if (data.batchCode) {
+            let batchModule;
+            if (data.batchCode instanceof WebAssembly.Module) {
+                batchModule = data.batchCode;
+            } else {
+                batchModule = await WebAssembly.compile(new Uint8Array(data.batchCode));
+            }
+            const ex = instance.exports;
+            const mkBatch = async (f, g) => (await WebAssembly.instantiate(batchModule, {
+                env: { "memory": memory },
+                curve: {
+                    f_mul: ex[f + "_mul"], f_square: ex[f + "_square"], f_add: ex[f + "_add"],
+                    f_sub: ex[f + "_sub"], f_neg: ex[f + "_neg"], f_inverse: ex[f + "_inverse"],
+                    f_isZero: ex[f + "_isZero"], g_add: ex[g + "_add"], g_addMixed: ex[g + "_addMixed"],
+                    g_double: ex[g + "_double"], g_zero: ex[g + "_zero"], g_isZero: ex[g + "_isZero"],
+                },
+            })).exports;
+            const n8f = data.n8f;
+            batchFns = {};
+            if (ex.f1m_mul && ex.g1m_addMixed) {
+                const b = await mkBatch("f1m", "g1m");
+                batchFns["g1m_multiexpAffineBatch"] = (pB, pS, sS, n, pr) => b.multiexpAffine(pB, pS, sS, n, pr, n8f);
+            }
+            if (ex.f2m_mul && ex.g2m_addMixed) {
+                const b = await mkBatch("f2m", "g2m");
+                batchFns["g2m_multiexpAffineBatch"] = (pB, pS, sS, n, pr) => b.multiexpAffine(pB, pS, sS, n, pr, n8f * 2);
+            }
+        }
 
         if (data.terminationTimeout) {
             terminationTimeout = data.terminationTimeout;
@@ -209,7 +243,17 @@ export default function thread(self) {
                         params.push(p.val);
                     }
                 }
-                instance.exports[task[i].fnName](...params);
+                {
+                    const fname = task[i].fnName;
+                    let fn = batchFns ? batchFns[fname] : undefined;
+                    if (!fn) {
+                        fn = instance.exports[fname];
+                        // graceful fallback: "...Batch" -> plain variant when the
+                        // batch module is unavailable (same 5-arg signature)
+                        if (!fn && fname.endsWith("Batch")) fn = instance.exports[fname.slice(0, -5)];
+                    }
+                    fn(...params);
+                }
                 break;
             }
             case "GET":

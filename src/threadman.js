@@ -116,13 +116,20 @@ export default async function buildThreadManager(wasm, singleThread) {
 
     tm.code = wasm.code;
     tm.wasmModule = wasmModule;
+    // Batch-affine MSM helper module (optional): compiled once, shipped to every
+    // worker alongside the main module. n8f = base-field element size in bytes.
+    tm.batchCode = wasm.batchCode;
+    tm.batchWasmModule = wasm.batchCode ? await WebAssembly.compile(wasm.batchCode) : undefined;
+    tm.n8f = wasm.n8q;
 
     if (singleThread) {
         tm.taskManager = thread();
         await tm.taskManager([{
             cmd: "INIT",
             init: MEM_SIZE,
-            code: tm.code.slice()
+            code: tm.code.slice(),
+            batchCode: tm.batchCode ? tm.batchCode.slice() : undefined,
+            n8f: tm.n8f
         }]);
         tm.concurrency  = 1;
     } else {
@@ -267,6 +274,8 @@ export class ThreadManager {
             cmd:  "INIT",
             init: MEM_SIZE,
             code: this.wasmModule,
+            batchCode: this.batchWasmModule,
+            n8f: this.n8f,
         }]).then(() => {
             slot.initialized = true;
         });

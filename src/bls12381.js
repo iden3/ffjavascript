@@ -1,6 +1,7 @@
 import buildEngine from "./engine.js";
 import * as Scalar from "./scalar.js";
 import * as bls12381wasmPrebuilt from "./wasm/bls12381_wasm.js";
+import * as msmBatchPrebuilt from "./wasm/msm_batch_wasm.js";
 import { base64ToUint8Array } from "./wasm/base64.js";
 
 // Module-local singleton cache. Must NOT be on globalThis: assigning to a frozen
@@ -65,6 +66,10 @@ export default async function buildBls12381(singleThread, plugins) {
         bls12381wasm.r = moduleBuilder.modules.bls12381.r;
     }
 
+
+    // Batch-affine MSM helper module (curve-independent; links against the
+    // main module's exports + memory at runtime in each worker).
+    bls12381wasm.batchCode = base64ToUint8Array(msmBatchPrebuilt.code);
 
     const params = {
         name: "bls12381",
