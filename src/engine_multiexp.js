@@ -19,13 +19,36 @@ export default function buildMultiexp(curve, groupName) {
         return inType === "affine" ? G.F.n8*2 : G.F.n8*3;
     }
 
+    // Batch-affine "auto" threshold: use the batch module when a chunk's bases
+    // fit comfortably in a per-worker share of the last-level cache. Measured
+    // (20 cores, bn128): clear win up to ~1-2 MiB of bases per chunk (+10% on a
+    // full 2^16 prove), parity but extra scratch memory at ~6 MiB chunks --
+    // under full worker concurrency the fill phase is bandwidth-bound, so the
+    // fewer-multiplications advantage only materializes while the random-access
+    // set stays cache-resident.
+    const AUTO_BATCH_MAX_BASES_BYTES = 1 << 21;
+
+    // Resolve the batching mode: "auto" (default) | "enabled" | "disabled".
+    // Accepts booleans as aliases. FF_NO_BATCH=1 force-disables globally
+    // (benchmark escape hatch).
+    function batchModeOf(options) {
+        if (typeof process !== "undefined" && process.env && process.env.FF_NO_BATCH) return "disabled";
+        const m = options ? options.batch : undefined;
+        if (m === true || m === "enabled") return "enabled";
+        if (m === false || m === "disabled") return "disabled";
+        return "auto";
+    }
+
     // WASM export name for this group + input representation. Affine input
-    // routes to the batch-affine MSM module ("...Batch"); the worker falls
-    // back to the plain in-module variant when the batch module is absent.
-    function fnNameFor(inType) {
+    // routes to the batch-affine MSM module ("...Batch") depending on the
+    // batching mode; the worker falls back to the plain in-module variant
+    // when the batch module is absent.
+    function fnNameFor(inType, basesBytes, batchMode) {
         const g = groupName === "G1" ? "g1m" : "g2m";
-        const noBatch = (typeof process !== "undefined" && process.env && process.env.FF_NO_BATCH);
-        return inType === "affine" ? `${g}_multiexpAffine${noBatch ? "" : "Batch"}` : `${g}_multiexp`;
+        if (inType !== "affine") return `${g}_multiexp`;
+        const useBatch = batchMode === "enabled" ||
+            (batchMode === "auto" && basesBytes <= AUTO_BATCH_MAX_BASES_BYTES);
+        return `${g}_multiexpAffine${useBatch ? "Batch" : ""}`;
     }
 
     // Points per chunk. nChunks is derived from the scalar bit-width and rounded up
@@ -43,7 +66,7 @@ export default function buildMultiexp(curve, groupName) {
     }
 
     // Run the multiexp of one chunk on a worker; returns the partial point.
-    async function _multiExpChunk(buffBases, buffScalars, inType, logText) {
+    async function _multiExpChunk(buffBases, buffScalars, inType, batchMode, logText) {
         if (!(buffBases instanceof Uint8Array)) throw new Error(`${logText} _multiExpChunk buffBases is not Uint8Array`);
         if (!(buffScalars instanceof Uint8Array)) throw new Error(`${logText} _multiExpChunk buffScalars is not Uint8Array`);
         const sGIn = pointSize(inType);
@@ -56,7 +79,7 @@ export default function buildMultiexp(curve, groupName) {
             {cmd: "ALLOCSET", var: 0, buff: buffBases},
             {cmd: "ALLOCSET", var: 1, buff: buffScalars},
             {cmd: "ALLOC",    var: 2, len: G.F.n8*3},
-            {cmd: "CALL", fnName: fnNameFor(inType), params: [
+            {cmd: "CALL", fnName: fnNameFor(inType, buffBases.byteLength, batchMode), params: [
                 {var: 0}, {var: 1}, {val: sScalar}, {val: nPoints}, {var: 2}
             ]},
             {cmd: "GET", out: 0, var: 2, len: G.F.n8*3},
@@ -71,7 +94,7 @@ export default function buildMultiexp(curve, groupName) {
     // `maxInFlight` chunks are sourced at once (Infinity = dispatch them all). The
     // point set is partitioned across chunks, so the full multiexp is the sum of the
     // per-chunk multiexps.
-    async function _multiExpDispatch(getChunk, buffScalars, nPoints, sGIn, sScalar, inType, maxInFlight, logger, logText) {
+    async function _multiExpDispatch(getChunk, buffScalars, nPoints, sGIn, sScalar, inType, maxInFlight, batchMode, logger, logText) {
         if (nPoints === 0) return G.zero;
         const chunkSize = chunkSizeFor(nPoints, sScalar);
         const inFlight = new Set();
@@ -87,7 +110,7 @@ export default function buildMultiexp(curve, groupName) {
             const op = (async () => {
                 const basesChunk = await getChunk(at*sGIn, n*sGIn);
                 const scalarsChunk = buffScalars.slice(at*sScalar, (at+n)*sScalar);
-                const r = await _multiExpChunk(basesChunk, scalarsChunk, inType, logText);
+                const r = await _multiExpChunk(basesChunk, scalarsChunk, inType, batchMode, logText);
                 if (logger) logger.debug(`Multiexp end: ${logText}: ${at}/${nPoints}`);
                 return r;
             })();
@@ -116,28 +139,29 @@ export default function buildMultiexp(curve, groupName) {
     }
 
     // multiexp over an in-memory bases buffer (sliced per chunk, all dispatched at once).
-    async function _multiExp(buffBases, buffScalars, inType, logger, logText) {
+    async function _multiExp(buffBases, buffScalars, inType, batchMode, logger, logText) {
         const { sGIn, nPoints, sScalar } = geometry(buffBases.byteLength, buffScalars, inType);
         const getChunk = (off, len) => buffBases.slice(off, off + len);
-        return _multiExpDispatch(getChunk, buffScalars, nPoints, sGIn, sScalar, inType, Infinity, logger, logText);
+        return _multiExpDispatch(getChunk, buffScalars, nPoints, sGIn, sScalar, inType, Infinity, batchMode, logger, logText);
     }
 
     G.multiExp = async function multiExp(buffBases, buffScalars, logger, logText) {
-        return _multiExp(buffBases, buffScalars, "jacobian", logger, logText);
+        return _multiExp(buffBases, buffScalars, "jacobian", "disabled", logger, logText);
     };
-    G.multiExpAffine = async function multiExpAffine(buffBases, buffScalars, logger, logText) {
-        return _multiExp(buffBases, buffScalars, "affine", logger, logText);
+    // options.batch: "auto" (default) | "enabled" | "disabled" -- see batchModeOf.
+    G.multiExpAffine = async function multiExpAffine(buffBases, buffScalars, logger, logText, options) {
+        return _multiExp(buffBases, buffScalars, "affine", batchModeOf(options), logger, logText);
     };
 
     // Streaming affine multiexp: bases are produced chunk-by-chunk by `basesReader`
     // (e.g. a direct sub-range file read) instead of being read whole and sliced --
     // no main-thread slice copy, and the full section never sits in RAM (reads are
     // bounded to a few in-flight chunks). Result is identical to multiExpAffine.
-    G.multiExpAffineChunked = async function multiExpAffineChunked(basesReader, totalBasesBytes, buffScalars, logger, logText) {
+    G.multiExpAffineChunked = async function multiExpAffineChunked(basesReader, totalBasesBytes, buffScalars, logger, logText, options) {
         if (typeof basesReader !== "function") {
             throw new Error(`${logText || "multiExpAffineChunked"}: basesReader must be a function (byteOffset, byteLength) => Promise<Uint8Array>`);
         }
         const { sGIn, nPoints, sScalar } = geometry(totalBasesBytes, buffScalars, "affine");
-        return _multiExpDispatch(basesReader, buffScalars, nPoints, sGIn, sScalar, "affine", tm.concurrency + 2, logger, logText);
+        return _multiExpDispatch(basesReader, buffScalars, nPoints, sGIn, sScalar, "affine", tm.concurrency + 2, batchModeOf(options), logger, logText);
     };
 }

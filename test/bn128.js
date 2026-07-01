@@ -221,6 +221,26 @@ describe("bn128", async function () {
         await checkChunkedMatches(bn128.G2, bn128.Fr, 1 << 13); // ~2 chunks
     });
 
+    it("multiexp batching modes (auto/enabled/disabled) agree", async () => {
+        const G = bn128.G1, Fr = bn128.Fr;
+        const N = 1 << 12;
+        const sG = G.F.n8*2;
+        const scalars = new Uint8Array(N*Fr.n8);
+        const bases = new Uint8Array(N*sG);
+        for (let i=0; i<N; i++) {
+            const num = Fr.e(i*7+3);
+            scalars.set(Fr.fromMontgomery(num), i*Fr.n8);
+            bases.set(G.toAffine(G.timesFr(G.g, num)), i*sG);
+        }
+        const rAuto = await G.multiExpAffine(bases, scalars, null, "auto", {batch: "auto"});
+        const rOn   = await G.multiExpAffine(bases, scalars, null, "on",   {batch: "enabled"});
+        const rOff  = await G.multiExpAffine(bases, scalars, null, "off",  {batch: "disabled"});
+        const rDef  = await G.multiExpAffine(bases, scalars, null, "def");
+        assert(G.eq(rAuto, rOn));
+        assert(G.eq(rAuto, rOff));
+        assert(G.eq(rAuto, rDef));
+    });
+
     it("multiExpAffineChunked rejects a non-function reader", async () => {
         let threw = false;
         try { await bn128.G1.multiExpAffineChunked(null, 64, new Uint8Array(32), null, "bad"); }
