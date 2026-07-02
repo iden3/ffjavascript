@@ -100,7 +100,11 @@ export default function thread(self) {
             batchFns = {};
             if (ex.f1m_mul && ex.g1m_addMixed) {
                 const b = await mkBatch("f1m", "g1m");
-                batchFns["g1m_multiexpAffineBatch"] = (pB, pS, sS, n, pr) => b.multiexpAffine(pB, pS, sS, n, pr, n8f);
+                // GLV path (bn254 G1 endomorphism) when the curve advertises it;
+                // the wasm falls back internally for unexpected sizes.
+                const useGlv = data.glv && b.multiexpAffineGLV;
+                const fn = useGlv ? b.multiexpAffineGLV : b.multiexpAffine;
+                batchFns["g1m_multiexpAffineBatch"] = (pB, pS, sS, n, pr) => fn(pB, pS, sS, n, pr, n8f);
             }
             if (ex.f2m_mul && ex.g2m_addMixed) {
                 const b = await mkBatch("f2m", "g2m");

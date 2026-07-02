@@ -121,6 +121,7 @@ export default async function buildThreadManager(wasm, singleThread) {
     tm.batchCode = wasm.batchCode;
     tm.batchWasmModule = wasm.batchCode ? await WebAssembly.compile(wasm.batchCode) : undefined;
     tm.n8f = wasm.n8q;
+    tm.glv = !!wasm.glv;
 
     if (singleThread) {
         tm.taskManager = thread();
@@ -129,7 +130,8 @@ export default async function buildThreadManager(wasm, singleThread) {
             init: MEM_SIZE,
             code: tm.code.slice(),
             batchCode: tm.batchCode ? tm.batchCode.slice() : undefined,
-            n8f: tm.n8f
+            n8f: tm.n8f,
+            glv: tm.glv
         }]);
         tm.concurrency  = 1;
     } else {
@@ -276,6 +278,7 @@ export class ThreadManager {
             code: this.wasmModule,
             batchCode: this.batchWasmModule,
             n8f: this.n8f,
+            glv: this.glv,
         }]).then(() => {
             slot.initialized = true;
         });

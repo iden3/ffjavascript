@@ -68,6 +68,8 @@ export default async function buildBn128(singleThread, plugins) {
     // Batch-affine MSM helper module (curve-independent; links against the
     // main module's exports + memory at runtime in each worker).
     bn128wasm.batchCode = base64ToUint8Array(msmBatchPrebuilt.code);
+    // The batch module's GLV path hardcodes the bn254 endomorphism constants.
+    bn128wasm.glv = true;
 
     const params = {
         name: "bn128",
