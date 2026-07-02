@@ -87,19 +87,21 @@ export default function thread(self) {
                 batchModule = await WebAssembly.compile(new Uint8Array(data.batchCode));
             }
             const ex = instance.exports;
-            const mkBatch = async (f, g) => (await WebAssembly.instantiate(batchModule, {
+            const mkBatch = async (f, g, conj) => (await WebAssembly.instantiate(batchModule, {
                 env: { "memory": memory },
                 curve: {
                     f_mul: ex[f + "_mul"], f_square: ex[f + "_square"], f_add: ex[f + "_add"],
                     f_sub: ex[f + "_sub"], f_neg: ex[f + "_neg"], f_inverse: ex[f + "_inverse"],
-                    f_isZero: ex[f + "_isZero"], g_add: ex[g + "_add"], g_addMixed: ex[g + "_addMixed"],
+                    f_isZero: ex[f + "_isZero"], f_conj: ex[conj],
+                    g_add: ex[g + "_add"], g_addMixed: ex[g + "_addMixed"],
                     g_double: ex[g + "_double"], g_zero: ex[g + "_zero"], g_isZero: ex[g + "_isZero"],
                 },
             })).exports;
             const n8f = data.n8f;
             batchFns = {};
             if (ex.f1m_mul && ex.g1m_addMixed) {
-                const b = await mkBatch("f1m", "g1m");
+                // f_conj is only used by the G2 GLS path; wire a harmless copy for G1
+                const b = await mkBatch("f1m", "g1m", "f1m_copy");
                 // GLV path (bn254 G1 endomorphism) when the curve advertises it;
                 // the wasm falls back internally for unexpected sizes.
                 const useGlv = data.glv && b.multiexpAffineGLV;
@@ -107,8 +109,12 @@ export default function thread(self) {
                 batchFns["g1m_multiexpAffineBatch"] = (pB, pS, sS, n, pr) => fn(pB, pS, sS, n, pr, n8f);
             }
             if (ex.f2m_mul && ex.g2m_addMixed) {
-                const b = await mkBatch("f2m", "g2m");
-                batchFns["g2m_multiexpAffineBatch"] = (pB, pS, sS, n, pr) => b.multiexpAffine(pB, pS, sS, n, pr, n8f * 2);
+                const b = await mkBatch("f2m", "g2m", "f2m_conjugate");
+                // GLS (bn254 G2 endomorphism) when the curve advertises it; the
+                // wasm gates internally on chunk size and falls back to batch.
+                const useGls = data.glv && b.multiexpAffineGLS;
+                const fn2 = useGls ? b.multiexpAffineGLS : b.multiexpAffine;
+                batchFns["g2m_multiexpAffineBatch"] = (pB, pS, sS, n, pr) => fn2(pB, pS, sS, n, pr, n8f * 2);
             }
         }
 
