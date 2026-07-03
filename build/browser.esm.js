@@ -5217,10 +5217,8 @@ function buildMultiexp$1(curve, groupName) {
     const AUTO_BATCH_MAX_BASES_BYTES = 1 << 21;
 
     // Resolve the batching mode: "auto" (default) | "enabled" | "disabled".
-    // Accepts booleans as aliases. FF_NO_BATCH=1 force-disables globally
-    // (benchmark escape hatch).
+    // Accepts booleans as aliases.
     function batchModeOf(options) {
-        if (typeof process !== "undefined" && process.env && process.env.FF_NO_BATCH) return "disabled";
         const m = options ? options.batch : undefined;
         if (m === true || m === "enabled") return "enabled";
         if (m === false || m === "disabled") return "disabled";
