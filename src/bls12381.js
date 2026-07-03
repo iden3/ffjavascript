@@ -70,6 +70,9 @@ export default async function buildBls12381(singleThread, plugins) {
     // Batch-affine MSM helper module (curve-independent; links against the
     // main module's exports + memory at runtime in each worker).
     bls12381wasm.batchCode = base64ToUint8Array(msmBatchPrebuilt.code);
+    // The batch module's GLV path carries bls12-381 G1 constants too (G2 GLS
+    // is bn254-only; the wasm falls through internally for bls G2 sizes).
+    bls12381wasm.glv = true;
 
     const params = {
         name: "bls12381",
