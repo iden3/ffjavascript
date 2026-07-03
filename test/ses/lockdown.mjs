@@ -55,6 +55,35 @@ if (buildBn128 && buildBls12381) {
             const lhs = await c.pairing(c.G1.timesFr(c.G1.g, two), c.G2.g);
             const rhs = await c.pairing(c.G1.g, c.G2.timesFr(c.G2.g, two));
             check(c.Gt.eq(lhs, rhs), `${name}: pairing bilinearity holds under lockdown`);
+
+            // Multiexp through the batch module (the single-thread task manager
+            // instantiates the batch-affine MSM module next to the main one --
+            // a second WebAssembly.instantiate inside the hardened realm) and
+            // through the GLV/GLS endomorphism paths, checked against the
+            // plain path for agreement.
+            for (const [gName, G] of [["G1", c.G1], ["G2", c.G2]]) {
+                const N = 256;
+                const sG = G.F.n8 * 2;
+                const scalars = new Uint8Array(N * c.Fr.n8);
+                const bases = new Uint8Array(N * sG);
+                for (let i = 0; i < N; i++) {
+                    const num = c.Fr.e(i * 17 + 3);
+                    scalars.set(c.Fr.fromMontgomery(num), i * c.Fr.n8);
+                    bases.set(G.toAffine(G.timesFr(G.g, num)), i * sG);
+                }
+                const rBatch = await G.multiExpAffine(bases, scalars, null, "b", { batch: "enabled" });
+                const rNoEndo = await G.multiExpAffine(bases, scalars, null, "n", { batch: "enabled", glv: "disabled", gls: "disabled" });
+                const rPlain = await G.multiExpAffine(bases, scalars, null, "p", { batch: "disabled" });
+                check(G.eq(rBatch, rPlain) && G.eq(rNoEndo, rPlain),
+                    `${name}: ${gName} multiexp (batch/endo/plain agree) under lockdown`);
+            }
+
+            // Fr FFT roundtrip in the hardened realm
+            const nF = 1 << 10;
+            const fbuf = new Uint8Array(nF * c.Fr.n8);
+            for (let i = 0; i < nF; i++) fbuf.set(c.Fr.e(i * 31 + 7), i * c.Fr.n8);
+            const rt = await c.Fr.ifft(await c.Fr.fft(fbuf));
+            check(Buffer.from(rt).equals(Buffer.from(fbuf)), `${name}: Fr fft/ifft roundtrip under lockdown`);
             await c.terminate();
         } catch (e) {
             check(false, `${name}: threw under lockdown -- ${e && e.stack ? e.stack : e}`);
