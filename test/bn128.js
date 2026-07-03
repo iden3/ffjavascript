@@ -241,6 +241,24 @@ describe("bn128", async function () {
         assert(G.eq(rAuto, rDef));
     });
 
+    it("G2 gls option (endomorphism on/off) agrees", async () => {
+        const G = bn128.G2, Fr = bn128.Fr;
+        const N = 1 << 10;
+        const sG = G.F.n8*2;
+        const scalars = new Uint8Array(N*Fr.n8);
+        const bases = new Uint8Array(N*sG);
+        for (let i=0; i<N; i++) {
+            const num = Fr.e(i*11+5);
+            scalars.set(Fr.fromMontgomery(num), i*Fr.n8);
+            bases.set(G.toAffine(G.timesFr(G.g, num)), i*sG);
+        }
+        const rGls  = await G.multiExpAffine(bases, scalars, null, "gls",   {batch: "enabled"});
+        const rNo   = await G.multiExpAffine(bases, scalars, null, "nogls", {batch: "enabled", gls: false});
+        const rOff  = await G.multiExpAffine(bases, scalars, null, "plain", {batch: "disabled", gls: false});
+        assert(G.eq(rGls, rNo));
+        assert(G.eq(rGls, rOff));
+    });
+
     it("multiExpAffineChunked rejects a non-function reader", async () => {
         let threw = false;
         try { await bn128.G1.multiExpAffineChunked(null, 64, new Uint8Array(32), null, "bad"); }

@@ -112,9 +112,11 @@ export default function thread(self) {
                 const b = await mkBatch("f2m", "g2m", "f2m_conjugate");
                 // GLS (bn254 G2 endomorphism) when the curve advertises it; the
                 // wasm gates internally on chunk size and falls back to batch.
-                const useGls = data.glv && b.multiexpAffineGLS && !(typeof process !== "undefined" && process.env && process.env.FF_NO_GLS);
+                // The NoGls variant is selectable per call ({gls:false} option).
+                const useGls = data.glv && b.multiexpAffineGLS;
                 const fn2 = useGls ? b.multiexpAffineGLS : b.multiexpAffine;
                 batchFns["g2m_multiexpAffineBatch"] = (pB, pS, sS, n, pr) => fn2(pB, pS, sS, n, pr, n8f * 2);
+                batchFns["g2m_multiexpAffineBatchNoGls"] = (pB, pS, sS, n, pr) => b.multiexpAffine(pB, pS, sS, n, pr, n8f * 2);
             }
         }
 
@@ -258,9 +260,13 @@ export default function thread(self) {
                     let fn = batchFns ? batchFns[fname] : undefined;
                     if (!fn) {
                         fn = instance.exports[fname];
-                        // graceful fallback: "...Batch" -> plain variant when the
-                        // batch module is unavailable (same 5-arg signature)
-                        if (!fn && fname.endsWith("Batch")) fn = instance.exports[fname.slice(0, -5)];
+                        // graceful fallback: "...Batch"/"...BatchNoGls" -> plain
+                        // in-module variant when the batch module is unavailable
+                        // (same 5-arg signature)
+                        if (!fn) {
+                            const base = fname.replace(/BatchNoGls$/, "").replace(/Batch$/, "");
+                            fn = instance.exports[base];
+                        }
                     }
                     fn(...params);
                 }
