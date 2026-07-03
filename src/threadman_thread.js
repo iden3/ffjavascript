@@ -107,6 +107,8 @@ export default function thread(self) {
                 const useGlv = data.glv && b.multiexpAffineGLV;
                 const fn = useGlv ? b.multiexpAffineGLV : b.multiexpAffine;
                 batchFns["g1m_multiexpAffineBatch"] = (pB, pS, sS, n, pr) => fn(pB, pS, sS, n, pr, n8f);
+                // NoGlv variant, selectable per call ({glv: "disabled"} option)
+                batchFns["g1m_multiexpAffineBatchNoGlv"] = (pB, pS, sS, n, pr) => b.multiexpAffine(pB, pS, sS, n, pr, n8f);
             }
             if (ex.f2m_mul && ex.g2m_addMixed) {
                 const b = await mkBatch("f2m", "g2m", "f2m_conjugate");
@@ -260,11 +262,11 @@ export default function thread(self) {
                     let fn = batchFns ? batchFns[fname] : undefined;
                     if (!fn) {
                         fn = instance.exports[fname];
-                        // graceful fallback: "...Batch"/"...BatchNoGls" -> plain
+                        // graceful fallback: "...Batch[NoGls|NoGlv]" -> plain
                         // in-module variant when the batch module is unavailable
                         // (same 5-arg signature)
                         if (!fn) {
-                            const base = fname.replace(/BatchNoGls$/, "").replace(/Batch$/, "");
+                            const base = fname.replace(/Batch(NoGls|NoGlv)?$/, "");
                             fn = instance.exports[base];
                         }
                     }

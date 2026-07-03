@@ -241,6 +241,22 @@ describe("bn128", async function () {
         assert(G.eq(rAuto, rDef));
     });
 
+    it("G1 glv option (endomorphism auto/disabled) agrees", async () => {
+        const G = bn128.G1, Fr = bn128.Fr;
+        const N = 1 << 11;
+        const sG = G.F.n8*2;
+        const scalars = new Uint8Array(N*Fr.n8);
+        const bases = new Uint8Array(N*sG);
+        for (let i=0; i<N; i++) {
+            const num = Fr.e(i*13+7);
+            scalars.set(Fr.fromMontgomery(num), i*Fr.n8);
+            bases.set(G.toAffine(G.timesFr(G.g, num)), i*sG);
+        }
+        const rAuto = await G.multiExpAffine(bases, scalars, null, "glv",   {batch: "enabled"});
+        const rNo   = await G.multiExpAffine(bases, scalars, null, "noglv", {batch: "enabled", glv: "disabled"});
+        assert(G.eq(rAuto, rNo));
+    });
+
     it("G2 gls option (endomorphism on/off) agrees", async () => {
         const G = bn128.G2, Fr = bn128.Fr;
         const N = 1 << 10;
@@ -253,8 +269,8 @@ describe("bn128", async function () {
             bases.set(G.toAffine(G.timesFr(G.g, num)), i*sG);
         }
         const rGls  = await G.multiExpAffine(bases, scalars, null, "gls",   {batch: "enabled"});
-        const rNo   = await G.multiExpAffine(bases, scalars, null, "nogls", {batch: "enabled", gls: false});
-        const rOff  = await G.multiExpAffine(bases, scalars, null, "plain", {batch: "disabled", gls: false});
+        const rNo   = await G.multiExpAffine(bases, scalars, null, "nogls", {batch: "enabled", gls: "disabled"});
+        const rOff  = await G.multiExpAffine(bases, scalars, null, "plain", {batch: "disabled", gls: "disabled"});
         assert(G.eq(rGls, rNo));
         assert(G.eq(rGls, rOff));
     });
