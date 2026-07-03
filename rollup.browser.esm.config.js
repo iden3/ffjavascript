@@ -13,6 +13,13 @@ export default [
                 inlineDynamicImports: true,
             },
         ],
+        // Runtime wasm codegen toolchain. Only reachable through the custom
+        // `plugins` curve-build path (never taken when the prebuilt vendored
+        // wasm is used). Keeping it external preserves the lazy
+        // `import("wasmbuilder")`, so consumers' bundlers split it into an
+        // async chunk that never loads unless plugins are actually passed,
+        // instead of inlining the whole toolchain into every browser bundle.
+        external: ["wasmbuilder", "wasmcurves"],
         plugins: [
             replace({
                 preventAssignment: true,
