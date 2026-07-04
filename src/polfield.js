@@ -297,8 +297,8 @@ export default class PolField {
     }
 
     _fft(pall, bits, offset, step) {
-// coverage: legacy pure-JS algorithm interior kept for reference
-/* c8 ignore start */
+        // coverage: legacy pure-JS algorithm interior kept for reference
+        /* c8 ignore start */
 
         const n = 1 << bits;
         if (n==1) {
@@ -320,7 +320,7 @@ export default class PolField {
 
         return out;
     }
-/* c8 ignore stop */
+    /* c8 ignore stop */
 
     extend(p, e) {
         if (e == p.length) return p;
@@ -482,7 +482,7 @@ export default class PolField {
             /* c8 ignore start */
             throw new Error(`Internal errlr: ${n} should equal ${1<<nbits}`);
         }
-            /* c8 ignore stop */
+        /* c8 ignore stop */
 
         while (r>0) {
             if (r & 1 == 1) {
@@ -516,7 +516,7 @@ export default class PolField {
                 }
             }
         }
-            /* c8 ignore stop */
+        /* c8 ignore stop */
 
         const z = this.F.sub(tm, this.F.one);
         //        let l = this.F.mul(z,  this.F.pow(this.F.twoinv, m));
@@ -534,7 +534,7 @@ export default class PolField {
         /* c8 ignore start */
         return log2(V);
     }
-        /* c8 ignore stop */
+    /* c8 ignore stop */
 }
 
 function log2( V )

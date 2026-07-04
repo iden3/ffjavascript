@@ -137,7 +137,7 @@ export default function thread(self) {
             /* c8 ignore start */
             terminationTimeout = data.terminationTimeout;
         }
-            /* c8 ignore stop */
+        /* c8 ignore stop */
     }
 
 
@@ -190,7 +190,7 @@ export default function thread(self) {
                 }
             }
         }
-            /* c8 ignore stop */
+        /* c8 ignore stop */
     }
 
     function alloc(length) {
@@ -206,7 +206,7 @@ export default function thread(self) {
             if (requiredPages>MAXMEM) requiredPages=MAXMEM;
             memory.grow(requiredPages-currentPages);
         }
-            /* c8 ignore stop */
+        /* c8 ignore stop */
         return res;
     }
 
@@ -280,7 +280,7 @@ export default function thread(self) {
                             const base = fname.replace(/Batch(NoGls|NoGlv)?$/, "");
                             fn = instance.exports[base];
                         }
-                            /* c8 ignore stop */
+                        /* c8 ignore stop */
                     }
                     fn(...params);
                 }
@@ -323,7 +323,7 @@ export default function thread(self) {
             self.close();
         }
     }
-        /* c8 ignore stop */
+    /* c8 ignore stop */
 
     return runTask;
 }

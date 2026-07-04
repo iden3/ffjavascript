@@ -1,4 +1,4 @@
-import * as chai from "chai";
+import { assert } from "vitest";
 import buildBn128 from "../src/bn128.js";
 import buildBls12381 from "../src/bls12381.js";
 import * as Scalar from "../src/scalar.js";
@@ -7,14 +7,12 @@ import F1Field from "../src/f1field.js";
 import PolField from "../src/polfield.js";
 import ChaCha from "../src/chacha.js";
 
-const assert = chai.assert;
 
 describe("wasm curve mixed-representation dispatch", function () {
-    this.timeout(120000);
 
     let curve, Fr, G1;
-    before(async () => { curve = await buildBn128(); Fr = curve.Fr; G1 = curve.G1; });
-    after(async () => { await curve.terminate(); });
+    beforeAll(async () => { curve = await buildBn128(); Fr = curve.Fr; G1 = curve.G1; });
+    afterAll(async () => { await curve.terminate(); });
 
     it("add/sub accept every jacobian/affine combination and reject bad sizes", () => {
         const Pj = G1.timesFr(G1.g, Fr.e(7));      // jacobian
@@ -192,7 +190,6 @@ describe("wasm curve mixed-representation dispatch", function () {
 });
 
 describe("single-thread engine covers the inline thread paths", function () {
-    this.timeout(120000);
 
     it("runs fft, multiexp and batch ops through the in-process task runner", async () => {
         const curve = await buildBn128(true);
@@ -338,7 +335,6 @@ describe("utils leftover branches", function () {
 });
 
 describe("bls12381 runtime plugin build", function () {
-    this.timeout(600000);
 
     it("builds bls12381 through the wasmbuilder plugin path", async () => {
         let pluginCalled = false;

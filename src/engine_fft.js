@@ -506,7 +506,7 @@ export default function buildFFT(curve, groupName) {
         } else {
             throw new Error("Invalid group");
         }
-            /* c8 ignore stop */
+        /* c8 ignore stop */
 
         const nPoints = buff.byteLength /sIn;
         const bits = log2(nPoints);
@@ -519,8 +519,8 @@ export default function buildFFT(curve, groupName) {
         if (bits <= Fr.s) {
             return await G.ifft(buff, inType, outType, logger, loggerTxt);
         }
-// coverage: requires a 2^(s+1)-point domain (>= 16 GiB for bn128); only full-size ceremonies reach this
-/* c8 ignore start */
+        // coverage: requires a 2^(s+1)-point domain (>= 16 GiB for bn128); only full-size ceremonies reach this
+        /* c8 ignore start */
 
         if (bits > Fr.s+1) {
             if (logger) logger.error("lagrangeEvaluations input too big");
@@ -554,7 +554,7 @@ export default function buildFFT(curve, groupName) {
         buffOut.set(t1, t0.byteLength);
 
         return buffOut;
-/* c8 ignore stop */
+        /* c8 ignore stop */
     };
 
     G.fftMix = async function fftMix(buff) {

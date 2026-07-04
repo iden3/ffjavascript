@@ -50,7 +50,7 @@ export default function buildBatchApplyKey(curve, groupName) {
             /* c8 ignore start */
             throw new Error("Invalid group: " + groupName);
         }
-            /* c8 ignore stop */
+        /* c8 ignore stop */
         const nPoints = Math.floor(buff.byteLength / sGin);
         const pointsPerChunk = Math.floor(nPoints/tm.concurrency);
         const opPromises = [];

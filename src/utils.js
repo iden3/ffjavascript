@@ -220,7 +220,7 @@ export function buffReverseBits(buff, eSize) {
         /* c8 ignore start */
         throw new Error("Invalid number of pointers");
     }
-        /* c8 ignore stop */
+    /* c8 ignore stop */
     for (let i = 0; i < n; i++) {
         const r = bitReverse(i, bits);
         if (i > r) {

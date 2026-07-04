@@ -36,7 +36,7 @@ export function mulScalar(F, base, e) {
     } else {
         throw new Error("invlaud NAF");
     }
-        /* c8 ignore stop */
+    /* c8 ignore stop */
 
     for (let i=n.length-2; i>=0; i--) {
 

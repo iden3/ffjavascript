@@ -1,7 +1,6 @@
-import * as chai from "chai";
+import { assert } from "vitest";
 import buildBls12381 from "../src/bls12381.js";
 
-const assert = chai.assert;
 
 // Mirrors the multiexp-option coverage in test/bn128.js (multiExpAffine
 // batching modes, GLV/GLS endomorphism options). bn128 already exercised
@@ -17,13 +16,12 @@ const assert = chai.assert;
 // below still asserts agreement, but is confirming the fallthrough is a
 // harmless no-op rather than exercising a distinct decomposition path.
 describe("bls12381", async function () {
-    this.timeout(0);
 
     let bls12381;
-    before(async () => {
+    beforeAll(async () => {
         bls12381 = await buildBls12381();
     });
-    after(async () => {
+    afterAll(async () => {
         bls12381.terminate();
     });
 

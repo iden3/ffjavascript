@@ -84,7 +84,7 @@ function getWorkerSource() {
     } else {
         workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
     }
-        /* c8 ignore stop */
+    /* c8 ignore stop */
     return workerSource;
 }
 
@@ -115,7 +115,7 @@ export default async function buildThreadManager(wasm, singleThread) {
         /* c8 ignore start */
         singleThread = true;
     }
-        /* c8 ignore stop */
+    /* c8 ignore stop */
 
     tm.singleThread = singleThread;
     tm.initalPFree = tm.u32[0];   // Save the Pointer to free space.
@@ -163,7 +163,7 @@ export default async function buildThreadManager(wasm, singleThread) {
         if(concurrency === 0){
             concurrency = 2;
         }
-            /* c8 ignore stop */
+        /* c8 ignore stop */
 
         // Limit to 64 threads for memory reasons.
         if (concurrency>64) concurrency=64;
@@ -233,7 +233,7 @@ export class ThreadManager {
                 await tm.processWorks();
                 return;
             }
-                /* c8 ignore stop */
+            /* c8 ignore stop */
 
             if (data.error) {
                 slot.working = false;
@@ -298,7 +298,7 @@ export class ThreadManager {
                         );
                         slot.working = false;
                     }
-                        /* c8 ignore stop */
+                    /* c8 ignore stop */
                     return;
                 }
                 // fall through for "initialized" so the INIT deferred is resolved below
@@ -380,7 +380,7 @@ export class ThreadManager {
                 slot.worker.removeEventListener("message", slot.onMsg);
                 slot.worker.removeEventListener("error",   slot.onError);
             }
-                /* c8 ignore stop */
+            /* c8 ignore stop */
             slot.initializing = false;
             slot.working = false;
             tm.bootFailures++;
@@ -416,7 +416,7 @@ export class ThreadManager {
             if (_deferred) _deferred.reject(err);
             throw err;
         }
-            /* c8 ignore stop */
+        /* c8 ignore stop */
         slot.working = true;
         slot.pendingDeferred = _deferred ? _deferred : new Deferred();
         // postMessage's behavior for an already-detached transfer buffer is
@@ -483,7 +483,7 @@ export class ThreadManager {
                 this._failQueueIfUnservable(this.bootBroken);
                 return;
             }
-                /* c8 ignore stop */
+            /* c8 ignore stop */
             let initializingCount = 0;
             for (let i = 0; i < this.concurrency; i++) {
                 const slot = this.pool[i];
@@ -527,7 +527,7 @@ export class ThreadManager {
                 if (idx >= 0) this.actionQueue.splice(idx, 1);
                 d.reject(err);
             }
-                /* c8 ignore stop */
+            /* c8 ignore stop */
         }
         return d.promise;
     }
@@ -537,7 +537,7 @@ export class ThreadManager {
         /* c8 ignore start */
         this.u32[0] = this.initalPFree;
     }
-        /* c8 ignore stop */
+    /* c8 ignore stop */
 
     allocBuff(buff) {
         const pointer = this.alloc(buff.byteLength);

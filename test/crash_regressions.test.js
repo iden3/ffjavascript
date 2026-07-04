@@ -6,7 +6,6 @@ import path from "path";
 // so each harness runs as its OWN process -- like test/ses/lockdown.mjs --
 // and this file just asserts a clean exit / expected output.
 describe("multiexp crash regressions", function () {
-    this.timeout(60000);
 
     it("multiExpAffineChunked + terminate() survives a mid-stream basesReader failure", () => {
         const dir = path.dirname(fileURLToPath(import.meta.url));
@@ -18,7 +17,6 @@ describe("multiexp crash regressions", function () {
 });
 
 describe("threadman crash regressions", function () {
-    this.timeout(60000);
 
     it("survives a worker-side task error without crashing the process", () => {
         const dir = path.dirname(fileURLToPath(import.meta.url));

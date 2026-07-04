@@ -1,3 +1,4 @@
+import { assert } from "vitest";
 /*
     Copyright 2018 0kims association.
 
@@ -16,9 +17,6 @@
     You should have received a copy of the GNU General Public License along with
     zksnark JavaScript library. If not, see <https://www.gnu.org/licenses/>.
 */
-
-import * as chai from "chai";
-
 import * as Scalar from "../src/scalar.js";
 import ZqField from "../src/f1field.js";
 import RatField from "../src/ratfield.js";
@@ -26,9 +24,6 @@ import RatField from "../src/ratfield.js";
 const q  = Scalar.fromString("21888242871839275222246405745257275088548364400416034343698204186575808495617");
 const Z = new ZqField(q);
 const R = new RatField(Z);
-
-const assert = chai.assert;
-
 function r(a,b) {
     return [Z.e(a), Z.e(b)];
 }

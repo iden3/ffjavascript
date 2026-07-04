@@ -1,8 +1,7 @@
-import * as chai from "chai";
+import { assert } from "vitest";
 import buildBn128 from "../src/bn128.js";
 import buildBls12381 from "../src/bls12381.js";
 
-const assert = chai.assert;
 
 // isValid() has zero test coverage anywhere else in this repo, yet it is the
 // function that guards against an off-curve/invalid-curve point sneaking in
@@ -10,16 +9,15 @@ const assert = chai.assert;
 // covers both curves, both groups, and both valid and deliberately corrupted
 // points.
 describe("curve point validation (isValid)", function () {
-    this.timeout(60000);
 
     const curves = [];
 
-    before(async () => {
+    beforeAll(async () => {
         curves.push({ name: "bn128", curve: await buildBn128() });
         curves.push({ name: "bls12381", curve: await buildBls12381() });
     });
 
-    after(async () => {
+    afterAll(async () => {
         for (const { curve } of curves) await curve.terminate();
     });
 

@@ -1,10 +1,9 @@
-import * as chai from "chai";
+import { assert } from "vitest";
 import buildBn128 from "../src/bn128.js";
 import buildBls12381 from "../src/bls12381.js";
 import * as Scalar from "../src/scalar.js";
 import ChaCha from "../src/chacha.js";
 
-const assert = chai.assert;
 
 // Cross-validation against external references:
 //  - ChaCha against RFC 8439 (the block function is standard ChaCha20)
@@ -169,14 +168,13 @@ describe("RFC 8439: the ChaCha rng is standard ChaCha20", function () {
 });
 
 describe("bn254 group arithmetic vs an independent BigInt reference", function () {
-    this.timeout(300000);
 
     const q = 21888242871839275222246405745257275088696311157297823662689037894645226208583n;
     const r = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 
     let curve;
-    before(async () => { curve = await buildBn128(); });
-    after(async () => { await curve.terminate(); });
+    beforeAll(async () => { curve = await buildBn128(); });
+    afterAll(async () => { await curve.terminate(); });
 
     it("G1 scalar multiples match the affine reference implementation", () => {
         const Fp = makeFp(q);
@@ -241,7 +239,6 @@ describe("bn254 group arithmetic vs an independent BigInt reference", function (
 });
 
 describe("BLS12-381 parameters vs the IETF CFRG pairing-friendly-curves draft", function () {
-    this.timeout(600000);
 
     // Draft-irtf-cfrg-pairing-friendly-curves §4.2.1 (also the zkcrypto spec)
     const p = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaabn;
@@ -250,8 +247,8 @@ describe("BLS12-381 parameters vs the IETF CFRG pairing-friendly-curves draft", 
     const g1y = 0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1n;
 
     let curve;
-    before(async () => { curve = await buildBls12381(true); });
-    after(async () => { await curve.terminate(); });
+    beforeAll(async () => { curve = await buildBls12381(true); });
+    afterAll(async () => { await curve.terminate(); });
 
     it("field modulus and group order match the draft", () => {
         assert.strictEqual(curve.q, p);

@@ -1,12 +1,8 @@
-import * as chai from "chai";
+import { assert } from "vitest";
 import buildBn128 from "../src/bn128.js";
 import {log2} from "../src/utils.js";
 import BigBuffer from "../src/bigbuffer.js";
-
-const assert = chai.assert;
-
 describe("bn128", async function () {
-    this.timeout(0);
 
     const logger = {
         error: (msg) => { console.log("ERROR: "+msg); },
@@ -16,11 +12,11 @@ describe("bn128", async function () {
     };
 
     let bn128;
-    before( async() => {
+    beforeAll( async() => {
         bn128 = await buildBn128();
         console.log(bn128.Fr.toString(bn128.Fr.w[28]));
     });
-    after( async() => {
+    afterAll( async() => {
         bn128.terminate();
     });
 

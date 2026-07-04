@@ -39,7 +39,7 @@ export default class WasmField1 {
             /* c8 ignore start */
             throw new Error("n8 must be a multiple of 8");
         }
-            /* c8 ignore stop */
+        /* c8 ignore stop */
 
         this.half = Scalar.shiftRight(this.p, Scalar.one);
         this.nqr = this.two;
@@ -265,7 +265,7 @@ export default class WasmField1 {
             /* c8 ignore start */
             throw new Error("Invalid buffer size");
         }
-            /* c8 ignore stop */
+        /* c8 ignore stop */
         const pointsPerChunk = Math.floor(nPoints/this.tm.concurrency);
         const opPromises = [];
         for (let i=0; i<this.tm.concurrency; i++) {

@@ -15,7 +15,7 @@ export default function buildSqrt (F) {
                     /* c8 ignore start */
                     throw new Error("Field withot sqrt");
                 }
-                    /* c8 ignore stop */
+                /* c8 ignore stop */
             } else if (Scalar.eq(Scalar.mod(F.p, 8), 5 )) {
                 alg3_atkin(F);
             } else {
@@ -23,7 +23,7 @@ export default function buildSqrt (F) {
                 /* c8 ignore start */
                 throw new Error("Field withot sqrt");
             }
-                /* c8 ignore stop */
+            /* c8 ignore stop */
         } else if (Scalar.eq(Scalar.mod(F.p, 4), 3 )) {
             alg2_shanks(F);
         }
@@ -38,7 +38,7 @@ export default function buildSqrt (F) {
             /* c8 ignore start */
             alg8_complex(F);
         }
-            /* c8 ignore stop */
+        /* c8 ignore stop */
 
     }
 }
@@ -150,7 +150,7 @@ function alg9_adj(F) {
             return x;
         }
     };
-            /* c8 ignore stop */
+    /* c8 ignore stop */
 
     F.sqrt = function(a) {
         const F = this;

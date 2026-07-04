@@ -1,4 +1,4 @@
-import * as chai from "chai";
+import { assert } from "vitest";
 import buildBn128 from "../src/bn128.js";
 import * as Scalar from "../src/scalar.js";
 import * as utils from "../src/utils.js";
@@ -6,18 +6,16 @@ import BigBuffer from "../src/bigbuffer.js";
 import { getCurveFromName, getCurveFromQ, getCurveFromR } from "../src/curves.js";
 import { base64ToUint8Array } from "../src/wasm/base64.js";
 
-const assert = chai.assert;
 
 describe("engine batch operations", function () {
-    this.timeout(120000);
 
     let curve, Fr, G1, G2;
 
-    before(async () => {
+    beforeAll(async () => {
         curve = await buildBn128();
         Fr = curve.Fr; G1 = curve.G1; G2 = curve.G2;
     });
-    after(async () => {
+    afterAll(async () => {
         await curve.terminate();
     });
 
@@ -322,7 +320,6 @@ describe("engine batch operations", function () {
 });
 
 describe("curves module", function () {
-    this.timeout(120000);
 
     it("resolves curves by name, q and r, rejecting unknown values", async () => {
         const c1 = await getCurveFromName("bn128", true);

@@ -91,7 +91,7 @@ export default class FFT {
             /* c8 ignore start */
             throw new Error("Size must be multiple of 2");
         }
-            /* c8 ignore stop */
+        /* c8 ignore stop */
         const res = __fft(this, p, bits, 0, 1);
         return res;
     }
@@ -107,7 +107,7 @@ export default class FFT {
             /* c8 ignore start */
             throw new Error("Size must be multiple of 2");
         }
-            /* c8 ignore stop */
+        /* c8 ignore stop */
         const res =  __fft(this, p, bits, 0, 1);
         const twoinvm = this.F.inv( this.F.mulScalar(this.F.one, m) );
         const resn = new Array(m);

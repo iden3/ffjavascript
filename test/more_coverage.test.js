@@ -1,4 +1,4 @@
-import * as chai from "chai";
+import { assert } from "vitest";
 import * as Scalar from "../src/scalar.js";
 import buildBn128 from "../src/bn128.js";
 import F1Field from "../src/f1field.js";
@@ -9,7 +9,6 @@ import ChaCha from "../src/chacha.js";
 import { getRandomBytes } from "../src/random.js";
 import { base64ToUint8Array } from "../src/wasm/base64.js";
 
-const assert = chai.assert;
 
 const r = Scalar.fromString("21888242871839275222246405745257275088548364400416034343698204186575808495617");
 
@@ -389,7 +388,6 @@ describe("Scalar module sweep", function () {
 });
 
 describe("engine construction variants", function () {
-    this.timeout(300000);
 
     it("builds bn128 through the runtime wasmbuilder plugin path", async () => {
         let pluginCalled = false;

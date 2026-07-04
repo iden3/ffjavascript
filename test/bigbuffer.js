@@ -1,7 +1,6 @@
-import * as chai from "chai";
+import { assert } from "vitest";
 import BigBuffer from "../src/bigbuffer.js";
 
-const assert = chai.assert;
 
 // PAGE_SIZE is a private constant in src/bigbuffer.js (1 << 30, i.e. 1 GiB).
 // Every test elsewhere in this suite uses KB-sized buffers, so firstPage ===
@@ -11,7 +10,6 @@ const assert = chai.assert;
 const PAGE_SIZE = 1 << 30;
 
 describe("BigBuffer page-boundary correctness", function () {
-    this.timeout(120000);
 
     it("allocates exactly 1 page at size == PAGE_SIZE, 2 pages just above it", () => {
         const atThreshold = new BigBuffer(PAGE_SIZE);

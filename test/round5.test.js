@@ -1,4 +1,4 @@
-import * as chai from "chai";
+import { assert } from "vitest";
 import buildBn128 from "../src/bn128.js";
 import * as Scalar from "../src/scalar.js";
 import * as utils from "../src/utils.js";
@@ -8,14 +8,12 @@ import { getCurveFromName, getCurveFromQ, getCurveFromR } from "../src/curves.js
 import { getRandomBytes } from "../src/random.js";
 import nodeCrypto from "crypto";
 
-const assert = chai.assert;
 
 describe("wasm curve invalid-input guards and zero serialization", function () {
-    this.timeout(120000);
 
     let curve, Fr, G1;
-    before(async () => { curve = await buildBn128(); Fr = curve.Fr; G1 = curve.G1; });
-    after(async () => { await curve.terminate(); });
+    beforeAll(async () => { curve = await buildBn128(); Fr = curve.Fr; G1 = curve.G1; });
+    afterAll(async () => { await curve.terminate(); });
 
     it("every unary/scalar op rejects a malformed point size", () => {
         const bad = new Uint8Array(7);
@@ -154,11 +152,10 @@ describe("wasm curve invalid-input guards and zero serialization", function () {
 });
 
 describe("exported FFT helpers for Fr and G2", function () {
-    this.timeout(120000);
 
     let curve, Fr;
-    before(async () => { curve = await buildBn128(); Fr = curve.Fr; });
-    after(async () => { await curve.terminate(); });
+    beforeAll(async () => { curve = await buildBn128(); Fr = curve.Fr; });
+    afterAll(async () => { await curve.terminate(); });
 
     // NOTE: Fr.fftMix/fftJoin exist but compute sizes as G.F.n8*3 (three
     // point coordinates), which is meaningless for the scalar field -- the Fr
@@ -201,11 +198,10 @@ describe("exported FFT helpers for Fr and G2", function () {
 });
 
 describe("last-mile engine edges", function () {
-    this.timeout(120000);
 
     let curve, Fr, G1;
-    before(async () => { curve = await buildBn128(); Fr = curve.Fr; G1 = curve.G1; });
-    after(async () => { await curve.terminate(); });
+    beforeAll(async () => { curve = await buildBn128(); Fr = curve.Fr; G1 = curve.G1; });
+    afterAll(async () => { await curve.terminate(); });
 
     it("Fr.lagrangeEvaluations delegates to ifft for field elements", async () => {
         const n = 8;
@@ -273,7 +269,6 @@ describe("last-mile engine edges", function () {
 });
 
 describe("curves resolve bls12381 too", function () {
-    this.timeout(300000);
 
     it("by name, q and r", async () => {
         const c = await getCurveFromName("bls12-381", true);

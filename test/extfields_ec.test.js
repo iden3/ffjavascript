@@ -1,4 +1,4 @@
-import * as chai from "chai";
+import { assert } from "vitest";
 import * as Scalar from "../src/scalar.js";
 import buildBn128 from "../src/bn128.js";
 import F1Field from "../src/f1field.js";
@@ -7,7 +7,6 @@ import F3Field from "../src/f3field.js";
 import EC from "../src/ec.js";
 import ChaCha from "../src/chacha.js";
 
-const assert = chai.assert;
 
 // bn128 base field prime
 const q = Scalar.fromString("21888242871839275222246405745257275088696311157297823662689037894645226208583");
@@ -34,7 +33,6 @@ function checkFieldAxioms(F, sample) {
 }
 
 describe("F2Field", function () {
-    this.timeout(60000);
 
     // bn128's Fq2: nonResidue = -1
     const F1 = new F1Field(q);
@@ -105,7 +103,6 @@ describe("F2Field", function () {
 });
 
 describe("F3Field", function () {
-    this.timeout(60000);
 
     // 2 is not a cube mod 7 (cubes mod 7 are {1, 6})
     const F1 = new F1Field(Scalar.e(7));
@@ -144,17 +141,16 @@ describe("F3Field", function () {
 });
 
 describe("EC (pure JS curve) vs the wasm bn128 oracle", function () {
-    this.timeout(120000);
 
     let bn128;
     const F = new F1Field(q);
     const ec = new EC(F, [F.e(1), F.e(2)]);
     ec.b = F.e(3); // y^2 = x^3 + 3, needed by fromRng
 
-    before(async () => {
+    beforeAll(async () => {
         bn128 = await buildBn128(true);
     });
-    after(async () => {
+    afterAll(async () => {
         bn128.terminate();
     });
 

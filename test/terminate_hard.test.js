@@ -1,7 +1,6 @@
-import * as chai from "chai";
+import { assert } from "vitest";
 import buildBn128 from "../src/bn128.js";
 
-const assert = chai.assert;
 
 // Regression for the runtime-portability of teardown: tm.terminate() used to
 // only postMessage TERMINATE and rely on the worker's self.close() -- which
@@ -9,7 +8,6 @@ const assert = chai.assert;
 // alive and the process could never exit). terminate() now also hard-kills
 // via worker.terminate() and releases every pool slot.
 describe("thread manager teardown", function () {
-    this.timeout(60000);
 
     it("terminate() releases every pool slot after real work, and is idempotent", async () => {
         const curve = await buildBn128();
