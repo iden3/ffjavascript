@@ -56,16 +56,12 @@ export default function thread(self) {
     async function init(data) {
         let wasmModule;
         if (data.code instanceof WebAssembly.Module) {
-            console.log("Using precompiled WebAssembly.Module");
             wasmModule = data.code;
         } else {
-            console.log("Compiling WebAssembly.Module");
             const code = new Uint8Array(data.code);
             wasmModule = await WebAssembly.compile(code);
         }
         memory = new WebAssembly.Memory({initial:data.init, maximum: MAXMEM});
-
-        console.log("Initialized thread with memory", memory.buffer.byteLength / 1024 / 1024, "MB");
 
         instance = await WebAssembly.instantiate(wasmModule, {
             env: {
@@ -185,7 +181,6 @@ export default function thread(self) {
             let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;
             if (requiredPages>MAXMEM) requiredPages=MAXMEM;
             memory.grow(requiredPages-currentPages);
-            console.log("Growing memory to", memory.buffer.byteLength / 1024 / 1024, "MB");
         }
         return res;
     }
@@ -228,17 +223,9 @@ export default function thread(self) {
                 break;
             }
             case "ALLOCSET":
-                if (task[i].len / 1024 / 1024 > 25) {
-                    console.log("tasks", task);
-                    //console.trace();
-                }
                 ctx.vars[task[i].var] = allocBuffer(task[i].buff);
                 break;
             case "ALLOC":
-                if (task[i].len / 1024 / 1024 > 25) {
-                    console.log("tasks", task);
-                    //console.trace();
-                }
                 ctx.vars[task[i].var] = alloc(task[i].len);
                 break;
             case "SET":
@@ -299,7 +286,6 @@ export default function thread(self) {
     function terminate() {
         clearTimeout(terminationTimer);
         if (self) {
-            console.log("TERMINATE");
             self.postMessage({status: "terminated"});
             self.close();
         }
