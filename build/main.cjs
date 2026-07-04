@@ -4,7 +4,6 @@ var crypto = require('crypto');
 var os = require('os');
 var Worker = require('web-worker');
 
-/* global BigInt */
 const hexLen = [ 0, 1, 2, 2, 3, 3, 3, 3, 4 ,4 ,4 ,4 ,4 ,4 ,4 ,4];
 
 function fromString(s, radix) {
@@ -349,7 +348,7 @@ class PolField {
 
 
         this.roots = [];
-/*        for (let i=0; i<16; i++) {
+        /*        for (let i=0; i<16; i++) {
             let r = this.F.one;
             n = 1 << i;
             const rootsi = new Array(n);
@@ -1451,8 +1450,6 @@ function __fft(PF, pall, bits, offset, step) {
 
     return out;
 }
-
-/* global BigInt */
 
 class ZqField {
     constructor(p) {
@@ -2767,8 +2764,6 @@ class EC {
 
 
 }
-
-/* global BigInt */
 
 function stringifyBigInts(o) {
     if (typeof o == "bigint" || o.eq !== undefined) {
@@ -4249,8 +4244,6 @@ class WasmCurve {
 
 }
 
-/* global WebAssembly */
-
 function thread(self) {
     const MAXMEM = 32767;
     let instance;
@@ -4540,6 +4533,9 @@ function thread(self) {
         clearTimeout(terminationTimer);
         if (terminationTimeout > 0) {
             terminationTimer = setTimeout(() => {
+                // 2-phase termination: notify main thread first; close only after
+                // it acks with TERMINATE. This prevents the race where the main
+                // thread dispatches a task to a worker that has already closed.
                 if (self) self.postMessage({status: "want_to_terminate"});
             }, terminationTimeout);
         }
