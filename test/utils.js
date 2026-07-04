@@ -1,9 +1,6 @@
-import * as chai from "chai";
+import { assert } from "vitest";
 import * as ScalarN from "../src/scalar.js";
 import * as utilsN from "../src/utils.js";
-
-const assert = chai.assert;
-
 describe("Utils native", () => {
     const num = ScalarN.e("21888242871839275222246405745257275088614511777268538073601725287587578984328");
 
