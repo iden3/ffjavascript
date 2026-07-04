@@ -1,4 +1,4 @@
-import {log2, buffReverseBits, array2buffer, buffer2array} from "./utils.js";
+import {log2, array2buffer, buffer2array} from "./utils.js";
 import BigBuffer from "./bigbuffer.js";
 
 

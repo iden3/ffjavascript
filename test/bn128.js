@@ -100,7 +100,7 @@ describe("bn128", async function () {
         const Ainv = await bn128.Fr.ifft(A);
 
         for (let i=0; i<N; i++) {
-//            console.log(Fr.toString(Ainv[i]));
+            //console.log(Fr.toString(Ainv[i]));
             assert(Fr.eq(a[i], Ainv[i]));
         }
     });
@@ -120,7 +120,7 @@ describe("bn128", async function () {
         const Ainv = await bn128.Fr.ifft(A);
 
         for (let i=0; i<N; i++) {
-//            console.log(Fr.toString(Ainv[i]));
+            //console.log(Fr.toString(Ainv[i]));
             assert(Fr.eq(a[i], Ainv[i]));
         }
 
@@ -278,7 +278,7 @@ describe("bn128", async function () {
     it("multiExpAffineChunked rejects a non-function reader", async () => {
         let threw = false;
         try { await bn128.G1.multiExpAffineChunked(null, 64, new Uint8Array(32), null, "bad"); }
-        catch (e) { threw = true; }
+        catch { threw = true; }
         assert(threw, "should throw when basesReader is not a function");
     });
 

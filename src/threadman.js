@@ -38,10 +38,6 @@ class Deferred {
     }
 }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 // WorkerSlot holds the native Worker and all per-worker state.
 // Each call to startWorker() creates a fresh WorkerSlot instance.
 // Message handlers close over the slot reference so that stale messages

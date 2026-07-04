@@ -1,4 +1,3 @@
-/* global WebAssembly */
 
 export default function thread(self) {
     const MAXMEM = 32767;
@@ -7,7 +6,6 @@ export default function thread(self) {
     let batchFns = null;   // batch-affine MSM entry points (per-group wrappers)
     let terminationTimeout = 1500; // milliseconds
     let terminationTimer;
-    let wantToTerminate = false;
 
     if (self) {
         self.onmessage = function(e) {
@@ -209,7 +207,6 @@ export default function thread(self) {
 
     function runTask(task) {
         clearTimeout(terminationTimer);
-        wantToTerminate = false;
         if (task[0].cmd === "INIT") {
             return init(task[0]);
         }
@@ -294,7 +291,6 @@ export default function thread(self) {
                 // 2-phase termination: notify main thread first; close only after
                 // it acks with TERMINATE. This prevents the race where the main
                 // thread dispatches a task to a worker that has already closed.
-                wantToTerminate = true;
                 if (self) self.postMessage({status: "want_to_terminate"});
             }, terminationTimeout);
         }
