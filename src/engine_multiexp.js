@@ -110,30 +110,43 @@ export default function buildMultiexp(curve, groupName) {
         const inFlight = new Set();
         const partials = [];
 
-        for (let off = 0; off < nPoints; off += chunkSize) {
-            const n = Math.min(nPoints - off, chunkSize);
-            const at = off;
-            // Backpressure: block until a slot frees (Promise.race also surfaces a
-            // failed chunk promptly). With maxInFlight = Infinity this never blocks.
-            while (inFlight.size >= maxInFlight) await Promise.race(inFlight);
-            if (logger) logger.debug(`Multiexp start: ${logText}: ${at}/${nPoints}`);
-            const op = (async () => {
-                const basesChunk = await getChunk(at*sGIn, n*sGIn);
-                const scalarsChunk = buffScalars.slice(at*sScalar, (at+n)*sScalar);
-                const r = await _multiExpChunk(basesChunk, scalarsChunk, inType, batchMode, endoMode, logText);
-                if (logger) logger.debug(`Multiexp end: ${logText}: ${at}/${nPoints}`);
-                return r;
-            })();
-            // settle-either-way cleanup so a rejected chunk can't wedge the set
-            const slot = op.finally(() => inFlight.delete(slot));
-            inFlight.add(slot);
-            partials.push(slot);
-        }
+        try {
+            for (let off = 0; off < nPoints; off += chunkSize) {
+                const n = Math.min(nPoints - off, chunkSize);
+                const at = off;
+                // Backpressure: block until a slot frees (Promise.race also surfaces a
+                // failed chunk promptly). With maxInFlight = Infinity this never blocks.
+                while (inFlight.size >= maxInFlight) await Promise.race(inFlight);
+                if (logger) logger.debug(`Multiexp start: ${logText}: ${at}/${nPoints}`);
+                const op = (async () => {
+                    const basesChunk = await getChunk(at*sGIn, n*sGIn);
+                    const scalarsChunk = buffScalars.slice(at*sScalar, (at+n)*sScalar);
+                    const r = await _multiExpChunk(basesChunk, scalarsChunk, inType, batchMode, endoMode, logText);
+                    if (logger) logger.debug(`Multiexp end: ${logText}: ${at}/${nPoints}`);
+                    return r;
+                })();
+                // settle-either-way cleanup so a rejected chunk can't wedge the set
+                const slot = op.finally(() => inFlight.delete(slot));
+                inFlight.add(slot);
+                partials.push(slot);
+            }
 
-        const result = await Promise.all(partials);
-        let res = G.zero;
-        for (let i = result.length-1; i >= 0; i--) res = G.add(res, result[i]);
-        return res;
+            const result = await Promise.all(partials);
+            let res = G.zero;
+            for (let i = result.length-1; i >= 0; i--) res = G.add(res, result[i]);
+            return res;
+        } catch (err) {
+            // A chunk failed (bad read, worker error, ...). Other chunks
+            // dispatched earlier may still be running against workers; drain
+            // them here so every promise has a handler attached before we
+            // return control to the caller. Without this, a caller that
+            // reacts to the rejection by tearing down workers (e.g.
+            // ThreadManager.terminate()) can abort an still-in-flight chunk;
+            // its worker-error rejection would then have no listener and
+            // crash the process as an unhandled rejection.
+            await Promise.allSettled(partials);
+            throw err;
+        }
     }
 
     // Derive nPoints/sScalar and validate before dispatching.
