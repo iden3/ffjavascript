@@ -194,7 +194,7 @@ export class ThreadManager {
                     slot.initializing = false;
                     tm.pool[slotIndex] = null;
                 }
-                throw new Error("Worker error: " + data.error);
+                return;
             }
 
             if (data.status) {
@@ -250,7 +250,6 @@ export class ThreadManager {
                     slot.pendingDeferred.reject(new Error("Worker error: " + e.message));
                 }
             }
-            throw new Error("Worker error: " + e.message);
         };
     }
 
@@ -308,7 +307,17 @@ export class ThreadManager {
             const slot = this.pool[i];
             if (slot && slot.initialized && !slot.working) {
                 const work = this.actionQueue.shift();
-                await this.postAction(i, work.data, work.transfers, work.deferred);
+                // postAction's returned promise follows the task's own
+                // completion (slot.pendingDeferred.promise), not just
+                // dispatch. work.deferred is that same promise object, and
+                // its original queueAction() caller holds their own
+                // reference to it -- catching the task's eventual rejection
+                // here (a fire-and-forget call site with no caller of its
+                // own to propagate to) does not suppress it for them.
+                // Without this, a task failing while processWorks() runs
+                // from an event-listener callback (not from queueAction's
+                // own call stack) would surface as an unhandled rejection.
+                await this.postAction(i, work.data, work.transfers, work.deferred).catch(() => {});
             }
         }
 

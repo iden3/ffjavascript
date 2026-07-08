@@ -16,3 +16,13 @@ describe("multiexp crash regressions", function () {
         execFileSync(process.execPath, [harness], { stdio: "inherit" });
     });
 });
+
+describe("threadman crash regressions", function () {
+    this.timeout(60000);
+
+    it("survives a worker-side task error without crashing the process", () => {
+        const dir = path.dirname(fileURLToPath(import.meta.url));
+        const harness = path.join(dir, "threadman", "worker_task_error.mjs");
+        execFileSync(process.execPath, [harness], { stdio: "inherit" });
+    });
+});
