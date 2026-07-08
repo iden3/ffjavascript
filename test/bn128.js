@@ -106,6 +106,27 @@ describe("bn128", async function () {
     });
 
 
+    it("Fr.fft/ifft round-trip correctly at boundary sizes N=1 and N=2", async () => {
+        const Fr = bn128.Fr;
+        for (const N of [1, 2]) {
+            const buf = new Uint8Array(N * Fr.n8);
+            for (let i = 0; i < N; i++) buf.set(Fr.e(i + 1), i * Fr.n8);
+            const fft = await Fr.fft(buf);
+            const back = await Fr.ifft(fft);
+            for (let i = 0; i < N; i++) {
+                assert(Fr.eq(Fr.e(i + 1), back.slice(i * Fr.n8, (i + 1) * Fr.n8)));
+            }
+        }
+    });
+
+    it("Fr.fft rejects N=0 with a clear error instead of hanging or crashing", async () => {
+        const Fr = bn128.Fr;
+        let threw = false;
+        try { await Fr.fft(new Uint8Array(0)); }
+        catch { threw = true; }
+        assert(threw, "fft on an empty buffer should throw, not hang or silently return garbage");
+    });
+
     it("It shoud do a big FFTExt/IFFTExt in Fr", async () => {
         const Fr = bn128.Fr;
         const N = 16;
@@ -282,6 +303,17 @@ describe("bn128", async function () {
         assert(threw, "should throw when basesReader is not a function");
     });
 
+    it("multiExpAffine rejects a scalar buffer whose length doesn't divide evenly across the bases", async () => {
+        const G = bn128.G1, Fr = bn128.Fr;
+        const N = 10;
+        const bases = new Uint8Array(N * G.F.n8 * 2);
+        // Not a multiple of N -- geometry() can't derive a consistent sScalar.
+        const badScalars = new Uint8Array(N * Fr.n8 + 3);
+        let threw = false;
+        try { await G.multiExpAffine(bases, badScalars, null, "mismatch"); }
+        catch { threw = true; }
+        assert(threw, "should throw when scalar buffer size is inconsistent with the bases count");
+    });
 
 });
 
