@@ -64,9 +64,9 @@ for (const name of ["bn128", "bls12381"]) {
     const body = keys.map((k) => `export const ${k} = ${JSON.stringify(out[k])};`).join("\n");
     const header =
         `// AUTO-GENERATED from wasmcurves/build/${name}_wasm.js — do not edit.\n` +
-        `// Regenerate with: npm run gen-wasm\n` +
-        `// 'code' is base64 of the wasm-opt -O2 optimized wasm; the rest are\n` +
-        `// pointer offsets / field moduli.\n`;
+        "// Regenerate with: npm run gen-wasm\n" +
+        "// 'code' is base64 of the wasm-opt -O2 optimized wasm; the rest are\n" +
+        "// pointer offsets / field moduli.\n";
     writeFileSync(join(outDir, `${name}_wasm.js`), header + body + "\n");
     const pct = Math.round((1 - after / before) * 100);
     console.log(

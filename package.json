@@ -19,12 +19,16 @@
     "crypto": false
   },
   "scripts": {
-    "test": "mocha",
+    "lint": "eslint .",
+    "clean": "rimraf build",
+    "test": "vitest run",
+    "test:node": "vitest run --project node-esm",
+    "test:watch": "vitest --project node-esm",
     "test:ses": "node test/ses/lockdown.mjs",
     "gen-wasm": "node scripts/gen-wasm.js",
-    "build:node": "rollup -c rollup.cjs.config.js",
-    "build:browser": "rollup -c rollup.browser.esm.config.js",
-    "build": "npm run build:node && npm run build:browser"
+    "build:node": "vite build",
+    "build:browser": "vite build --mode browser",
+    "build": "npm run clean && npm run build:node && npm run build:browser"
   },
   "repository": {
     "type": "git",
@@ -53,16 +57,14 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@rollup/plugin-commonjs": "^29.0.3",
-    "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-replace": "^6.0.3",
     "binaryen": "^130.0.0",
-    "chai": "^6.2.2",
     "eslint": "^10.6.0",
     "globals": "^17.7.0",
-    "mocha": "^11.7.6",
-    "rollup": "^4.62.2",
-    "ses": "^2.2.0"
+    "rimraf": "^6.1.3",
+    "ses": "^2.2.0",
+    "vite": "^8.0.3",
+    "vitest": "^4.1.2"
   },
   "overrides": {
     "serialize-javascript": "^7.0.5",

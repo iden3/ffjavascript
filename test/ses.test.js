@@ -8,7 +8,6 @@ import path from "path";
 // test. Spawning a child keeps the realm hardening fully isolated; here we just
 // assert the harness exits 0.
 describe("SES lockdown", function () {
-    this.timeout(120000); // building both curves single-threaded is slow
 
     it("builds curves and runs pairings inside a hardened SES realm", () => {
         const dir = path.dirname(fileURLToPath(import.meta.url));

@@ -1,3 +1,4 @@
+import { assert } from "vitest";
 /*
     Copyright 2018 0kims association.
 
@@ -16,22 +17,15 @@
     You should have received a copy of the GNU General Public License along with
     zksnark JavaScript library. If not, see <https://www.gnu.org/licenses/>.
 */
-
-import * as chai from "chai";
-
 import * as Scalar from "../src/scalar.js";
 import buildBn128 from "../src/bn128.js";
 import F1Field from "../src/f1field.js";
-
-const assert = chai.assert;
-
-
 describe("Sqrt testing", () => {
     let bn128;
-    before( async() => {
+    beforeAll( async() => {
         bn128 = await buildBn128();
     });
-    after( async() => {
+    afterAll( async() => {
         bn128.terminate();
     });
 
