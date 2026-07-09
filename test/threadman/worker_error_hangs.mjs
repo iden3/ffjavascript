@@ -134,6 +134,28 @@ const badWasm = new Uint8Array([
     await bn128.terminate();
 }
 
+// --- Scenario 4: a throw inside a pairing sync-op region must not wedge ----
+{
+    const bn128 = await buildBn128();
+    let threw = false;
+    try {
+        bn128.pairing(null, bn128.G2.g); // toJacobian(null) throws mid-region
+    } catch { threw = true; }
+    check(threw, "garbage pairing input throws");
+
+    // Pre-fix, endSyncOp was skipped and every later pairing call failed with
+    // "Sync operation in progress" for the life of the curve object.
+    const guard = withWatchdog(10000, "syncop-wedge");
+    bn128.pairingEq(
+        bn128.G1.timesFr(bn128.G1.g, bn128.Fr.e(2)), bn128.G2.g,
+        bn128.G1.neg(bn128.G1.g), bn128.G2.timesFr(bn128.G2.g, bn128.Fr.e(2))
+    ).then((r) => withWatchdog.resolve({ result: r }),
+        (e) => withWatchdog.resolve({ rejected: e.message }));
+    const r = await guard;
+    check(r.result === true, `pairingEq works after a mid-region throw (got: ${JSON.stringify(r)})`);
+    await bn128.terminate();
+}
+
 if (failed) {
     console.error("WORKER ERROR HANG HARNESS FAILED");
     process.exit(1);

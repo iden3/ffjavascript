@@ -347,7 +347,14 @@ export class ThreadManager {
     async postAction(slotIndex, e, transfers, _deferred) {
         const slot = this.pool[slotIndex];
         if (!slot || slot.working) {
-            throw new Error("Posting a job to a working worker");
+            // Defensive: should be unreachable (processWorks checks
+            // !slot.working in the same synchronous span). If it ever fires
+            // with a caller-supplied deferred, reject it -- processWorks
+            // swallows this throw, and an unsettled work.deferred would hang
+            // its queueAction caller forever.
+            const err = new Error("Posting a job to a working worker");
+            if (_deferred) _deferred.reject(err);
+            throw err;
         }
         slot.working = true;
         slot.pendingDeferred = _deferred ? _deferred : new Deferred();
@@ -410,12 +417,24 @@ export class ThreadManager {
             const res = this.taskManager(actionData);
             d.resolve(res);
         } else {
-            this.actionQueue.push({
+            const work = {
                 data:      actionData,
                 transfers: transfers,
                 deferred:  d
-            });
-            await this.processWorks();
+            };
+            this.actionQueue.push(work);
+            try {
+                await this.processWorks();
+            } catch (err) {
+                // processWorks can throw synchronously (e.g. the Worker
+                // constructor in startWorker on a restricted realm). Settle
+                // this caller's deferred and remove the queued entry --
+                // otherwise d.promise (returned below on the success path,
+                // and possibly already held by racing callers) never settles.
+                const idx = this.actionQueue.indexOf(work);
+                if (idx >= 0) this.actionQueue.splice(idx, 1);
+                d.reject(err);
+            }
         }
         return d.promise;
     }

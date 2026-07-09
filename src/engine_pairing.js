@@ -3,16 +3,22 @@ export default function buildPairing(curve) {
     const tm = curve.tm;
     curve.pairing = function pairing(a, b) {
 
+        // try/finally on every sync-op region: startSyncOp() throws if one
+        // is already open, so a mid-region throw (bad point encoding, wasm
+        // trap) that skips endSyncOp() would otherwise wedge the
+        // ThreadManager -- every later pairing/prepare/millerLoop call fails
+        // with "Sync operation in progress" for the life of the curve.
         tm.startSyncOp();
-        const pA = tm.allocBuff(curve.G1.toJacobian(a));
-        const pB = tm.allocBuff(curve.G2.toJacobian(b));
-        const pRes = tm.alloc(curve.Gt.n8);
-        tm.instance.exports[curve.name + "_pairing"](pA, pB, pRes);
+        try {
+            const pA = tm.allocBuff(curve.G1.toJacobian(a));
+            const pB = tm.allocBuff(curve.G2.toJacobian(b));
+            const pRes = tm.alloc(curve.Gt.n8);
+            tm.instance.exports[curve.name + "_pairing"](pA, pB, pRes);
 
-        const res = tm.getBuff(pRes, curve.Gt.n8);
-
-        tm.endSyncOp();
-        return res;
+            return tm.getBuff(pRes, curve.Gt.n8);
+        } finally {
+            tm.endSyncOp();
+        }
     };
 
     curve.pairingEq = async function pairingEq() {
@@ -73,63 +79,71 @@ export default function buildPairing(curve) {
         const result = await Promise.all(opPromises);
 
         tm.startSyncOp();
-        const pRes = tm.alloc(curve.Gt.n8);
-        tm.instance.exports.ftm_one(pRes);
+        try {
+            const pRes = tm.alloc(curve.Gt.n8);
+            tm.instance.exports.ftm_one(pRes);
 
-        for (let i=0; i<result.length; i++) {
-            const pMR = tm.allocBuff(result[i][0]);
-            tm.instance.exports.ftm_mul(pRes, pMR, pRes);
+            for (let i=0; i<result.length; i++) {
+                const pMR = tm.allocBuff(result[i][0]);
+                tm.instance.exports.ftm_mul(pRes, pMR, pRes);
+            }
+            tm.instance.exports[curve.name + "_finalExponentiation"](pRes, pRes);
+
+            const pCt = tm.allocBuff(buffCt);
+
+            return !!tm.instance.exports.ftm_eq(pRes, pCt);
+        } finally {
+            tm.endSyncOp();
         }
-        tm.instance.exports[curve.name + "_finalExponentiation"](pRes, pRes);
-
-        const pCt = tm.allocBuff(buffCt);
-
-        const r = !!tm.instance.exports.ftm_eq(pRes, pCt);
-
-        tm.endSyncOp();
-
-        return r;
     };
 
     curve.prepareG1 = function(p) {
         this.tm.startSyncOp();
-        const pP = this.tm.allocBuff(p);
-        const pPrepP = this.tm.alloc(this.prePSize);
-        this.tm.instance.exports[this.name + "_prepareG1"](pP, pPrepP);
-        const res = this.tm.getBuff(pPrepP, this.prePSize);
-        this.tm.endSyncOp();
-        return res;
+        try {
+            const pP = this.tm.allocBuff(p);
+            const pPrepP = this.tm.alloc(this.prePSize);
+            this.tm.instance.exports[this.name + "_prepareG1"](pP, pPrepP);
+            return this.tm.getBuff(pPrepP, this.prePSize);
+        } finally {
+            this.tm.endSyncOp();
+        }
     };
 
     curve.prepareG2 = function(q) {
         this.tm.startSyncOp();
-        const pQ = this.tm.allocBuff(q);
-        const pPrepQ = this.tm.alloc(this.preQSize);
-        this.tm.instance.exports[this.name + "_prepareG2"](pQ, pPrepQ);
-        const res = this.tm.getBuff(pPrepQ, this.preQSize);
-        this.tm.endSyncOp();
-        return res;
+        try {
+            const pQ = this.tm.allocBuff(q);
+            const pPrepQ = this.tm.alloc(this.preQSize);
+            this.tm.instance.exports[this.name + "_prepareG2"](pQ, pPrepQ);
+            return this.tm.getBuff(pPrepQ, this.preQSize);
+        } finally {
+            this.tm.endSyncOp();
+        }
     };
 
     curve.millerLoop = function(preP, preQ) {
         this.tm.startSyncOp();
-        const pPreP = this.tm.allocBuff(preP);
-        const pPreQ = this.tm.allocBuff(preQ);
-        const pRes = this.tm.alloc(this.Gt.n8);
-        this.tm.instance.exports[this.name + "_millerLoop"](pPreP, pPreQ, pRes);
-        const res = this.tm.getBuff(pRes, this.Gt.n8);
-        this.tm.endSyncOp();
-        return res;
+        try {
+            const pPreP = this.tm.allocBuff(preP);
+            const pPreQ = this.tm.allocBuff(preQ);
+            const pRes = this.tm.alloc(this.Gt.n8);
+            this.tm.instance.exports[this.name + "_millerLoop"](pPreP, pPreQ, pRes);
+            return this.tm.getBuff(pRes, this.Gt.n8);
+        } finally {
+            this.tm.endSyncOp();
+        }
     };
 
     curve.finalExponentiation = function(a) {
         this.tm.startSyncOp();
-        const pA = this.tm.allocBuff(a);
-        const pRes = this.tm.alloc(this.Gt.n8);
-        this.tm.instance.exports[this.name + "_finalExponentiation"](pA, pRes);
-        const res = this.tm.getBuff(pRes, this.Gt.n8);
-        this.tm.endSyncOp();
-        return res;
+        try {
+            const pA = this.tm.allocBuff(a);
+            const pRes = this.tm.alloc(this.Gt.n8);
+            this.tm.instance.exports[this.name + "_finalExponentiation"](pA, pRes);
+            return this.tm.getBuff(pRes, this.Gt.n8);
+        } finally {
+            this.tm.endSyncOp();
+        }
     };
 
 }
