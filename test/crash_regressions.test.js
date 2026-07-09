@@ -25,4 +25,10 @@ describe("threadman crash regressions", function () {
         const harness = path.join(dir, "threadman", "worker_task_error.mjs");
         execFileSync(process.execPath, [harness], { stdio: "inherit" });
     });
+
+    it("propagates worker errors instead of hanging (INIT failure, dispatch failure, queue stall)", () => {
+        const dir = path.dirname(fileURLToPath(import.meta.url));
+        const harness = path.join(dir, "threadman", "worker_error_hangs.mjs");
+        execFileSync(process.execPath, [harness], { stdio: "inherit" });
+    });
 });

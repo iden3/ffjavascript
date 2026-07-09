@@ -23,6 +23,13 @@ export default function thread(self) {
                         // Start idle timer only after init completes so it never
                         // fires during async WASM compilation.
                         scheduleTermination();
+                    }, function(err) {
+                        // init is async, so the surrounding try/catch cannot
+                        // see its failure. Without this handler an INIT error
+                        // (bad wasm, instantiate failure) died as an unhandled
+                        // rejection inside the worker and the main thread
+                        // waited forever for an "initialized" that never came.
+                        self.postMessage({error: err.message});
                     });
                     return; // skip the scheduleTermination() call at the bottom
                 } else if (data[0].cmd === "TERMINATE") {

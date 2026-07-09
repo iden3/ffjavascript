@@ -179,9 +179,14 @@ export class ThreadManager {
                 if (!data.status && slot.working) {
                     // Stale task result: the slot was replaced (want_to_terminate raced
                     // with a task dispatch — pool[i] was nulled before the result came
-                    // back). The result is still valid; resolve so the caller doesn't hang.
+                    // back). Settle the deferred either way so the caller doesn't hang:
+                    // an error message must reject, not masquerade as a result.
                     slot.working = false;
-                    slot.pendingDeferred.resolve(data);
+                    if (data.error) {
+                        slot.pendingDeferred.reject(new Error("Worker error: " + data.error));
+                    } else {
+                        slot.pendingDeferred.resolve(data);
+                    }
                 }
                 await tm.processWorks();
                 return;
@@ -193,7 +198,19 @@ export class ThreadManager {
                 if (slot.initializing) {
                     slot.initializing = false;
                     tm.pool[slotIndex] = null;
+                    // Do NOT call processWorks here: it would immediately
+                    // respawn a worker for the queued tasks, and if INIT
+                    // failure is deterministic (bad wasm) that respawn fails
+                    // too -- an infinite spawn/fail loop with the callers
+                    // waiting forever. The INIT deferred's rejection handler
+                    // in startWorker owns the retry/give-up decision.
+                    return;
                 }
+                // A task error on a healthy worker: the slot is free again,
+                // dispatch any queued tasks now. Without this, work already
+                // sitting in actionQueue stalls until the worker's idle
+                // timer happens to fire (~1.5s), or forever without timers.
+                await tm.processWorks();
                 return;
             }
 
@@ -244,11 +261,24 @@ export class ThreadManager {
         const tm = this;
         return function(e) {
             if (tm.pool[slotIndex] === slot) {
-                slot.working     = false;
-                slot.initialized = false;
+                // A native worker 'error' event means the worker is broken
+                // (uncaught exception / failed INIT); it will never serve
+                // another task. Release the pool slot so processWorks can
+                // start a fresh worker there — leaving the dead slot in
+                // place blocked its position forever and hung any task
+                // queued behind it.
+                slot.working      = false;
+                slot.initialized  = false;
+                slot.initializing = false;
+                tm.pool[slotIndex] = null;
+                slot.worker.removeEventListener("message", slot.onMsg);
+                slot.worker.removeEventListener("error",   slot.onError);
                 if (slot.pendingDeferred) {
                     slot.pendingDeferred.reject(new Error("Worker error: " + e.message));
                 }
+                // Re-dispatch anything still queued (fire-and-forget; task
+                // rejections reach their callers via their own deferreds).
+                tm.processWorks().catch(() => {});
             }
         };
     }
@@ -267,6 +297,7 @@ export class ThreadManager {
 
         // postAction sets slot.working = true synchronously before any await,
         // so processWorks will not attempt to start this slot again.
+        const tm = this;
         this.postAction(slotIndex, [{
             cmd:  "INIT",
             init: MEM_SIZE,
@@ -276,6 +307,29 @@ export class ThreadManager {
             glv: this.glv,
         }]).then(() => {
             slot.initialized = true;
+        }, (err) => {
+            // INIT failed (bad wasm, instantiate error, worker crash on
+            // boot). No queueAction caller is watching this internal
+            // deferred, so the failure must be surfaced here: release the
+            // slot, and if no other worker is alive or coming up, reject
+            // everything still queued -- those tasks would otherwise wait
+            // forever for a worker that will never exist. (All workers run
+            // the same wasm, so an INIT failure is typically deterministic;
+            // but if some are healthy, let them drain the queue instead.)
+            if (tm.pool[slotIndex] === slot) {
+                tm.pool[slotIndex] = null;
+                slot.worker.removeEventListener("message", slot.onMsg);
+                slot.worker.removeEventListener("error",   slot.onError);
+            }
+            slot.initializing = false;
+            slot.working = false;
+            const anyAlive = tm.pool.some((s) => s);
+            if (!anyAlive) {
+                const queued = tm.actionQueue.splice(0, tm.actionQueue.length);
+                for (const work of queued) {
+                    work.deferred.reject(new Error("Worker initialization failed: " + err.message));
+                }
+            }
         });
     }
 
@@ -297,7 +351,17 @@ export class ThreadManager {
         }
         slot.working = true;
         slot.pendingDeferred = _deferred ? _deferred : new Deferred();
-        await slot.worker.postMessage(e, transfers);
+        try {
+            await slot.worker.postMessage(e, transfers);
+        } catch (err) {
+            // postMessage itself failed (e.g. a transfer-list buffer already
+            // detached by an earlier dispatch). The worker never saw the
+            // task, so no message will ever come back: settle the deferred
+            // here and free the slot, or the caller waits forever and the
+            // slot stays wedged as "working".
+            slot.working = false;
+            slot.pendingDeferred.reject(err);
+        }
         return slot.pendingDeferred.promise;
     }
 
