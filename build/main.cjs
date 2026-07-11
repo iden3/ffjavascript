@@ -5334,15 +5334,41 @@ function buildMultiexp(curve, groupName) {
         return "auto";
     }
 
+    // Sampled scalar-triviality estimate: fraction of zero/one scalars among
+    // up to 64 evenly-spaced samples. Witness MSMs (A/B1/B2/C) are dominated
+    // by 0/1 wires -- a sha256 witness is ~2/3 zeros + 1/3 ones -- and the
+    // batch module's scalar-size partitioning turns those into skips/plain
+    // adds, so cache-residency (the reason for the auto size cap) only
+    // applies to the non-trivial remainder.
+    function trivialFraction(buffScalars, nPoints, sScalar) {
+        const nSamples = Math.min(64, nPoints);
+        const step = Math.floor(nPoints / nSamples) || 1;
+        let trivial = 0;
+        for (let s = 0; s < nSamples; s++) {
+            const o = s * step * sScalar;
+            let top = 0;
+            for (let k = sScalar - 1; k >= 1; k--) {
+                if (buffScalars[o + k] !== 0) { top = k; break; }
+            }
+            if (top === 0 && buffScalars[o] <= 1) trivial++;
+        }
+        return trivial / nSamples;
+    }
+
     // WASM export name for this group + input representation. Affine input
     // routes to the batch-affine MSM module ("...Batch") depending on the
     // batching mode; the worker falls back to the plain in-module variant
-    // when the batch module is absent.
-    function fnNameFor(inType, basesBytes, batchMode, endoMode) {
+    // when the batch module is absent. In "auto", the batch module is used
+    // when the bases fit the per-worker cache budget OR the scalars sample
+    // as mostly trivial (the partition shrinks the cache-relevant set).
+    function fnNameFor(inType, basesBytes, batchMode, endoMode, scalarsChunk, nPoints, sScalar) {
         const g = groupName === "G1" ? "g1m" : "g2m";
         if (inType !== "affine") return `${g}_multiexp`;
-        const useBatch = batchMode === "enabled" ||
+        let useBatch = batchMode === "enabled" ||
             (batchMode === "auto" && basesBytes <= AUTO_BATCH_MAX_BASES_BYTES);
+        if (!useBatch && batchMode === "auto" && scalarsChunk) {
+            useBatch = trivialFraction(scalarsChunk, nPoints, sScalar) >= 0.5;
+        }
         if (!useBatch) return `${g}_multiexpAffine`;
         const noEndo = endoMode === "disabled" ? (groupName === "G1" ? "NoGlv" : "NoGls") : "";
         return `${g}_multiexpAffineBatch${noEndo}`;
@@ -5376,7 +5402,7 @@ function buildMultiexp(curve, groupName) {
             {cmd: "ALLOCSET", var: 0, buff: buffBases},
             {cmd: "ALLOCSET", var: 1, buff: buffScalars},
             {cmd: "ALLOC",    var: 2, len: G.F.n8*3},
-            {cmd: "CALL", fnName: fnNameFor(inType, buffBases.byteLength, batchMode, endoMode), params: [
+            {cmd: "CALL", fnName: fnNameFor(inType, buffBases.byteLength, batchMode, endoMode, buffScalars, nPoints, sScalar), params: [
                 {var: 0}, {var: 1}, {val: sScalar}, {val: nPoints}, {var: 2}
             ]},
             {cmd: "GET", out: 0, var: 2, len: G.F.n8*3},
