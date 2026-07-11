@@ -49,7 +49,7 @@
   },
   "optionalDependencies": {
     "wasmbuilder": "0.0.16",
-    "wasmcurves": "git+https://github.com/iden3/wasmcurves.git#ac7fca431771e0030aaedd1e86693f649eeb448d"
+    "wasmcurves": "git+https://github.com/iden3/wasmcurves.git#c3981f1a448ce8732e1834b7f2984d41d5a1ebf3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
