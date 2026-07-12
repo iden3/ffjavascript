@@ -20,6 +20,17 @@
 // const MEM_SIZE = 1000;  // Memory size in 64K Pakes (512Mb)
 const MEM_SIZE = 25;  // Memory size in 64K Pakes (1600Kb)
 
+// Give-up threshold for workers that die while booting. All workers run the
+// same code, so a boot failure is almost always deterministic (bad wasm, a
+// restricted realm, hostile execArgv inherited by the worker); without a cap
+// the error handler's slot-release + processWorks respawn cycle spins forever
+// at full CPU (~hundreds of workers/second) while every caller hangs.
+// Consecutive failures are counted across the pool (a burst of N parallel
+// spawns failing is N counts) and reset by any successful INIT, so one full
+// spawn round over-threshold is enough to trip it -- transient single-worker
+// failures with healthy siblings never accumulate.
+const MAX_CONSECUTIVE_BOOT_FAILURES = 8;
+
 
 import thread from "./threadman_thread.js";
 import os from "os";
@@ -156,6 +167,26 @@ export class ThreadManager {
     constructor() {
         this.actionQueue = [];
         this.oldPFree = 0;
+        // Consecutive worker boot failures (reset by any successful INIT).
+        // Once it reaches MAX_CONSECUTIVE_BOOT_FAILURES, bootBroken latches
+        // the causing error and no further workers are spawned.
+        this.bootFailures = 0;
+        this.bootBroken = null;
+    }
+
+    // Reject everything queued when nothing can ever serve it: no slot alive
+    // at all, or worker boot latched broken with no initialized worker left.
+    // (Initialized-but-busy workers keep the queue alive: they will drain it.)
+    _failQueueIfUnservable(err) {
+        const anyAlive = this.pool.some((s) => s);
+        const anyInitialized = this.pool.some((s) => s && s.initialized);
+        if (!anyAlive || (this.bootBroken && !anyInitialized)) {
+            const cause = this.bootBroken || err;
+            const queued = this.actionQueue.splice(0, this.actionQueue.length);
+            for (const work of queued) {
+                work.deferred.reject(new Error("Worker initialization failed: " + cause.message));
+            }
+        }
     }
 
     // Build the message handler for a specific WorkerSlot.
@@ -307,15 +338,19 @@ export class ThreadManager {
             glv: this.glv,
         }]).then(() => {
             slot.initialized = true;
+            tm.bootFailures = 0;
         }, (err) => {
             // INIT failed (bad wasm, instantiate error, worker crash on
             // boot). No queueAction caller is watching this internal
             // deferred, so the failure must be surfaced here: release the
-            // slot, and if no other worker is alive or coming up, reject
-            // everything still queued -- those tasks would otherwise wait
-            // forever for a worker that will never exist. (All workers run
-            // the same wasm, so an INIT failure is typically deterministic;
-            // but if some are healthy, let them drain the queue instead.)
+            // slot, count the failure, and reject everything still queued
+            // once nothing can serve it -- those tasks would otherwise wait
+            // forever for a worker that will never exist. The failure count
+            // is what breaks the melt cycle: the 'error'-event handler
+            // releases the slot and processWorks respawns for the queued
+            // tasks, so a deterministic boot failure (all workers run the
+            // same code) would otherwise spawn/fail forever at full CPU
+            // while `pool.some(s => s)` stays true through the churn.
             if (tm.pool[slotIndex] === slot) {
                 tm.pool[slotIndex] = null;
                 slot.worker.removeEventListener("message", slot.onMsg);
@@ -323,13 +358,11 @@ export class ThreadManager {
             }
             slot.initializing = false;
             slot.working = false;
-            const anyAlive = tm.pool.some((s) => s);
-            if (!anyAlive) {
-                const queued = tm.actionQueue.splice(0, tm.actionQueue.length);
-                for (const work of queued) {
-                    work.deferred.reject(new Error("Worker initialization failed: " + err.message));
-                }
+            tm.bootFailures++;
+            if (tm.bootFailures >= MAX_CONSECUTIVE_BOOT_FAILURES && !tm.bootBroken) {
+                tm.bootBroken = err;
             }
+            tm._failQueueIfUnservable(err);
         });
     }
 
@@ -394,6 +427,13 @@ export class ThreadManager {
 
         // Start new workers for slots that need them.
         if (this.actionQueue.length > 0) {
+            if (this.bootBroken) {
+                // Worker boot is latched broken: never spawn again. If no
+                // initialized worker survives to drain the queue (e.g. the
+                // last one idle-terminated), fail the queued tasks now.
+                this._failQueueIfUnservable(this.bootBroken);
+                return;
+            }
             let initializingCount = 0;
             for (let i = 0; i < this.concurrency; i++) {
                 const slot = this.pool[i];

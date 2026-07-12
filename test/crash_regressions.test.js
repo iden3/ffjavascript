@@ -31,4 +31,10 @@ describe("threadman crash regressions", function () {
         const harness = path.join(dir, "threadman", "worker_error_hangs.mjs");
         execFileSync(process.execPath, [harness], { stdio: "inherit" });
     });
+
+    it("gives up after repeated worker boot failures instead of respawning forever", () => {
+        const dir = path.dirname(fileURLToPath(import.meta.url));
+        const harness = path.join(dir, "threadman", "boot_failure_melt.mjs");
+        execFileSync(process.execPath, [harness], { stdio: "inherit" });
+    });
 });
