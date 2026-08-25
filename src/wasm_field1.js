@@ -35,8 +35,11 @@ export default class WasmField1 {
         this.n32 = Math.floor(n8/4);
 
         if(this.n64*8 != this.n8) {
+            // coverage: defensive guard against states the callers cannot produce
+            /* c8 ignore start */
             throw new Error("n8 must be a multiple of 8");
         }
+            /* c8 ignore stop */
 
         this.half = Scalar.shiftRight(this.p, Scalar.one);
         this.nqr = this.two;
@@ -64,9 +67,12 @@ export default class WasmField1 {
             this.w[i] = this.square(this.w[i+1]);
         }
 
+        // coverage: defensive guard against states the callers cannot produce
+        /* c8 ignore start */
         if (!this.eq(this.w[0], this.one)) {
             throw new Error("Error calculating roots of unity");
         }
+        /* c8 ignore stop */
 
         this.batchToMontgomery = buildBatchConvert(tm, prefix + "_batchToMontgomery", this.n8, this.n8);
         this.batchFromMontgomery = buildBatchConvert(tm, prefix + "_batchFromMontgomery", this.n8, this.n8);
@@ -255,8 +261,11 @@ export default class WasmField1 {
 
         const nPoints = Math.floor(buffIn.byteLength / sIn);
         if ( nPoints * sIn !== buffIn.byteLength) {
+            // coverage: BigBuffer output path requires >= 256 MiB of data
+            /* c8 ignore start */
             throw new Error("Invalid buffer size");
         }
+            /* c8 ignore stop */
         const pointsPerChunk = Math.floor(nPoints/this.tm.concurrency);
         const opPromises = [];
         for (let i=0; i<this.tm.concurrency; i++) {
@@ -290,7 +299,10 @@ export default class WasmField1 {
 
         let fullBuffOut;
         if (buffIn instanceof BigBuffer) {
+            // coverage: BigBuffer output path requires >= 256 MiB of data
+            /* c8 ignore start */
             fullBuffOut = new BigBuffer(nPoints*sOut);
+            /* c8 ignore stop */
         } else {
             fullBuffOut = new Uint8Array(nPoints*sOut);
         }

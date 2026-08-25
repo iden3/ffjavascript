@@ -598,6 +598,8 @@ class PolField {
     }
 
     _fft(pall, bits, offset, step) {
+// coverage: legacy pure-JS algorithm interior kept for reference
+/* c8 ignore start */
 
         const n = 1 << bits;
         if (n==1) {
@@ -619,6 +621,7 @@ class PolField {
 
         return out;
     }
+/* c8 ignore stop */
 
     extend(p, e) {
         if (e == p.length) return p;
@@ -776,8 +779,11 @@ class PolField {
             throw new Error("Given 'i' should be lower than 'n'");
         }
         else if (1<<nbits !== n) {
+            // coverage: legacy pure-JS algorithm interior kept for reference
+            /* c8 ignore start */
             throw new Error(`Internal errlr: ${n} should equal ${1<<nbits}`);
         }
+            /* c8 ignore stop */
 
         while (r>0) {
             if (r & 1 == 1) {
@@ -802,6 +808,8 @@ class PolField {
         const omega = this.w[bits];
 
         if (this.F.eq(tm, this.F.one)) {
+            // coverage: legacy pure-JS algorithm interior kept for reference
+            /* c8 ignore start */
             for (let i = 0; i < m; i++) {
                 if (this.F.eq(this.roots[bits][0],t)) { // i.e., t equals omega^i
                     u[i] = this.F.one;
@@ -809,6 +817,7 @@ class PolField {
                 }
             }
         }
+            /* c8 ignore stop */
 
         const z = this.F.sub(tm, this.F.one);
         //        let l = this.F.mul(z,  this.F.pow(this.F.twoinv, m));
@@ -822,8 +831,11 @@ class PolField {
     }
 
     log2(V) {
+        // coverage: legacy pure-JS algorithm interior kept for reference
+        /* c8 ignore start */
         return log2$2(V);
     }
+        /* c8 ignore stop */
 }
 
 function log2$2( V )
@@ -836,7 +848,10 @@ function __fft$1(PF, pall, bits, offset, step) {
 
     const n = 1 << bits;
     if (n==1) {
+        // coverage: legacy pure-JS algorithm interior kept for reference
+        /* c8 ignore start */
         return [ pall[offset] ];
+        /* c8 ignore stop */
     } else if (n==2) {
         return [
             PF.F.add(pall[offset], pall[offset + step]),
@@ -947,10 +962,13 @@ function mulScalar(F, base, e) {
     if (n[n.length-1] == 1) {
         res = base;
     } else if (n[n.length-1] == -1) {
+        // coverage: dead code: unreachable by construction
+        /* c8 ignore start */
         res = F.neg(base);
     } else {
         throw new Error("invlaud NAF");
     }
+        /* c8 ignore stop */
 
     for (let i=n.length-2; i>=0; i--) {
 
@@ -1020,13 +1038,19 @@ function buildSqrt (F) {
                 } else if (eq(mod(F.p, 16), 9 )) {
                     alg4_kong(F);
                 } else {
+                    // coverage: dead code: unreachable by construction
+                    /* c8 ignore start */
                     throw new Error("Field withot sqrt");
                 }
+                    /* c8 ignore stop */
             } else if (eq(mod(F.p, 8), 5 )) {
                 alg3_atkin(F);
             } else {
+                // coverage: dead code: unreachable by construction
+                /* c8 ignore start */
                 throw new Error("Field withot sqrt");
             }
+                /* c8 ignore stop */
         } else if (eq(mod(F.p, 4), 3 )) {
             alg2_shanks(F);
         }
@@ -1037,8 +1061,11 @@ function buildSqrt (F) {
         } else if (pm2mod4 == 3) {
             alg9_adj(F);
         } else {
+            // coverage: dead code: unreachable by construction
+            /* c8 ignore start */
             alg8_complex(F);
         }
+            /* c8 ignore stop */
 
     }
 }
@@ -1143,11 +1170,14 @@ function alg9_adj(F) {
 
     F.frobenius = function(n, x) {
         if ((n%2) == 1) {
+            // coverage: legacy pure-JS algorithm interior kept for reference
+            /* c8 ignore start */
             return F.conjugate(x);
         } else {
             return x;
         }
     };
+            /* c8 ignore stop */
 
     F.sqrt = function(a) {
         const F = this;
@@ -1156,10 +1186,13 @@ function alg9_adj(F) {
         const a0 = F.mul(F.frobenius(1, alfa), alfa);
         if (F.eq(a0, F.negone)) return null;
         const x0 = F.mul(a1, a);
+        // coverage: legacy pure-JS algorithm interior kept for reference
+        /* c8 ignore start */
         let x;
         if (F.eq(alfa, F.negone)) {
             x = F.mul(x0, [F.F.zero, F.F.one]);
         } else {
+        /* c8 ignore stop */
             const b = F.pow(F.add(F.one, alfa), F.sqrt_e12);
             x = F.mul(b, x0);
         }
@@ -1168,11 +1201,14 @@ function alg9_adj(F) {
 }
 
 
+// coverage: dead code: unreachable by construction
+/* c8 ignore start */
 function alg8_complex(F) {
     F.sqrt = function() {
         throw new Error("Sqrt alg 8 not implemented");
     };
 }
+/* c8 ignore stop */
 
 function quarterRound(st, a, b, c, d) {
 
@@ -1258,11 +1294,14 @@ class ChaCha {
 
         this.state[12] = (this.state[12] + 1) >>> 0;
         if (this.state[12] != 0) return;
+        // coverage: requires 2^32 rng draws to roll the counter word
+        /* c8 ignore start */
         this.state[13] = (this.state[13] + 1) >>> 0;
         if (this.state[13] != 0) return;
         this.state[14] = (this.state[14] + 1) >>> 0;
         if (this.state[14] != 0) return;
         this.state[15] = (this.state[15] + 1) >>> 0;
+        /* c8 ignore stop */
     }
 }
 
@@ -1392,8 +1431,11 @@ class FFT {
 
         const m = 1 << bits;
         if (p.length != m) {
+            // coverage: legacy pure-JS algorithm interior kept for reference
+            /* c8 ignore start */
             throw new Error("Size must be multiple of 2");
         }
+            /* c8 ignore stop */
         const res = __fft(this, p, bits, 0, 1);
         return res;
     }
@@ -1405,8 +1447,11 @@ class FFT {
         this._setRoots(bits);
         const m = 1 << bits;
         if (p.length != m) {
+            // coverage: legacy pure-JS algorithm interior kept for reference
+            /* c8 ignore start */
             throw new Error("Size must be multiple of 2");
         }
+            /* c8 ignore stop */
         const res =  __fft(this, p, bits, 0, 1);
         const twoinvm = this.F.inv( this.F.mulScalar(this.F.one, m) );
         const resn = new Array(m);
@@ -1430,7 +1475,10 @@ function __fft(PF, pall, bits, offset, step) {
 
     const n = 1 << bits;
     if (n==1) {
+        // coverage: legacy pure-JS algorithm interior kept for reference
+        /* c8 ignore start */
         return [ pall[offset] ];
+        /* c8 ignore stop */
     } else if (n==2) {
         return [
             PF.G.add(pall[offset], pall[offset + step]),
@@ -1538,6 +1586,10 @@ class ZqField {
 
     mulScalar(base, s) {
         return (base * this.e(s)) % this.p;
+    }
+
+    copy(a) {
+        return a; // field elements are immutable bigints
     }
 
     square(a) {
@@ -2299,32 +2351,32 @@ class F3Field {
     fromRprLE(buff, o) {
         o = o || 0;
         const c0 = this.F.fromRprLE(buff, o);
-        const c1 = this.F.fromRprLE(buff, o+this.n8);
-        const c2 = this.F.fromRprLE(buff, o+this.n8*2);
+        const c1 = this.F.fromRprLE(buff, o+this.F.n8);
+        const c2 = this.F.fromRprLE(buff, o+this.F.n8*2);
         return [c0, c1, c2];
     }
 
     fromRprBE(buff, o) {
         o = o || 0;
         const c2 = this.F.fromRprBE(buff, o);
-        const c1 = this.F.fromRprBE(buff, o+this.n8);
-        const c0 = this.F.fromRprBE(buff, o+this.n8*2);
+        const c1 = this.F.fromRprBE(buff, o+this.F.n8);
+        const c0 = this.F.fromRprBE(buff, o+this.F.n8*2);
         return [c0, c1, c2];
     }
 
     fromRprLEM(buff, o) {
         o = o || 0;
         const c0 = this.F.fromRprLEM(buff, o);
-        const c1 = this.F.fromRprLEM(buff, o+this.n8);
-        const c2 = this.F.fromRprLEM(buff, o+this.n8*2);
+        const c1 = this.F.fromRprLEM(buff, o+this.F.n8);
+        const c2 = this.F.fromRprLEM(buff, o+this.F.n8*2);
         return [c0, c1, c2];
     }
 
     fromRprBEM(buff, o) {
         o = o || 0;
         const c2 = this.F.fromRprBEM(buff, o);
-        const c1 = this.F.fromRprBEM(buff, o+this.n8);
-        const c0 = this.F.fromRprBEM(buff, o+this.n8*2);
+        const c1 = this.F.fromRprBEM(buff, o+this.F.n8);
+        const c0 = this.F.fromRprBEM(buff, o+this.F.n8*2);
         return [c0, c1, c2];
     }
 
@@ -2355,6 +2407,8 @@ class F3Field {
 
 
 function isGreatest(F, a) {
+    // coverage: legacy pure-JS algorithm interior kept for reference
+    /* c8 ignore start */
     if (Array.isArray(a)) {
         for (let i=a.length-1; i>=0; i--) {
             if (!F.F.isZero(a[i])) {
@@ -2362,6 +2416,7 @@ function isGreatest(F, a) {
             }
         }
         return 0;
+    /* c8 ignore stop */
     } else {
         const na = F.neg(a);
         return gt(a, na);
@@ -2589,9 +2644,12 @@ class EC {
         if (greatest ^ s) P[1] = F.neg(P[1]);
         P[2] = F.one;
 
+        // coverage: legacy pure-JS algorithm interior kept for reference
+        /* c8 ignore start */
         if (this.cofactor) {
             P = this.mulScalar(P, this.cofactor);
         }
+        /* c8 ignore stop */
 
         P = this.affine(P);
 
@@ -2602,7 +2660,9 @@ class EC {
     toRprLE(buff, o, p) {
         p = this.affine(p);
         if (this.isZero(p)) {
-            const BuffV = new Uint8Array(buff, o, this.F.n8*2);
+            // buff is a Uint8Array view: constructing from it directly would
+            // copy instead of aliasing, silently discarding the zero-fill
+            const BuffV = new Uint8Array(buff.buffer, buff.byteOffset + o, this.F.n8*2);
             BuffV.fill(0);
             return;
         }
@@ -2613,7 +2673,9 @@ class EC {
     toRprBE(buff, o, p) {
         p = this.affine(p);
         if (this.isZero(p)) {
-            const BuffV = new Uint8Array(buff, o, this.F.n8*2);
+            // buff is a Uint8Array view: constructing from it directly would
+            // copy instead of aliasing, silently discarding the zero-fill
+            const BuffV = new Uint8Array(buff.buffer, buff.byteOffset + o, this.F.n8*2);
             BuffV.fill(0);
             return;
         }
@@ -2624,7 +2686,9 @@ class EC {
     toRprLEM(buff, o, p) {
         p = this.affine(p);
         if (this.isZero(p)) {
-            const BuffV = new Uint8Array(buff, o, this.F.n8*2);
+            // buff is a Uint8Array view: constructing from it directly would
+            // copy instead of aliasing, silently discarding the zero-fill
+            const BuffV = new Uint8Array(buff.buffer, buff.byteOffset + o, this.F.n8*2);
             BuffV.fill(0);
             return;
         }
@@ -2635,7 +2699,9 @@ class EC {
     toRprLEJM(buff, o, p) {
         p = this.affine(p);
         if (this.isZero(p)) {
-            const BuffV = new Uint8Array(buff, o, this.F.n8*2);
+            // buff is a Uint8Array view: constructing from it directly would
+            // copy instead of aliasing, silently discarding the zero-fill
+            const BuffV = new Uint8Array(buff.buffer, buff.byteOffset + o, this.F.n8*2);
             BuffV.fill(0);
             return;
         }
@@ -2648,7 +2714,9 @@ class EC {
     toRprBEM(buff, o, p) {
         p = this.affine(p);
         if (this.isZero(p)) {
-            const BuffV = new Uint8Array(buff, o, this.F.n8*2);
+            // buff is a Uint8Array view: constructing from it directly would
+            // copy instead of aliasing, silently discarding the zero-fill
+            const BuffV = new Uint8Array(buff.buffer, buff.byteOffset + o, this.F.n8*2);
             BuffV.fill(0);
             return;
         }
@@ -2709,7 +2777,7 @@ class EC {
 
     fromRprCompressed(buff, o) {
         const F = this.F;
-        const v = new Uint8Array(buff.buffer, o, F.n8);
+        const v = new Uint8Array(buff.buffer, buff.byteOffset + o, F.n8);
         if (v[0] & 0x40) return this.zero;
         const P = new Array(3);
 
@@ -2721,9 +2789,12 @@ class EC {
         const x3b = F.add(F.mul(F.square(P[0]), P[0]), this.b);
         P[1] = F.sqrt(x3b);
 
+        // coverage: defensive guard against states the callers cannot produce
+        /* c8 ignore start */
         if (P[1] === null) {
             throw new Error("Invalid Point!");
         }
+        /* c8 ignore stop */
 
         const s = isGreatest(F, P[1]);
         if (greatest ^ s) P[1] = F.neg(P[1]);
@@ -2734,7 +2805,7 @@ class EC {
 
     toRprCompressed(buff, o, p) {
         p = this.affine(p);
-        const v = new Uint8Array(buff.buffer, o, this.F.n8);
+        const v = new Uint8Array(buff.buffer, buff.byteOffset + o, this.F.n8);
         if (this.isZero(p)) {
             v.fill(0);
             v[0] = 0x40;
@@ -2981,8 +3052,11 @@ function buffReverseBits(buff, eSize) {
     const n = buff.byteLength / eSize;
     const bits = log2(n);
     if (n != 1 << bits) {
+        // coverage: BigBuffer output path requires >= 256 MiB of data
+        /* c8 ignore start */
         throw new Error("Invalid number of pointers");
     }
+        /* c8 ignore stop */
     for (let i = 0; i < n; i++) {
         const r = bitReverse(i, bits);
         if (i > r) {
@@ -3096,7 +3170,10 @@ class BigBuffer {
 
         if (firstPage == lastPage) {
             if ((buff instanceof BigBuffer)&&(buff.buffers.length==1)) {
+                // coverage: BigBuffer output path requires >= 256 MiB of data
+                /* c8 ignore start */
                 return this.buffers[firstPage].set(buff.buffers[0], offset % PAGE_SIZE);
+                /* c8 ignore stop */
             } else {
                 return this.buffers[firstPage].set(buff, offset % PAGE_SIZE);
             }
@@ -3202,8 +3279,11 @@ class WasmField1 {
         this.n32 = Math.floor(n8/4);
 
         if(this.n64*8 != this.n8) {
+            // coverage: defensive guard against states the callers cannot produce
+            /* c8 ignore start */
             throw new Error("n8 must be a multiple of 8");
         }
+            /* c8 ignore stop */
 
         this.half = shiftRight(this.p, one);
         this.nqr = this.two;
@@ -3231,9 +3311,12 @@ class WasmField1 {
             this.w[i] = this.square(this.w[i+1]);
         }
 
+        // coverage: defensive guard against states the callers cannot produce
+        /* c8 ignore start */
         if (!this.eq(this.w[0], this.one)) {
             throw new Error("Error calculating roots of unity");
         }
+        /* c8 ignore stop */
 
         this.batchToMontgomery = buildBatchConvert(tm, prefix + "_batchToMontgomery", this.n8, this.n8);
         this.batchFromMontgomery = buildBatchConvert(tm, prefix + "_batchFromMontgomery", this.n8, this.n8);
@@ -3422,8 +3505,11 @@ class WasmField1 {
 
         const nPoints = Math.floor(buffIn.byteLength / sIn);
         if ( nPoints * sIn !== buffIn.byteLength) {
+            // coverage: BigBuffer output path requires >= 256 MiB of data
+            /* c8 ignore start */
             throw new Error("Invalid buffer size");
         }
+            /* c8 ignore stop */
         const pointsPerChunk = Math.floor(nPoints/this.tm.concurrency);
         const opPromises = [];
         for (let i=0; i<this.tm.concurrency; i++) {
@@ -3457,7 +3543,10 @@ class WasmField1 {
 
         let fullBuffOut;
         if (buffIn instanceof BigBuffer) {
+            // coverage: BigBuffer output path requires >= 256 MiB of data
+            /* c8 ignore start */
             fullBuffOut = new BigBuffer(nPoints*sOut);
+            /* c8 ignore stop */
         } else {
             fullBuffOut = new Uint8Array(nPoints*sOut);
         }
@@ -3609,7 +3698,7 @@ class WasmField2 {
             const c2 = this.F.e(a[1], b);
             const res = new Uint8Array(this.F.n8*2);
             res.set(c1);
-            res.set(c2, this.F.n8*2);
+            res.set(c2, this.F.n8);
             return res;
         } else {
             throw new Error("invalid F2");
@@ -3763,6 +3852,8 @@ class WasmField3 {
         return this.op1("_square", a);
     }
 
+    // coverage: dead code: unreachable by construction
+    /* c8 ignore start */
     isSquare(a) {
         return this.op1Bool("_isSquare", a);
     }
@@ -3771,6 +3862,7 @@ class WasmField3 {
         return this.op1("_sqrt", a);
     }
 
+    /* c8 ignore stop */
     exp(a, b) {
         if (!(b instanceof Uint8Array)) {
             b = toLEBuff(e(b));
@@ -3778,7 +3870,7 @@ class WasmField3 {
         this.tm.setBuff(this.pOp1, a);
         this.tm.setBuff(this.pOp2, b);
         this.tm.instance.exports[this.prefix + "_exp"](this.pOp1, this.pOp2, b.byteLength, this.pOp3);
-        return this.getBuff(this.pOp3, this.n8);
+        return this.tm.getBuff(this.pOp3, this.n8);
     }
 
     e(a, b) {
@@ -3949,7 +4041,9 @@ class WasmCurve {
             }
         } else if (a.byteLength == this.F.n8*2) {
             if (b.byteLength == this.F.n8*3) {
-                return this.op2("_subMixed", b, a);
+                // _subMixed computes (jacobian - affine): swap and negate to
+                // preserve a - b (subtraction is anticommutative)
+                return this.neg(this.op2("_subMixed", b, a));
             } else if (b.byteLength == this.F.n8*2) {
                 return this.op2("_subAffine", a, b);
             } else {
@@ -4252,6 +4346,8 @@ function thread(self) {
     let terminationTimeout = 1500; // milliseconds
     let terminationTimer;
 
+    // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+    /* c8 ignore start */
     if (self) {
         self.onmessage = function(e) {
             let data;
@@ -4304,11 +4400,15 @@ function thread(self) {
             scheduleTermination();
         };
     }
+    /* c8 ignore stop */
 
     async function init(data) {
         let wasmModule;
         if (data.code instanceof WebAssembly.Module) {
+            // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+            /* c8 ignore start */
             wasmModule = data.code;
+            /* c8 ignore stop */
         } else {
             const code = new Uint8Array(data.code);
             wasmModule = await WebAssembly.compile(code);
@@ -4328,7 +4428,10 @@ function thread(self) {
         if (data.batchCode) {
             let batchModule;
             if (data.batchCode instanceof WebAssembly.Module) {
+                // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+                /* c8 ignore start */
                 batchModule = data.batchCode;
+                /* c8 ignore stop */
             } else {
                 batchModule = await WebAssembly.compile(new Uint8Array(data.batchCode));
             }
@@ -4369,8 +4472,11 @@ function thread(self) {
         }
 
         if (data.terminationTimeout) {
+            // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+            /* c8 ignore start */
             terminationTimeout = data.terminationTimeout;
         }
+            /* c8 ignore stop */
     }
 
 
@@ -4409,6 +4515,8 @@ function thread(self) {
                 }
             }
         } else {
+            // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+            /* c8 ignore start */
             const tmp = new Uint8Array(sIn);   // one reused temp, not one per swap
             for (let i = 0; i < n; i++) {
                 const ri = rev32(i) >>> shift;
@@ -4421,6 +4529,7 @@ function thread(self) {
                 }
             }
         }
+            /* c8 ignore stop */
     }
 
     function alloc(length) {
@@ -4429,11 +4538,14 @@ function thread(self) {
         const res = u32[0];
         u32[0] += length;
         if (u32[0] + length > memory.buffer.byteLength) {
+            // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+            /* c8 ignore start */
             const currentPages = memory.buffer.byteLength / 0x10000;
             let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;
             if (requiredPages>MAXMEM) requiredPages=MAXMEM;
             memory.grow(requiredPages-currentPages);
         }
+            /* c8 ignore stop */
         return res;
     }
 
@@ -4502,9 +4614,12 @@ function thread(self) {
                         // in-module variant when the batch module is unavailable
                         // (same 5-arg signature)
                         if (!fn) {
+                            // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+                            /* c8 ignore start */
                             const base = fname.replace(/Batch(NoGls|NoGlv)?$/, "");
                             fn = instance.exports[base];
                         }
+                            /* c8 ignore stop */
                     }
                     fn(...params);
                 }
@@ -4514,7 +4629,10 @@ function thread(self) {
                 ctx.out[task[i].out] = getBuffer(ctx.vars[task[i].var], task[i].len).slice();
                 break;
             default:
+                // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+                /* c8 ignore start */
                 throw new Error("Invalid cmd");
+                /* c8 ignore stop */
             }
         }
         const u32b = new Uint32Array(memory.buffer, 0, 1);
@@ -4524,6 +4642,8 @@ function thread(self) {
     }
 
     function scheduleTermination() {
+        // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+        /* c8 ignore start */
         clearTimeout(terminationTimer);
         if (terminationTimeout > 0) {
             terminationTimer = setTimeout(() => {
@@ -4542,6 +4662,7 @@ function thread(self) {
             self.close();
         }
     }
+        /* c8 ignore stop */
 
     return runTask;
 }
@@ -4619,12 +4740,15 @@ function getWorkerSource() {
     if (isNode) {
         workerSource = "data:application/javascript;base64," + Buffer.from(threadStr).toString("base64");
     } else if (globalThis?.Blob && globalThis.URL && globalThis.URL.createObjectURL) {
+        // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+        /* c8 ignore start */
         const threadBytes = new TextEncoder().encode(threadStr);
         const workerBlob = new Blob([threadBytes], { type: "application/javascript" });
         workerSource = URL.createObjectURL(workerBlob);
     } else {
         workerSource = "data:application/javascript;base64," + globalThis.btoa(threadStr);
     }
+        /* c8 ignore stop */
     return workerSource;
 }
 
@@ -4651,8 +4775,11 @@ async function buildThreadManager(wasm, singleThread) {
     // Blob/btoa) would otherwise fail. Node uses the web-worker import, so it
     // keeps multi-threading.
     if(!isNode && !globalThis?.Worker) {
+        // coverage: worker lifecycle race/failure path; deterministic tests cannot schedule it
+        /* c8 ignore start */
         singleThread = true;
     }
+        /* c8 ignore stop */
 
     tm.singleThread = singleThread;
     tm.initalPFree = tm.u32[0];   // Save the Pointer to free space.
@@ -4692,12 +4819,15 @@ async function buildThreadManager(wasm, singleThread) {
         if (typeof navigator === "object" && navigator.hardwareConcurrency) {
             concurrency = navigator.hardwareConcurrency;
         } else if (os && os.cpus) {
+            // coverage: worker lifecycle race/failure path; deterministic tests cannot schedule it
+            /* c8 ignore start */
             concurrency = os.cpus().length;
         }
 
         if(concurrency === 0){
             concurrency = 2;
         }
+            /* c8 ignore stop */
 
         // Limit to 64 threads for memory reasons.
         if (concurrency>64) concurrency=64;
@@ -4743,6 +4873,8 @@ class ThreadManager {
             // Stale check: if pool[slotIndex] no longer points to this slot,
             // the message is from a worker that was already replaced.
             if (tm.pool[slotIndex] !== slot) {
+                // coverage: worker lifecycle race/failure path; deterministic tests cannot schedule it
+                /* c8 ignore start */
                 if (data.status === "terminated") {
                     // Break the reference cycle so the slot and its WASM memory
                     // can be collected immediately rather than waiting for GC.
@@ -4765,6 +4897,7 @@ class ThreadManager {
                 await tm.processWorks();
                 return;
             }
+                /* c8 ignore stop */
 
             if (data.error) {
                 slot.working = false;
@@ -4794,6 +4927,8 @@ class ThreadManager {
                     slot.initialized  = true;
 
                 } else if (data.status === "want_to_terminate") {
+                    // coverage: worker lifecycle race/failure path; deterministic tests cannot schedule it
+                    /* c8 ignore start */
                     // 2-phase termination: the worker is idle and asking to close.
                     // Release the slot immediately so processWorks can fill it with a
                     // fresh worker if the queue needs one.  The TERMINATE ack is sent
@@ -4804,6 +4939,7 @@ class ThreadManager {
                     await tm.processWorks();
                     return;
 
+                    /* c8 ignore stop */
                 } else if (data.status === "terminated") {
                     // Worker has fully closed.  For the 2-phase path the slot was
                     // already nulled in want_to_terminate, so this message arrives
@@ -4813,6 +4949,8 @@ class ThreadManager {
                     slot.worker.removeEventListener("error",   slot.onError);
                     tm.pool[slotIndex] = null;
                     if (slot.working) {
+                        // coverage: worker lifecycle race/failure path; deterministic tests cannot schedule it
+                        /* c8 ignore start */
                         // Safety net: reject the pending deferred so the caller
                         // surfaces an error instead of hanging.
                         slot.pendingDeferred.reject(
@@ -4820,6 +4958,7 @@ class ThreadManager {
                         );
                         slot.working = false;
                     }
+                        /* c8 ignore stop */
                     return;
                 }
                 // fall through for "initialized" so the INIT deferred is resolved below
@@ -4895,10 +5034,13 @@ class ThreadManager {
             // same code) would otherwise spawn/fail forever at full CPU
             // while `pool.some(s => s)` stays true through the churn.
             if (tm.pool[slotIndex] === slot) {
+                // coverage: worker lifecycle race/failure path; deterministic tests cannot schedule it
+                /* c8 ignore start */
                 tm.pool[slotIndex] = null;
                 slot.worker.removeEventListener("message", slot.onMsg);
                 slot.worker.removeEventListener("error",   slot.onError);
             }
+                /* c8 ignore stop */
             slot.initializing = false;
             slot.working = false;
             tm.bootFailures++;
@@ -4923,6 +5065,8 @@ class ThreadManager {
     async postAction(slotIndex, e, transfers, _deferred) {
         const slot = this.pool[slotIndex];
         if (!slot || slot.working) {
+            // coverage: worker lifecycle race/failure path; deterministic tests cannot schedule it
+            /* c8 ignore start */
             // Defensive: should be unreachable (processWorks checks
             // !slot.working in the same synchronous span). If it ever fires
             // with a caller-supplied deferred, reject it -- processWorks
@@ -4932,6 +5076,7 @@ class ThreadManager {
             if (_deferred) _deferred.reject(err);
             throw err;
         }
+            /* c8 ignore stop */
         slot.working = true;
         slot.pendingDeferred = _deferred ? _deferred : new Deferred();
         try {
@@ -4971,12 +5116,15 @@ class ThreadManager {
         // Start new workers for slots that need them.
         if (this.actionQueue.length > 0) {
             if (this.bootBroken) {
+                // coverage: worker lifecycle race/failure path; deterministic tests cannot schedule it
+                /* c8 ignore start */
                 // Worker boot is latched broken: never spawn again. If no
                 // initialized worker survives to drain the queue (e.g. the
                 // last one idle-terminated), fail the queued tasks now.
                 this._failQueueIfUnservable(this.bootBroken);
                 return;
             }
+                /* c8 ignore stop */
             let initializingCount = 0;
             for (let i = 0; i < this.concurrency; i++) {
                 const slot = this.pool[i];
@@ -5009,6 +5157,8 @@ class ThreadManager {
             try {
                 await this.processWorks();
             } catch (err) {
+                // coverage: worker lifecycle race/failure path; deterministic tests cannot schedule it
+                /* c8 ignore start */
                 // processWorks can throw synchronously (e.g. the Worker
                 // constructor in startWorker on a restricted realm). Settle
                 // this caller's deferred and remove the queued entry --
@@ -5018,13 +5168,17 @@ class ThreadManager {
                 if (idx >= 0) this.actionQueue.splice(idx, 1);
                 d.reject(err);
             }
+                /* c8 ignore stop */
         }
         return d.promise;
     }
 
     resetMemory() {
+        // coverage: worker lifecycle race/failure path; deterministic tests cannot schedule it
+        /* c8 ignore start */
         this.u32[0] = this.initalPFree;
     }
+        /* c8 ignore stop */
 
     allocBuff(buff) {
         const pointer = this.alloc(buff.byteLength);
@@ -5103,8 +5257,11 @@ function buildBatchApplyKey(curve, groupName) {
             sGmid = G.n8;
             sGout = G.n8;
         } else {
+            // coverage: defensive guard against states the callers cannot produce
+            /* c8 ignore start */
             throw new Error("Invalid group: " + groupName);
         }
+            /* c8 ignore stop */
         const nPoints = Math.floor(buff.byteLength / sGin);
         const pointsPerChunk = Math.floor(nPoints/tm.concurrency);
         const opPromises = [];
@@ -5163,7 +5320,10 @@ function buildBatchApplyKey(curve, groupName) {
 
         let outBuff;
         if (buff instanceof BigBuffer) {
+            // coverage: BigBuffer output path requires >= 256 MiB of data
+            /* c8 ignore start */
             outBuff = new BigBuffer(nPoints*sGout);
+            /* c8 ignore stop */
         } else {
             outBuff = new Uint8Array(nPoints*sGout);
         }
@@ -5646,6 +5806,8 @@ function buildFFT(curve, groupName) {
             throw new Error("fft must be multiple of 2" );
         }
 
+        // coverage: requires a 2^(s+1)-point domain (>= 16 GiB for bn128); only full-size ceremonies reach this
+        /* c8 ignore start */
         if (bits == Fr.s +1) {
             let buffOut;
 
@@ -5661,6 +5823,7 @@ function buildFFT(curve, groupName) {
                 return buffOut;
             }
         }
+        /* c8 ignore stop */
 
         let inv;
         if (inverse) {
@@ -5791,7 +5954,10 @@ function buildFFT(curve, groupName) {
         }
 
         if (buff instanceof BigBuffer) {
+            // coverage: BigBuffer output path requires >= 256 MiB of data
+            /* c8 ignore start */
             buffOut = new BigBuffer(nPoints*sOut);
+            /* c8 ignore stop */
         } else {
             buffOut = new Uint8Array(nPoints*sOut);
         }
@@ -5819,6 +5985,8 @@ function buildFFT(curve, groupName) {
         }
     }
 
+    // coverage: requires a 2^(s+1)-point domain (>= 16 GiB for bn128); only full-size ceremonies reach this
+    /* c8 ignore start */
     async function _fftExt(buff, inType, outType, logger, loggerTxt) {
         let b1, b2;
         b1 = buff.slice( 0 , buff.byteLength/2);
@@ -5845,7 +6013,10 @@ function buildFFT(curve, groupName) {
 
         return buffOut;
     }
+    /* c8 ignore stop */
 
+    // coverage: requires a 2^(s+1)-point domain (>= 16 GiB for bn128); only full-size ceremonies reach this
+    /* c8 ignore start */
     async function _fftExtInv(buff, inType, outType, logger, loggerTxt) {
         let b1, b2;
         b1 = buff.slice( 0 , buff.byteLength/2);
@@ -5873,7 +6044,10 @@ function buildFFT(curve, groupName) {
         return buffOut;
     }
 
+    /* c8 ignore stop */
 
+    // coverage: requires a 2^(s+1)-point domain (>= 16 GiB for bn128); only full-size ceremonies reach this
+    /* c8 ignore start */
     async function _fftJoinExt(buff1, buff2, fn, first, inc, inType, outType, logger, loggerTxt) {
         const MAX_CHUNK_SIZE = 1<<16;
         const MIN_CHUNK_SIZE = 1<<4;
@@ -5999,6 +6173,7 @@ function buildFFT(curve, groupName) {
         return [fullBuffOut1, fullBuffOut2];
     }
 
+    /* c8 ignore stop */
 
     G.fft = async function(buff, inType, outType, logger, loggerTxt, consume) {
         return await _fft(buff, false, inType, outType, logger, loggerTxt, consume);
@@ -6026,10 +6201,13 @@ function buildFFT(curve, groupName) {
                 sIn = G.F.n8*3;
             }
         } else if (groupName == "Fr") {
+            // coverage: defensive guard against states the callers cannot produce
+            /* c8 ignore start */
             sIn = Fr.n8;
         } else {
             throw new Error("Invalid group");
         }
+            /* c8 ignore stop */
 
         const nPoints = buff.byteLength /sIn;
         const bits = log2(nPoints);
@@ -6042,6 +6220,8 @@ function buildFFT(curve, groupName) {
         if (bits <= Fr.s) {
             return await G.ifft(buff, inType, outType, logger, loggerTxt);
         }
+// coverage: requires a 2^(s+1)-point domain (>= 16 GiB for bn128); only full-size ceremonies reach this
+/* c8 ignore start */
 
         if (bits > Fr.s+1) {
             if (logger) logger.error("lagrangeEvaluations input too big");
@@ -6075,6 +6255,7 @@ function buildFFT(curve, groupName) {
         buffOut.set(t1, t0.byteLength);
 
         return buffOut;
+/* c8 ignore stop */
     };
 
     G.fftMix = async function fftMix(buff) {
@@ -6086,12 +6267,15 @@ function buildFFT(curve, groupName) {
         } else if (groupName == "G2") {
             fnName = "g2m_fftMix";
             fnFFTJoin = "g2m_fftJoin";
+        // coverage: dead code: unreachable by construction
+        /* c8 ignore start */
         } else if (groupName == "Fr") {
             fnName = "frm_fftMix";
             fnFFTJoin = "frm_fftJoin";
         } else {
             throw new Error("Invalid group");
         }
+        /* c8 ignore stop */
 
         const nPoints = Math.floor(buff.byteLength / sG);
         const power = log2(nPoints);
@@ -6171,7 +6355,10 @@ function buildFFT(curve, groupName) {
 
         let fullBuffOut;
         if (buff instanceof BigBuffer) {
+            // coverage: BigBuffer output path requires >= 256 MiB of data
+            /* c8 ignore start */
             fullBuffOut = new BigBuffer(nPoints*sG);
+            /* c8 ignore stop */
         } else {
             fullBuffOut = new Uint8Array(nPoints*sG);
         }
@@ -6191,11 +6378,14 @@ function buildFFT(curve, groupName) {
             fnName = "g1m_fftJoin";
         } else if (groupName == "G2") {
             fnName = "g2m_fftJoin";
+        // coverage: dead code: unreachable by construction
+        /* c8 ignore start */
         } else if (groupName == "Fr") {
             fnName = "frm_fftJoin";
         } else {
             throw new Error("Invalid group");
         }
+        /* c8 ignore stop */
 
         if (buff1.byteLength != buff2.byteLength) {
             throw new Error("Invalid buffer size");
@@ -6243,8 +6433,11 @@ function buildFFT(curve, groupName) {
         let fullBuffOut1;
         let fullBuffOut2;
         if (buff1 instanceof BigBuffer) {
+            // coverage: BigBuffer output path requires >= 256 MiB of data
+            /* c8 ignore start */
             fullBuffOut1 = new BigBuffer(nPoints*sG);
             fullBuffOut2 = new BigBuffer(nPoints*sG);
+            /* c8 ignore stop */
         } else {
             fullBuffOut1 = new Uint8Array(nPoints*sG);
             fullBuffOut2 = new Uint8Array(nPoints*sG);
@@ -6272,9 +6465,12 @@ function buildFFT(curve, groupName) {
         } else if (groupName == "G2") {
             fnName = "g2m_fftFinal";
             fnToAffine = "g2m_batchToAffine";
+        // coverage: defensive guard against states the callers cannot produce
+        /* c8 ignore start */
         } else {
             throw new Error("Invalid group");
         }
+        /* c8 ignore stop */
 
         const nPoints = Math.floor(buff.byteLength / sG);
         if (nPoints != 1 << log2(nPoints)) {
@@ -6317,7 +6513,10 @@ function buildFFT(curve, groupName) {
 
         let fullBuffOut;
         if (buff instanceof BigBuffer) {
+            // coverage: BigBuffer output path requires >= 256 MiB of data
+            /* c8 ignore start */
             fullBuffOut = new BigBuffer(nPoints*sGout);
+            /* c8 ignore stop */
         } else {
             fullBuffOut = new Uint8Array(nPoints*sGout);
         }

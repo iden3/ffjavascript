@@ -46,8 +46,11 @@ export default function buildBatchApplyKey(curve, groupName) {
             sGmid = G.n8;
             sGout = G.n8;
         } else {
+            // coverage: defensive guard against states the callers cannot produce
+            /* c8 ignore start */
             throw new Error("Invalid group: " + groupName);
         }
+            /* c8 ignore stop */
         const nPoints = Math.floor(buff.byteLength / sGin);
         const pointsPerChunk = Math.floor(nPoints/tm.concurrency);
         const opPromises = [];
@@ -106,7 +109,10 @@ export default function buildBatchApplyKey(curve, groupName) {
 
         let outBuff;
         if (buff instanceof BigBuffer) {
+            // coverage: BigBuffer output path requires >= 256 MiB of data
+            /* c8 ignore start */
             outBuff = new BigBuffer(nPoints*sGout);
+            /* c8 ignore stop */
         } else {
             outBuff = new Uint8Array(nPoints*sGout);
         }

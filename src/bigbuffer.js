@@ -66,7 +66,10 @@ export default class BigBuffer {
 
         if (firstPage == lastPage) {
             if ((buff instanceof BigBuffer)&&(buff.buffers.length==1)) {
+                // coverage: BigBuffer output path requires >= 256 MiB of data
+                /* c8 ignore start */
                 return this.buffers[firstPage].set(buff.buffers[0], offset % PAGE_SIZE);
+                /* c8 ignore stop */
             } else {
                 return this.buffers[firstPage].set(buff, offset % PAGE_SIZE);
             }

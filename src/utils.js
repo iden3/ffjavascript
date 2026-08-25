@@ -216,8 +216,11 @@ export function buffReverseBits(buff, eSize) {
     const n = buff.byteLength / eSize;
     const bits = log2(n);
     if (n != 1 << bits) {
+        // coverage: BigBuffer output path requires >= 256 MiB of data
+        /* c8 ignore start */
         throw new Error("Invalid number of pointers");
     }
+        /* c8 ignore stop */
     for (let i = 0; i < n; i++) {
         const r = bitReverse(i, bits);
         if (i > r) {

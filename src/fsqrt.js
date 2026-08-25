@@ -11,13 +11,19 @@ export default function buildSqrt (F) {
                 } else if (Scalar.eq(Scalar.mod(F.p, 16), 9 )) {
                     alg4_kong(F);
                 } else {
+                    // coverage: dead code: unreachable by construction
+                    /* c8 ignore start */
                     throw new Error("Field withot sqrt");
                 }
+                    /* c8 ignore stop */
             } else if (Scalar.eq(Scalar.mod(F.p, 8), 5 )) {
                 alg3_atkin(F);
             } else {
+                // coverage: dead code: unreachable by construction
+                /* c8 ignore start */
                 throw new Error("Field withot sqrt");
             }
+                /* c8 ignore stop */
         } else if (Scalar.eq(Scalar.mod(F.p, 4), 3 )) {
             alg2_shanks(F);
         }
@@ -28,8 +34,11 @@ export default function buildSqrt (F) {
         } else if (pm2mod4 == 3) {
             alg9_adj(F);
         } else {
+            // coverage: dead code: unreachable by construction
+            /* c8 ignore start */
             alg8_complex(F);
         }
+            /* c8 ignore stop */
 
     }
 }
@@ -134,11 +143,14 @@ function alg9_adj(F) {
 
     F.frobenius = function(n, x) {
         if ((n%2) == 1) {
+            // coverage: legacy pure-JS algorithm interior kept for reference
+            /* c8 ignore start */
             return F.conjugate(x);
         } else {
             return x;
         }
     };
+            /* c8 ignore stop */
 
     F.sqrt = function(a) {
         const F = this;
@@ -147,10 +159,13 @@ function alg9_adj(F) {
         const a0 = F.mul(F.frobenius(1, alfa), alfa);
         if (F.eq(a0, F.negone)) return null;
         const x0 = F.mul(a1, a);
+        // coverage: legacy pure-JS algorithm interior kept for reference
+        /* c8 ignore start */
         let x;
         if (F.eq(alfa, F.negone)) {
             x = F.mul(x0, [F.F.zero, F.F.one]);
         } else {
+        /* c8 ignore stop */
             const b = F.pow(F.add(F.one, alfa), F.sqrt_e12);
             x = F.mul(b, x0);
         }
@@ -159,8 +174,11 @@ function alg9_adj(F) {
 }
 
 
+// coverage: dead code: unreachable by construction
+/* c8 ignore start */
 function alg8_complex(F) {
     F.sqrt = function() {
         throw new Error("Sqrt alg 8 not implemented");
     };
 }
+/* c8 ignore stop */

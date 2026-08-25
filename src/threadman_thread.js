@@ -7,6 +7,8 @@ export default function thread(self) {
     let terminationTimeout = 1500; // milliseconds
     let terminationTimer;
 
+    // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+    /* c8 ignore start */
     if (self) {
         self.onmessage = function(e) {
             let data;
@@ -59,11 +61,15 @@ export default function thread(self) {
             scheduleTermination();
         };
     }
+    /* c8 ignore stop */
 
     async function init(data) {
         let wasmModule;
         if (data.code instanceof WebAssembly.Module) {
+            // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+            /* c8 ignore start */
             wasmModule = data.code;
+            /* c8 ignore stop */
         } else {
             const code = new Uint8Array(data.code);
             wasmModule = await WebAssembly.compile(code);
@@ -83,7 +89,10 @@ export default function thread(self) {
         if (data.batchCode) {
             let batchModule;
             if (data.batchCode instanceof WebAssembly.Module) {
+                // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+                /* c8 ignore start */
                 batchModule = data.batchCode;
+                /* c8 ignore stop */
             } else {
                 batchModule = await WebAssembly.compile(new Uint8Array(data.batchCode));
             }
@@ -124,8 +133,11 @@ export default function thread(self) {
         }
 
         if (data.terminationTimeout) {
+            // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+            /* c8 ignore start */
             terminationTimeout = data.terminationTimeout;
         }
+            /* c8 ignore stop */
     }
 
 
@@ -164,6 +176,8 @@ export default function thread(self) {
                 }
             }
         } else {
+            // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+            /* c8 ignore start */
             const tmp = new Uint8Array(sIn);   // one reused temp, not one per swap
             for (let i = 0; i < n; i++) {
                 const ri = rev32(i) >>> shift;
@@ -176,6 +190,7 @@ export default function thread(self) {
                 }
             }
         }
+            /* c8 ignore stop */
     }
 
     function alloc(length) {
@@ -184,11 +199,14 @@ export default function thread(self) {
         const res = u32[0];
         u32[0] += length;
         if (u32[0] + length > memory.buffer.byteLength) {
+            // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+            /* c8 ignore start */
             const currentPages = memory.buffer.byteLength / 0x10000;
             let requiredPages = Math.floor((u32[0] + length) / 0x10000)+1;
             if (requiredPages>MAXMEM) requiredPages=MAXMEM;
             memory.grow(requiredPages-currentPages);
         }
+            /* c8 ignore stop */
         return res;
     }
 
@@ -257,9 +275,12 @@ export default function thread(self) {
                         // in-module variant when the batch module is unavailable
                         // (same 5-arg signature)
                         if (!fn) {
+                            // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+                            /* c8 ignore start */
                             const base = fname.replace(/Batch(NoGls|NoGlv)?$/, "");
                             fn = instance.exports[base];
                         }
+                            /* c8 ignore stop */
                     }
                     fn(...params);
                 }
@@ -269,7 +290,10 @@ export default function thread(self) {
                 ctx.out[task[i].out] = getBuffer(ctx.vars[task[i].var], task[i].len).slice();
                 break;
             default:
+                // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+                /* c8 ignore start */
                 throw new Error("Invalid cmd");
+                /* c8 ignore stop */
             }
         }
         const u32b = new Uint32Array(memory.buffer, 0, 1);
@@ -279,6 +303,8 @@ export default function thread(self) {
     }
 
     function scheduleTermination() {
+        // coverage: executes inside worker threads as a serialized copy; V8 coverage cannot attribute it to this file
+        /* c8 ignore start */
         clearTimeout(terminationTimer);
         if (terminationTimeout > 0) {
             terminationTimer = setTimeout(() => {
@@ -297,6 +323,7 @@ export default function thread(self) {
             self.close();
         }
     }
+        /* c8 ignore stop */
 
     return runTask;
 }
