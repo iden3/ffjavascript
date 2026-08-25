@@ -93,6 +93,10 @@ export default class ZqField {
         return (base * this.e(s)) % this.p;
     }
 
+    copy(a) {
+        return a; // field elements are immutable bigints
+    }
+
     square(a) {
         return (a*a) % this.p;
     }

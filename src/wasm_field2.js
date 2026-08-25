@@ -133,7 +133,7 @@ export default class WasmField2 {
             const c2 = this.F.e(a[1], b);
             const res = new Uint8Array(this.F.n8*2);
             res.set(c1);
-            res.set(c2, this.F.n8*2);
+            res.set(c2, this.F.n8);
             return res;
         } else {
             throw new Error("invalid F2");

@@ -107,6 +107,8 @@ export default class WasmField3 {
         return this.op1("_square", a);
     }
 
+    // coverage: dead code: unreachable by construction
+    /* c8 ignore start */
     isSquare(a) {
         return this.op1Bool("_isSquare", a);
     }
@@ -115,6 +117,7 @@ export default class WasmField3 {
         return this.op1("_sqrt", a);
     }
 
+    /* c8 ignore stop */
     exp(a, b) {
         if (!(b instanceof Uint8Array)) {
             b = Scalar.toLEBuff(Scalar.e(b));
@@ -122,7 +125,7 @@ export default class WasmField3 {
         this.tm.setBuff(this.pOp1, a);
         this.tm.setBuff(this.pOp2, b);
         this.tm.instance.exports[this.prefix + "_exp"](this.pOp1, this.pOp2, b.byteLength, this.pOp3);
-        return this.getBuff(this.pOp3, this.n8);
+        return this.tm.getBuff(this.pOp3, this.n8);
     }
 
     e(a, b) {
