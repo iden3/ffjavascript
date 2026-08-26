@@ -80,6 +80,11 @@ export default defineConfig(({ mode }) => {
                         globals: true,
                         testTimeout: 600_000,
                         hookTimeout: 600_000,
+                        // Every suite builds curves with a full worker pool;
+                        // concurrent test files oversubscribe CI runners badly
+                        // enough that large multiexp tests starve past 600s.
+                        // Sequential files, like mocha ran them.
+                        fileParallelism: false,
                     },
                 },
             ],
