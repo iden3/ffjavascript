@@ -96,3 +96,7 @@ if (failed) {
     process.exit(1);
 }
 console.log("SES LOCKDOWN HARNESS PASSED");
+// Exit explicitly: success must not depend on the event loop draining. A
+// single surviving worker handle would otherwise keep this child alive
+// forever, and the parent test's execFileSync would hang with it.
+process.exit(0);

@@ -12,7 +12,7 @@ describe("multiexp crash regressions", function () {
         const harness = path.join(dir, "multiexp", "mid_stream_reader_failure.mjs");
         // throws (failing the test) if the harness exits non-zero; inherit stdio
         // so the harness's OK/FAIL line appears in the mocha output.
-        execFileSync(process.execPath, [harness], { stdio: "inherit" });
+        execFileSync(process.execPath, [harness], { stdio: "inherit", timeout: 120_000, killSignal: "SIGKILL" });
     });
 });
 
@@ -21,18 +21,18 @@ describe("threadman crash regressions", function () {
     it("survives a worker-side task error without crashing the process", () => {
         const dir = path.dirname(fileURLToPath(import.meta.url));
         const harness = path.join(dir, "threadman", "worker_task_error.mjs");
-        execFileSync(process.execPath, [harness], { stdio: "inherit" });
+        execFileSync(process.execPath, [harness], { stdio: "inherit", timeout: 120_000, killSignal: "SIGKILL" });
     });
 
     it("propagates worker errors instead of hanging (INIT failure, dispatch failure, queue stall)", () => {
         const dir = path.dirname(fileURLToPath(import.meta.url));
         const harness = path.join(dir, "threadman", "worker_error_hangs.mjs");
-        execFileSync(process.execPath, [harness], { stdio: "inherit" });
+        execFileSync(process.execPath, [harness], { stdio: "inherit", timeout: 120_000, killSignal: "SIGKILL" });
     });
 
     it("gives up after repeated worker boot failures instead of respawning forever", () => {
         const dir = path.dirname(fileURLToPath(import.meta.url));
         const harness = path.join(dir, "threadman", "boot_failure_melt.mjs");
-        execFileSync(process.execPath, [harness], { stdio: "inherit" });
+        execFileSync(process.execPath, [harness], { stdio: "inherit", timeout: 120_000, killSignal: "SIGKILL" });
     });
 });

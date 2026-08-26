@@ -14,6 +14,6 @@ describe("SES lockdown", function () {
         const harness = path.join(dir, "ses", "lockdown.mjs");
         // throws (failing the test) if the harness exits non-zero; inherit stdio
         // so the harness's ok/FAIL lines appear in the mocha output.
-        execFileSync(process.execPath, [harness], { stdio: "inherit" });
+        execFileSync(process.execPath, [harness], { stdio: "inherit", timeout: 120_000, killSignal: "SIGKILL" });
     });
 });
