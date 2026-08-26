@@ -272,6 +272,10 @@ export class ThreadManager {
                     // message will be stale (pool[slotIndex] !== slot) and ignored.
                     tm.pool[slotIndex] = null;
                     slot.worker.postMessage([{cmd: "TERMINATE"}]);
+                    // Hard-kill as well: on runtimes where self.close() does
+                    // not end the thread (Bun), a recycled worker would
+                    // otherwise linger and keep the process alive at exit.
+                    try { if (typeof slot.worker.terminate === "function") slot.worker.terminate(); } catch (e) { /* already gone */ }
                     await tm.processWorks();
                     return;
 
@@ -415,6 +419,25 @@ export class ThreadManager {
             /* c8 ignore stop */
         slot.working = true;
         slot.pendingDeferred = _deferred ? _deferred : new Deferred();
+        // postMessage's behavior for an already-detached transfer buffer is
+        // version-dependent: newer Node throws a DataCloneError (handled in
+        // the catch below), but Node 20 posts silently and the task would
+        // hang forever. Detect detachment portably before dispatch: a
+        // detached ArrayBuffer reports byteLength 0 and constructing any
+        // view over it throws on every runtime.
+        if (transfers) {
+            for (const t of transfers) {
+                if (t instanceof ArrayBuffer && t.byteLength === 0) {
+                    let detached = false;
+                    try { new Uint8Array(t, 0, 0); } catch (err) { detached = true; }
+                    if (detached) {
+                        slot.working = false;
+                        slot.pendingDeferred.reject(new Error("Task transfer list contains a detached ArrayBuffer"));
+                        return slot.pendingDeferred.promise;
+                    }
+                }
+            }
+        }
         try {
             await slot.worker.postMessage(e, transfers);
         } catch (err) {
@@ -539,9 +562,18 @@ export class ThreadManager {
 
     async terminate() {
         for (let i = 0; i < this.pool.length; i++) {
-            if (this.pool[i]) {
-                this.pool[i].worker.postMessage([{cmd: "TERMINATE"}]);
-            }
+            const slot = this.pool[i];
+            if (!slot) continue;
+            // Graceful first (lets runtimes that honor self.close() flush),
+            // then the API-level kill: self.close() inside a worker does not
+            // end the thread on every runtime -- Bun keeps the process alive
+            // after it, so a prover that terminates its curve would still
+            // hang the process at exit. worker.terminate() is universal
+            // (worker_threads, browsers, Bun).
+            slot.worker.postMessage([{cmd: "TERMINATE"}]);
+            /* c8 ignore next */
+            try { if (typeof slot.worker.terminate === "function") slot.worker.terminate(); } catch (e) { /* already gone */ }
+            this.pool[i] = null;
         }
     }
 
