@@ -54,6 +54,22 @@ class Deferred {
 // Message handlers close over the slot reference so that stale messages
 // from a replaced worker are detected by a simple identity check
 // (tm.pool[i] !== slot).
+// Release the parent event loop's reference on a worker we have already told
+// to die. worker_threads' terminate() is asynchronous, and a thread that
+// fails to wind down (seen rarely on macOS CI: the process then never exits,
+// hanging the prover -- or a vitest fork -- forever) would otherwise keep the
+// process alive. Browser Workers have no unref and never hold a page open;
+// the node web-worker wrapper hides the native thread behind a private
+// symbol, so reach through it when the wrapper itself has no unref.
+function unrefWorker(worker) {
+    /* c8 ignore next */
+    if (typeof worker.unref === "function") { worker.unref(); return; }
+    for (const sym of Object.getOwnPropertySymbols(worker)) {
+        const native = worker[sym];
+        if (native && typeof native.unref === "function") { native.unref(); return; }
+    }
+}
+
 class WorkerSlot {
     constructor(worker) {
         this.worker      = worker; // native Worker thread
@@ -276,6 +292,7 @@ export class ThreadManager {
                     // not end the thread (Bun), a recycled worker would
                     // otherwise linger and keep the process alive at exit.
                     try { if (typeof slot.worker.terminate === "function") slot.worker.terminate(); } catch (e) { /* already gone */ }
+                    unrefWorker(slot.worker);
                     await tm.processWorks();
                     return;
 
@@ -573,6 +590,7 @@ export class ThreadManager {
             slot.worker.postMessage([{cmd: "TERMINATE"}]);
             /* c8 ignore next */
             try { if (typeof slot.worker.terminate === "function") slot.worker.terminate(); } catch (e) { /* already gone */ }
+            unrefWorker(slot.worker);
             this.pool[i] = null;
         }
     }

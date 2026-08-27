@@ -3277,6 +3277,20 @@ var Deferred = class {
 		});
 	}
 };
+function unrefWorker(worker) {
+	/* c8 ignore next */
+	if (typeof worker.unref === "function") {
+		worker.unref();
+		return;
+	}
+	for (const sym of Object.getOwnPropertySymbols(worker)) {
+		const native = worker[sym];
+		if (native && typeof native.unref === "function") {
+			native.unref();
+			return;
+		}
+	}
+}
 var WorkerSlot = class {
 	constructor(worker) {
 		this.worker = worker;
@@ -3651,6 +3665,7 @@ var ThreadManager = class {
 					try {
 						if (typeof slot.worker.terminate === "function") slot.worker.terminate();
 					} catch (e) {}
+					unrefWorker(slot.worker);
 					await tm.processWorks();
 					return;
 				} else if (data.status === "terminated") {
@@ -3846,6 +3861,7 @@ var ThreadManager = class {
 			try {
 				if (typeof slot.worker.terminate === "function") slot.worker.terminate();
 			} catch (e) {}
+			unrefWorker(slot.worker);
 			this.pool[i] = null;
 		}
 	}
