@@ -3859,6 +3859,10 @@ var ThreadManager = class {
 		for (let i = 0; i < this.pool.length; i++) {
 			const slot = this.pool[i];
 			if (!slot) continue;
+			if (slot.working && slot.pendingDeferred) {
+				slot.working = false;
+				slot.pendingDeferred.reject(/* @__PURE__ */ new Error("ThreadManager terminated while a task was in flight"));
+			}
 			slot.worker.postMessage([{ cmd: "TERMINATE" }]);
 			/* c8 ignore next */
 			try {
@@ -3867,6 +3871,8 @@ var ThreadManager = class {
 			unrefWorker(slot.worker);
 			this.pool[i] = null;
 		}
+		const queued = this.actionQueue ? this.actionQueue.splice(0, this.actionQueue.length) : [];
+		for (const work of queued) work.deferred.reject(/* @__PURE__ */ new Error("ThreadManager terminated before the task was dispatched"));
 	}
 };
 //#endregion
@@ -5281,6 +5287,16 @@ function base64ToUint8Array(b64) {
 var curve_bn128 = null;
 async function buildBn128(singleThread, plugins) {
 	if (!singleThread && curve_bn128) return curve_bn128;
+	if (!singleThread) {
+		if (!building_curve_bn128) building_curve_bn128 = _build$1(singleThread, plugins).finally(() => {
+			building_curve_bn128 = null;
+		});
+		return building_curve_bn128;
+	}
+	return _build$1(singleThread, plugins);
+}
+var building_curve_bn128 = null;
+async function _build$1(singleThread, plugins) {
 	let bn128wasm = {};
 	if (!plugins) {
 		bn128wasm.code = base64ToUint8Array(code$2);
@@ -5364,6 +5380,16 @@ var r = "52435875175126190479447740508185965837690552500527637822603658699938581
 var curve_bls12381 = null;
 async function buildBls12381(singleThread, plugins) {
 	if (!singleThread && curve_bls12381) return curve_bls12381;
+	if (!singleThread) {
+		if (!building_curve_bls12381) building_curve_bls12381 = _build(singleThread, plugins).finally(() => {
+			building_curve_bls12381 = null;
+		});
+		return building_curve_bls12381;
+	}
+	return _build(singleThread, plugins);
+}
+var building_curve_bls12381 = null;
+async function _build(singleThread, plugins) {
 	const bls12381wasm = {};
 	if (!plugins) {
 		bls12381wasm.code = base64ToUint8Array(code);

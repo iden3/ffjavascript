@@ -598,6 +598,15 @@ export class ThreadManager {
         for (let i = 0; i < this.pool.length; i++) {
             const slot = this.pool[i];
             if (!slot) continue;
+            if (slot.working && slot.pendingDeferred) {
+                // The curve object is a shared singleton (getCurveFromName
+                // caches it), so terminate() can race a verify/prove in
+                // flight elsewhere. Killing the worker below means the task
+                // result never arrives -- settle the deferred instead of
+                // leaving the caller awaiting forever.
+                slot.working = false;
+                slot.pendingDeferred.reject(new Error("ThreadManager terminated while a task was in flight"));
+            }
             // Graceful first (lets runtimes that honor self.close() flush),
             // then the API-level kill: self.close() inside a worker does not
             // end the thread on every runtime -- Bun keeps the process alive
@@ -609,6 +618,11 @@ export class ThreadManager {
             try { if (typeof slot.worker.terminate === "function") slot.worker.terminate(); } catch (e) { /* already gone */ }
             unrefWorker(slot.worker);
             this.pool[i] = null;
+        }
+        // Nothing can serve queued work anymore either: reject it.
+        const queued = this.actionQueue ? this.actionQueue.splice(0, this.actionQueue.length) : [];
+        for (const work of queued) {
+            work.deferred.reject(new Error("ThreadManager terminated before the task was dispatched"));
         }
     }
 

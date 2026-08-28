@@ -10,6 +10,18 @@ let curve_bn128 = null;
 
 export default async function buildBn128(singleThread, plugins) {
     if ((!singleThread) && (curve_bn128)) return curve_bn128;
+    // Concurrent first builds must share one curve (and one worker
+    // pool): cache the in-flight build promise, not just the result.
+    if (!singleThread) {
+        if (!building_curve_bn128) building_curve_bn128 = _build(singleThread, plugins).finally(() => { building_curve_bn128 = null; });
+        return building_curve_bn128;
+    }
+    return _build(singleThread, plugins);
+}
+
+let building_curve_bn128 = null;
+
+async function _build(singleThread, plugins) {
 
     let bn128wasm = {};
 

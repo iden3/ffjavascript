@@ -10,6 +10,18 @@ let curve_bls12381 = null;
 
 export default async function buildBls12381(singleThread, plugins) {
     if ((!singleThread) && (curve_bls12381)) return curve_bls12381;
+    // Concurrent first builds must share one curve (and one worker
+    // pool): cache the in-flight build promise, not just the result.
+    if (!singleThread) {
+        if (!building_curve_bls12381) building_curve_bls12381 = _build(singleThread, plugins).finally(() => { building_curve_bls12381 = null; });
+        return building_curve_bls12381;
+    }
+    return _build(singleThread, plugins);
+}
+
+let building_curve_bls12381 = null;
+
+async function _build(singleThread, plugins) {
 
     const bls12381wasm = {};
 
