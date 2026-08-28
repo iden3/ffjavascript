@@ -3556,7 +3556,7 @@ function getWorkerSource() {
 	/* c8 ignore stop */
 	return workerSource;
 }
-async function buildThreadManager(wasm, singleThread) {
+async function buildThreadManager(wasm, singleThread, options) {
 	const tm = new ThreadManager();
 	tm.memory = new WebAssembly.Memory({ initial: MEM_SIZE });
 	tm.u8 = new Uint8Array(tm.memory.buffer);
@@ -3582,6 +3582,7 @@ async function buildThreadManager(wasm, singleThread) {
 	tm.batchWasmModule = wasm.batchCode ? await WebAssembly.compile(wasm.batchCode) : void 0;
 	tm.n8f = wasm.n8q;
 	tm.glv = !!wasm.glv;
+	tm.terminationTimeout = options && options.terminationTimeout;
 	if (singleThread) {
 		tm.taskManager = thread();
 		await tm.taskManager([{
@@ -3659,6 +3660,7 @@ var ThreadManager = class {
 					slot.initializing = false;
 					slot.initialized = true;
 				} else if (data.status === "want_to_terminate") {
+					if (slot.working) return;
 					/* c8 ignore start */
 					tm.pool[slotIndex] = null;
 					slot.worker.postMessage([{ cmd: "TERMINATE" }]);
@@ -3717,7 +3719,8 @@ var ThreadManager = class {
 			code: this.wasmModule,
 			batchCode: this.batchWasmModule,
 			n8f: this.n8f,
-			glv: this.glv
+			glv: this.glv,
+			terminationTimeout: this.terminationTimeout
 		}]).then(() => {
 			slot.initialized = true;
 			tm.bootFailures = 0;

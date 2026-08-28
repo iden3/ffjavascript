@@ -106,7 +106,7 @@ function getWorkerSource() {
 
 
 
-export default async function buildThreadManager(wasm, singleThread) {
+export default async function buildThreadManager(wasm, singleThread, options) {
     const tm = new ThreadManager();
 
     tm.memory = new WebAssembly.Memory({initial:MEM_SIZE});
@@ -151,6 +151,9 @@ export default async function buildThreadManager(wasm, singleThread) {
     tm.batchWasmModule = wasm.batchCode ? await WebAssembly.compile(wasm.batchCode) : undefined;
     tm.n8f = wasm.n8q;
     tm.glv = !!wasm.glv;
+    // Worker idle self-termination timeout override (ms). Tests shrink it to
+    // make the idle-request/task-dispatch crossing race deterministic.
+    tm.terminationTimeout = options && options.terminationTimeout;
 
     if (singleThread) {
         tm.taskManager = thread();
@@ -279,6 +282,19 @@ export class ThreadManager {
                     slot.initialized  = true;
 
                 } else if (data.status === "want_to_terminate") {
+                    if (slot.working) {
+                        // A task dispatch crossed the worker's idle request in
+                        // flight. Veto the request by simply not acking: the
+                        // worker only closes on the TERMINATE ack, so it will
+                        // process the crossed task and ask again when idle.
+                        // Tearing down here (with the hard terminate() below)
+                        // killed the worker with the task aboard and its
+                        // deferred never settled -- seen as a chunked-multiexp
+                        // await hanging until the 600s test timeout on slow CI
+                        // runners, where inter-chunk gaps exceed the idle
+                        // timeout. Regression: test/threadman_idle_race.test.js
+                        return;
+                    }
                     // coverage: worker lifecycle race/failure path; deterministic tests cannot schedule it
                     /* c8 ignore start */
                     // 2-phase termination: the worker is idle and asking to close.
@@ -375,6 +391,7 @@ export class ThreadManager {
             batchCode: this.batchWasmModule,
             n8f: this.n8f,
             glv: this.glv,
+            terminationTimeout: this.terminationTimeout,
         }]).then(() => {
             slot.initialized = true;
             tm.bootFailures = 0;
