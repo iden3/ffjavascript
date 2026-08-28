@@ -57,7 +57,14 @@ function alg5_tonelliShanks(F) {
 
     let c0 = F.one;
 
-    while (F.eq(c0, F.one)) {
+    // Random search for a quadratic non-residue: accept only c0 == -1.
+    // pow(c, t) of a residue gives c0 == 1 (retry), of a non-residue -1
+    // (done) -- but c == 0 gives c0 == 0, and the old `c0 != 1` exit
+    // accepted it, leaving sqrt_z = 0: every later sqrt() that entered the
+    // correction loop then spun forever (b stays 0, never reaches 1). On a
+    // tiny field like F(17) random() draws 0 with probability 1/17, which
+    // hung the test suite -- and CI -- at that rate per run.
+    while (!F.eq(c0, F.negone)) {
         const c = F.random();
         F.sqrt_z = F.pow(c, F.sqrt_t);
         c0 = F.pow(F.sqrt_z, 2 ** (F.sqrt_s-1) );

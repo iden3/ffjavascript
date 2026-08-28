@@ -728,7 +728,7 @@ function alg5_tonelliShanks(F) {
 		F.sqrt_t = div(F.sqrt_t, 2);
 	}
 	let c0 = F.one;
-	while (F.eq(c0, F.one)) {
+	while (!F.eq(c0, F.negone)) {
 		const c = F.random();
 		F.sqrt_z = F.pow(c, F.sqrt_t);
 		c0 = F.pow(F.sqrt_z, 2 ** (F.sqrt_s - 1));
