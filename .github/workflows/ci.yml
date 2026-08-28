@@ -32,7 +32,9 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        # timeout guard: a hang here means a real teardown/termination bug
-        # (see the fsqrt c=0 non-residue hang, fixed in d99c27b) and should
-        # fail loudly rather than burn the 6h Actions limit
-        run: timeout 12m npm test
+        # step-level timeout (cross-platform; shell `timeout` does not exist
+        # on the macOS/Windows runners): a hang here means a real
+        # teardown/termination bug (see the fsqrt c=0 hang, d99c27b) and
+        # should fail loudly rather than burn the 6h Actions limit
+        timeout-minutes: 12
+        run: npm test
