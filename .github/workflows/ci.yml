@@ -32,11 +32,7 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        # vitest's forks pool occasionally loses the fork<->main IPC result
-        # message under CPU contention (reproduced locally at ~12% on a
-        # 2-CPU cgroup; fork idle with the file assigned, socket queues
-        # drained, main waiting forever -- killing the fork unblocks it).
-        # Present in vitest 4.1.11 and 5.0.0-rc.2; threads pool is not an
-        # option (the web-worker shim mis-detects worker threads). Until
-        # fixed upstream, bound each attempt and retry once.
-        run: timeout 12m npm test || { echo "::warning::vitest forks-pool IPC hang, retrying once"; timeout 12m npm test; }
+        # timeout guard: a hang here means a real teardown/termination bug
+        # (see the fsqrt c=0 non-residue hang, fixed in d99c27b) and should
+        # fail loudly rather than burn the 6h Actions limit
+        run: timeout 12m npm test
