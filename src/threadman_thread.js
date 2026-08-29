@@ -49,6 +49,25 @@ export default function thread(self) {
                             transfers.push(res[i].buffer);
                         }
                     }
+                    // Hand the task's input buffers back to the main isolate
+                    // too: they were transferred in, and after the task they
+                    // are garbage HERE -- but an idle worker allocates so
+                    // little that its collector may never run, so with large
+                    // streamed workloads (ptau/zkey contribute) they pile up
+                    // as worker external memory. Transferred back (and
+                    // unreferenced by the message), they are plain main-isolate
+                    // garbage, which is collected under normal pressure.
+                    const returned = new Set(transfers);
+                    for (let i=0; i<data.length; i++) {
+                        const b = data[i] ? data[i].buff : undefined;
+                        if ((b instanceof Uint8Array)
+                            && (b.buffer.byteLength > 0)      // not already detached
+                            && (typeof SharedArrayBuffer === "undefined" || !(b.buffer instanceof SharedArrayBuffer))
+                            && (!returned.has(b.buffer))) {
+                            returned.add(b.buffer);
+                            transfers.push(b.buffer);
+                        }
+                    }
                     self.postMessage(res, transfers);
                     if (terminateAfterTask) {
                         terminate();

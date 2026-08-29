@@ -3057,6 +3057,14 @@ function thread(self) {
 				const res = runTask(data);
 				let transfers = [];
 				for (let i = 0; i < res.length; i++) if (res[i] instanceof Uint8Array) transfers.push(res[i].buffer);
+				const returned = new Set(transfers);
+				for (let i = 0; i < data.length; i++) {
+					const b = data[i] ? data[i].buff : void 0;
+					if (b instanceof Uint8Array && b.buffer.byteLength > 0 && (typeof SharedArrayBuffer === "undefined" || !(b.buffer instanceof SharedArrayBuffer)) && !returned.has(b.buffer)) {
+						returned.add(b.buffer);
+						transfers.push(b.buffer);
+					}
+				}
 				self.postMessage(res, transfers);
 				if (terminateAfterTask) terminate();
 			}
