@@ -12,20 +12,35 @@ jobs:
   publish-npm:
     timeout-minutes: 15
     runs-on: ubuntu-latest
+    # id-token is required by npm --provenance (OIDC attestation linking the
+    # tarball to this workflow run); contents stays read-only
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           # no job pushes: never persist the GITHUB_TOKEN into .git/config
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: '20.x'
+          node-version: lts/*
           registry-url: https://registry.npmjs.org/
           cache: 'npm'
       - run: npm ci --ignore-scripts
         timeout-minutes: 10
       - run: npm audit signatures
       - run: npm run build
-      - run: npm publish
+      # Staged publishing (npm CLI >= 11.15): the tarball lands in the
+      # registry staging queue with a provenance attestation, but does NOT
+      # go live -- a maintainer reviews and releases it with 2FA:
+      #   npm stage list
+      #   npm stage approve <stage-id> --otp=<code>
+      # A compromised automation token can therefore stage, never ship.
+      - name: Check npm supports staged publishing
+        run: |
+          npm --version
+          node -e "const [ma,mi]=require('child_process').execSync('npm --version').toString().trim().split('.').map(Number); if (ma < 11 || (ma === 11 && mi < 15)) { console.error('npm >= 11.15 required for npm stage'); process.exit(1); }"
+      - run: npm stage publish --provenance
         env:
           NODE_AUTH_TOKEN: ${{secrets.IDEN3_CIRCOM_NPM_PUBLISH_TOKEN}}
