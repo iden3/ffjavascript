@@ -25,7 +25,7 @@ const browserReplace = replace({
     preventAssignment: true,
     delimiters: ["", ""],
     "process.browser": true,
-    "import Worker from \"web-worker\"": "",
+    "import Worker from \"./nodeworker.js\"": "",
     "thread.toString()": JSON.stringify(thread.toString()),
 });
 

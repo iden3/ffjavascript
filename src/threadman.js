@@ -34,7 +34,7 @@ const MAX_CONSECUTIVE_BOOT_FAILURES = 8;
 
 import thread from "./threadman_thread.js";
 import os from "os";
-import Worker from "web-worker";
+import Worker from "./nodeworker.js";
 
 // Robust Node detection that never throws (unlike `process.browser`, which is a
 // webpack-ism and is undefined under Vite/esbuild/SES).
@@ -58,16 +58,10 @@ class Deferred {
 // to die. worker_threads' terminate() is asynchronous, and a thread that
 // fails to wind down (seen rarely on macOS CI: the process then never exits,
 // hanging the prover -- or a vitest fork -- forever) would otherwise keep the
-// process alive. Browser Workers have no unref and never hold a page open;
-// the node web-worker wrapper hides the native thread behind a private
-// symbol, so reach through it when the wrapper itself has no unref.
+// process alive. The node Worker shim (nodeworker.js) exposes unref
+// directly; browser Workers have none and never hold a page open.
 function unrefWorker(worker) {
-    /* c8 ignore next */
-    if (typeof worker.unref === "function") { worker.unref(); return; }
-    for (const sym of Object.getOwnPropertySymbols(worker)) {
-        const native = worker[sym];
-        if (native && typeof native.unref === "function") { native.unref(); return; }
-    }
+    if (typeof worker.unref === "function") worker.unref();
 }
 
 class WorkerSlot {
@@ -124,7 +118,7 @@ export default async function buildThreadManager(wasm, singleThread, options) {
     // Force single-thread when no Worker is available. Covers SES hardened realms
     // (no Worker, frozen globals) and old/limited browsers, regardless of what
     // the caller requested -- the worker path (and getWorkerSource's
-    // Blob/btoa) would otherwise fail. Node uses the web-worker import, so it
+    // Blob/btoa) would otherwise fail. Node uses the nodeworker.js shim, so it
     // keeps multi-threading.
     if(!isNode && !globalThis?.Worker) {
         // coverage: worker lifecycle race/failure path; deterministic tests cannot schedule it

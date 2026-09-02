@@ -48,9 +48,6 @@
     "url": "https://github.com/iden3/ffjavascript/issues"
   },
   "homepage": "https://github.com/iden3/ffjavascript",
-  "dependencies": {
-    "web-worker": "1.5.0"
-  },
   "optionalDependencies": {
     "wasmbuilder": "0.0.16",
     "wasmcurves": "git+https://github.com/iden3/wasmcurves.git#13d4acc125b794a4e28a5dc1ea99f015d863ec98"

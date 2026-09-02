@@ -3286,18 +3286,7 @@ var Deferred = class {
 	}
 };
 function unrefWorker(worker) {
-	/* c8 ignore next */
-	if (typeof worker.unref === "function") {
-		worker.unref();
-		return;
-	}
-	for (const sym of Object.getOwnPropertySymbols(worker)) {
-		const native = worker[sym];
-		if (native && typeof native.unref === "function") {
-			native.unref();
-			return;
-		}
-	}
+	if (typeof worker.unref === "function") worker.unref();
 }
 var WorkerSlot = class {
 	constructor(worker) {

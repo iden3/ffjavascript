@@ -34,8 +34,7 @@ let crypto = require("crypto");
 crypto = __toESM(crypto, 1);
 let os = require("os");
 os = __toESM(os, 1);
-let web_worker = require("web-worker");
-web_worker = __toESM(web_worker, 1);
+let worker_threads = require("worker_threads");
 //#region src/scalar.js
 var scalar_exports = /* @__PURE__ */ __exportAll({
 	abs: () => abs,
@@ -3276,6 +3275,56 @@ function thread(self) {
 	return runTask;
 }
 //#endregion
+//#region src/nodeworker.js
+var BOOTSTRAP = `
+const { parentPort } = require("worker_threads");
+const self = {
+    onmessage: null,
+    postMessage(msg, transferList) { parentPort.postMessage(msg, transferList); },
+};
+parentPort.on("message", (data) => {
+    if (typeof self.onmessage === "function") self.onmessage({ data });
+});
+`;
+var Worker = class {
+	constructor(url) {
+		const m = /^data:.*?;base64,(.*)$/.exec(String(url));
+		if (!m) throw new Error("nodeworker: only base64 data: URLs are supported");
+		const script = Buffer.from(m[1], "base64").toString("utf8");
+		this._worker = new worker_threads.Worker(BOOTSTRAP + script, {
+			eval: true,
+			execArgv: []
+		});
+		this._wrapped = /* @__PURE__ */ new Map();
+	}
+	addEventListener(type, fn) {
+		let wrapper;
+		if (type === "message") {
+			wrapper = (data) => fn({ data });
+			this._worker.on("message", wrapper);
+		} else if (type === "error") {
+			wrapper = (err) => fn(err);
+			this._worker.on("error", wrapper);
+		} else return;
+		this._wrapped.set(fn, [type, wrapper]);
+	}
+	removeEventListener(type, fn) {
+		const entry = this._wrapped.get(fn);
+		if (!entry || entry[0] !== type) return;
+		this._worker.off(type, entry[1]);
+		this._wrapped.delete(fn);
+	}
+	postMessage(msg, transferList) {
+		this._worker.postMessage(msg, transferList);
+	}
+	terminate() {
+		return this._worker.terminate();
+	}
+	unref() {
+		this._worker.unref();
+	}
+};
+//#endregion
 //#region src/threadman.js
 var MEM_SIZE = 25;
 var MAX_CONSECUTIVE_BOOT_FAILURES = 8;
@@ -3289,18 +3338,7 @@ var Deferred = class {
 	}
 };
 function unrefWorker(worker) {
-	/* c8 ignore next */
-	if (typeof worker.unref === "function") {
-		worker.unref();
-		return;
-	}
-	for (const sym of Object.getOwnPropertySymbols(worker)) {
-		const native = worker[sym];
-		if (native && typeof native.unref === "function") {
-			native.unref();
-			return;
-		}
-	}
+	if (typeof worker.unref === "function") worker.unref();
 }
 var WorkerSlot = class {
 	constructor(worker) {
@@ -3475,7 +3513,7 @@ var ThreadManager = class {
 		};
 	}
 	startWorker(slotIndex) {
-		const nativeWorker = new web_worker.default(getWorkerSource());
+		const nativeWorker = new Worker(getWorkerSource());
 		const slot = new WorkerSlot(nativeWorker);
 		this.pool[slotIndex] = slot;
 		slot.onMsg = this._makeOnMsg(slotIndex, slot);
