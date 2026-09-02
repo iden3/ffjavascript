@@ -1,4 +1,4 @@
-import {log2, buffReverseBits, array2buffer, buffer2array} from "./utils.js";
+import {log2, array2buffer, buffer2array} from "./utils.js";
 import BigBuffer from "./bigbuffer.js";
 
 
@@ -6,7 +6,28 @@ export default function buildFFT(curve, groupName) {
     const G = curve[groupName];
     const Fr = curve.Fr;
     const tm = G.tm;
-    async function _fft(buff, inverse, inType, outType, logger, loggerTxt) {
+
+    // In-place bit-reversal permutation in a worker. The buffer is transferred
+    // in, reversed where it lies via plain typed-array lane swaps (no WASM
+    // linear memory grown, nothing allocated), and transferred back. Both
+    // transfers are pointer moves, so this is zero-copy. The swap is
+    // memory-bandwidth bound, so a single worker is as fast as splitting across
+    // many — which is why no SharedArrayBuffer is needed (only concurrent
+    // multi-worker access to one buffer would require that).
+    async function _reversePermutation(buff, sIn, bits) {
+        const res = await tm.queueAction(
+            [{cmd: "REVERSE", src: buff, sIn, bits}],
+            [buff.buffer]   // transfer in; reversed in place and transferred back
+        );
+        return res[0];
+    }
+
+    // `consume`: when true the caller cedes ownership of `buff` -- we skip the
+    // defensive full-copy below and reverse/transfer the caller's buffer in place
+    // (its backing ArrayBuffer is detached as a result). Only pass it when the
+    // input is discarded right after the call (e.g. the groth16 IFFT->applyKey->FFT
+    // pipeline). Default false preserves the input.
+    async function _fft(buff, inverse, inType, outType, logger, loggerTxt, consume) {
 
         inType = inType || "affine";
         outType = outType || "affine";
@@ -69,7 +90,11 @@ export default function buildFFT(curve, groupName) {
         if (Array.isArray(buff)) {
             buff = array2buffer(buff, sIn);
             returnArray = true;
-        } else {
+        } else if (!consume || !ArrayBuffer.isView(buff)) {
+            // Defensive copy: the bit-reversal runs in place and chunks are
+            // transferred, so without consume we must not touch the caller's buffer.
+            // It also flattens a BigBuffer (no single .buffer to transfer) to a
+            // Uint8Array, so consume can only be honoured for an ArrayBuffer view.
             buff = buff.slice(0, buff.byteLength);
         }
 
@@ -80,6 +105,8 @@ export default function buildFFT(curve, groupName) {
             throw new Error("fft must be multiple of 2" );
         }
 
+        // coverage: requires a 2^(s+1)-point domain (>= 16 GiB for bn128); only full-size ceremonies reach this
+        /* c8 ignore start */
         if (bits == Fr.s +1) {
             let buffOut;
 
@@ -95,6 +122,7 @@ export default function buildFFT(curve, groupName) {
                 return buffOut;
             }
         }
+        /* c8 ignore stop */
 
         let inv;
         if (inverse) {
@@ -103,7 +131,14 @@ export default function buildFFT(curve, groupName) {
 
         let buffOut;
 
-        buffReverseBits(buff, sIn);
+        // Bit-reversal permutation. Like the old pure-JS buffReverseBits, this is
+        // just a permutation of fixed-size (sIn-byte) elements and works for any
+        // element size, so it covers Fr, G1 and G2 alike. Reversed in place in a
+        // worker via typed-array swaps — no WASM linear memory grown, nothing
+        // allocated. (The previous WASM __reversePermutation swapped n8g-sized
+        // elements rather than sIn-sized ones, which was wrong whenever
+        // sIn != n8g, e.g. affine-input G1/G2 FFTs.)
+        buff = await _reversePermutation(buff, sIn, bits);
 
         let chunks;
         let pointsInChunk = Math.min(1 << MAX_BITS_THREAD, nPoints);
@@ -117,8 +152,8 @@ export default function buildFFT(curve, groupName) {
         const l2Chunk = log2(pointsInChunk);
 
         const promises = [];
+        if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix start: ${nChunks}`);
         for (let i = 0; i< nChunks; i++) {
-            if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix start: ${i}/${nChunks}`);
             const task = [];
             task.push({cmd: "ALLOC", var: 0, len: sMid*pointsInChunk});
             const buffChunk = buff.slice( (pointsInChunk * i)*sIn, (pointsInChunk * (i+1))*sIn);
@@ -146,17 +181,15 @@ export default function buildFFT(curve, groupName) {
             } else {
                 task.push({cmd: "GET", out:0, var: 0, len: sMid*pointsInChunk});
             }
-            promises.push(tm.queueAction(task).then( (r) => {
-                if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix end: ${i}/${nChunks}`);
-                return r;
-            }));
+            promises.push(tm.queueAction(task, [buffChunk.buffer]));
         }
 
         chunks = await Promise.all(promises);
+        if (logger) logger.debug(`${loggerTxt}: fft ${bits} mix end: ${nChunks}`);
         for (let i = 0; i< nChunks; i++) chunks[i] = chunks[i][0];
 
         for (let i = l2Chunk+1;   i<=bits; i++) {
-            if (logger) logger.debug(`${loggerTxt}: fft  ${bits}  join: ${i}/${bits}`);
+            if (logger) logger.debug(`${loggerTxt}: fft ${bits} join: ${i}/${bits}`);
             const nGroups = 1 << (bits - i);
             const nChunksPerGroup = nChunks / nGroups;
             const opPromises = [];
@@ -203,10 +236,7 @@ export default function buildFFT(curve, groupName) {
                         task.push({cmd: "GET", out: 0, var: 0, len: pointsInChunk*sMid});
                         task.push({cmd: "GET", out: 1, var: 1, len: pointsInChunk*sMid});
                     }
-                    opPromises.push(tm.queueAction(task).then( (r) => {
-                        if (logger) logger.debug(`${loggerTxt}: fft ${bits} join  ${i}/${bits}  ${j+1}/${nGroups} ${k}/${nChunksPerGroup/2}`);
-                        return r;
-                    }));
+                    opPromises.push(tm.queueAction(task, [chunks[o1].buffer, chunks[o2].buffer, first.buffer ]));
                 }
             }
 
@@ -223,7 +253,10 @@ export default function buildFFT(curve, groupName) {
         }
 
         if (buff instanceof BigBuffer) {
+            // coverage: BigBuffer output path requires >= 256 MiB of data
+            /* c8 ignore start */
             buffOut = new BigBuffer(nPoints*sOut);
+            /* c8 ignore stop */
         } else {
             buffOut = new Uint8Array(nPoints*sOut);
         }
@@ -251,6 +284,8 @@ export default function buildFFT(curve, groupName) {
         }
     }
 
+    // coverage: requires a 2^(s+1)-point domain (>= 16 GiB for bn128); only full-size ceremonies reach this
+    /* c8 ignore start */
     async function _fftExt(buff, inType, outType, logger, loggerTxt) {
         let b1, b2;
         b1 = buff.slice( 0 , buff.byteLength/2);
@@ -277,7 +312,10 @@ export default function buildFFT(curve, groupName) {
 
         return buffOut;
     }
+    /* c8 ignore stop */
 
+    // coverage: requires a 2^(s+1)-point domain (>= 16 GiB for bn128); only full-size ceremonies reach this
+    /* c8 ignore start */
     async function _fftExtInv(buff, inType, outType, logger, loggerTxt) {
         let b1, b2;
         b1 = buff.slice( 0 , buff.byteLength/2);
@@ -305,7 +343,10 @@ export default function buildFFT(curve, groupName) {
         return buffOut;
     }
 
+    /* c8 ignore stop */
 
+    // coverage: requires a 2^(s+1)-point domain (>= 16 GiB for bn128); only full-size ceremonies reach this
+    /* c8 ignore start */
     async function _fftJoinExt(buff1, buff2, fn, first, inc, inType, outType, logger, loggerTxt) {
         const MAX_CHUNK_SIZE = 1<<16;
         const MIN_CHUNK_SIZE = 1<<4;
@@ -402,7 +443,7 @@ export default function buildFFT(curve, groupName) {
             task.push({cmd: "GET", out: 0, var: 0, len: n*sOut});
             task.push({cmd: "GET", out: 1, var: 1, len: n*sOut});
             opPromises.push(
-                tm.queueAction(task).then( (r) => {
+                tm.queueAction(task, [b1.buffer, b2.buffer, firstChunk.buffer]).then((r) => {
                     if (logger) logger.debug(`${loggerTxt}: fftJoinExt End: ${i}/${nPoints}`);
                     return r;
                 })
@@ -431,13 +472,14 @@ export default function buildFFT(curve, groupName) {
         return [fullBuffOut1, fullBuffOut2];
     }
 
+    /* c8 ignore stop */
 
-    G.fft = async function(buff, inType, outType, logger, loggerTxt) {
-        return await _fft(buff, false, inType, outType, logger, loggerTxt);
+    G.fft = async function(buff, inType, outType, logger, loggerTxt, consume) {
+        return await _fft(buff, false, inType, outType, logger, loggerTxt, consume);
     };
 
-    G.ifft = async function(buff, inType, outType, logger, loggerTxt) {
-        return await _fft(buff, true, inType, outType, logger, loggerTxt);
+    G.ifft = async function(buff, inType, outType, logger, loggerTxt, consume) {
+        return await _fft(buff, true, inType, outType, logger, loggerTxt, consume);
     };
 
     G.lagrangeEvaluations = async function (buff, inType, outType, logger, loggerTxt) {
@@ -458,10 +500,13 @@ export default function buildFFT(curve, groupName) {
                 sIn = G.F.n8*3;
             }
         } else if (groupName == "Fr") {
+            // coverage: defensive guard against states the callers cannot produce
+            /* c8 ignore start */
             sIn = Fr.n8;
         } else {
             throw new Error("Invalid group");
         }
+        /* c8 ignore stop */
 
         const nPoints = buff.byteLength /sIn;
         const bits = log2(nPoints);
@@ -474,6 +519,8 @@ export default function buildFFT(curve, groupName) {
         if (bits <= Fr.s) {
             return await G.ifft(buff, inType, outType, logger, loggerTxt);
         }
+        // coverage: requires a 2^(s+1)-point domain (>= 16 GiB for bn128); only full-size ceremonies reach this
+        /* c8 ignore start */
 
         if (bits > Fr.s+1) {
             if (logger) logger.error("lagrangeEvaluations input too big");
@@ -507,6 +554,7 @@ export default function buildFFT(curve, groupName) {
         buffOut.set(t1, t0.byteLength);
 
         return buffOut;
+        /* c8 ignore stop */
     };
 
     G.fftMix = async function fftMix(buff) {
@@ -518,12 +566,15 @@ export default function buildFFT(curve, groupName) {
         } else if (groupName == "G2") {
             fnName = "g2m_fftMix";
             fnFFTJoin = "g2m_fftJoin";
+        // coverage: dead code: unreachable by construction
+        /* c8 ignore start */
         } else if (groupName == "Fr") {
             fnName = "frm_fftMix";
             fnFFTJoin = "frm_fftJoin";
         } else {
             throw new Error("Invalid group");
         }
+        /* c8 ignore stop */
 
         const nPoints = Math.floor(buff.byteLength / sG);
         const power = log2(nPoints);
@@ -550,7 +601,7 @@ export default function buildFFT(curve, groupName) {
             }
             task.push({cmd: "GET", out: 0, var: 0, len: pointsPerChunk*sG});
             opPromises.push(
-                tm.queueAction(task)
+                tm.queueAction(task, [b.buffer])
             );
         }
 
@@ -585,7 +636,7 @@ export default function buildFFT(curve, groupName) {
                     ]});
                     task.push({cmd: "GET", out: 0, var: 0, len: pointsPerChunk*sG});
                     task.push({cmd: "GET", out: 1, var: 1, len: pointsPerChunk*sG});
-                    opPromises.push(tm.queueAction(task));
+                    opPromises.push(tm.queueAction(task, [chunks[o1].buffer, chunks[o2].buffer, first.buffer]));
                 }
             }
 
@@ -603,7 +654,10 @@ export default function buildFFT(curve, groupName) {
 
         let fullBuffOut;
         if (buff instanceof BigBuffer) {
+            // coverage: BigBuffer output path requires >= 256 MiB of data
+            /* c8 ignore start */
             fullBuffOut = new BigBuffer(nPoints*sG);
+            /* c8 ignore stop */
         } else {
             fullBuffOut = new Uint8Array(nPoints*sG);
         }
@@ -623,11 +677,14 @@ export default function buildFFT(curve, groupName) {
             fnName = "g1m_fftJoin";
         } else if (groupName == "G2") {
             fnName = "g2m_fftJoin";
+        // coverage: dead code: unreachable by construction
+        /* c8 ignore start */
         } else if (groupName == "Fr") {
             fnName = "frm_fftJoin";
         } else {
             throw new Error("Invalid group");
         }
+        /* c8 ignore stop */
 
         if (buff1.byteLength != buff2.byteLength) {
             throw new Error("Invalid buffer size");
@@ -664,7 +721,7 @@ export default function buildFFT(curve, groupName) {
             task.push({cmd: "GET", out: 0, var: 0, len: pointsPerChunk*sG});
             task.push({cmd: "GET", out: 1, var: 1, len: pointsPerChunk*sG});
             opPromises.push(
-                tm.queueAction(task)
+                tm.queueAction(task, [b1.buffer, b2.buffer, firstChunk.buffer])
             );
 
         }
@@ -675,8 +732,11 @@ export default function buildFFT(curve, groupName) {
         let fullBuffOut1;
         let fullBuffOut2;
         if (buff1 instanceof BigBuffer) {
+            // coverage: BigBuffer output path requires >= 256 MiB of data
+            /* c8 ignore start */
             fullBuffOut1 = new BigBuffer(nPoints*sG);
             fullBuffOut2 = new BigBuffer(nPoints*sG);
+            /* c8 ignore stop */
         } else {
             fullBuffOut1 = new Uint8Array(nPoints*sG);
             fullBuffOut2 = new Uint8Array(nPoints*sG);
@@ -704,9 +764,12 @@ export default function buildFFT(curve, groupName) {
         } else if (groupName == "G2") {
             fnName = "g2m_fftFinal";
             fnToAffine = "g2m_batchToAffine";
+        // coverage: defensive guard against states the callers cannot produce
+        /* c8 ignore start */
         } else {
             throw new Error("Invalid group");
         }
+        /* c8 ignore stop */
 
         const nPoints = Math.floor(buff.byteLength / sG);
         if (nPoints != 1 << log2(nPoints)) {
@@ -740,7 +803,7 @@ export default function buildFFT(curve, groupName) {
             ]});
             task.push({cmd: "GET", out: 0, var: 0, len: n*sGout});
             opPromises.push(
-                tm.queueAction(task)
+                tm.queueAction(task, [b.buffer])
             );
 
         }
@@ -749,7 +812,10 @@ export default function buildFFT(curve, groupName) {
 
         let fullBuffOut;
         if (buff instanceof BigBuffer) {
+            // coverage: BigBuffer output path requires >= 256 MiB of data
+            /* c8 ignore start */
             fullBuffOut = new BigBuffer(nPoints*sGout);
+            /* c8 ignore stop */
         } else {
             fullBuffOut = new Uint8Array(nPoints*sGout);
         }

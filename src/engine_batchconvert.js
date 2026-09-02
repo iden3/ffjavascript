@@ -29,7 +29,7 @@ export default function buildBatchConvert(tm, fnName, sIn, sOut) {
                 {cmd: "GET", out: 0, var: 1, len:sOut * n},
             ];
             opPromises.push(
-                tm.queueAction(task)
+                tm.queueAction(task, [buffChunk.buffer])
             );
         }
 

@@ -87,10 +87,13 @@ export default class ChaCha {
 
         this.state[12] = (this.state[12] + 1) >>> 0;
         if (this.state[12] != 0) return;
+        // coverage: requires 2^32 rng draws to roll the counter word
+        /* c8 ignore start */
         this.state[13] = (this.state[13] + 1) >>> 0;
         if (this.state[13] != 0) return;
         this.state[14] = (this.state[14] + 1) >>> 0;
         if (this.state[14] != 0) return;
         this.state[15] = (this.state[15] + 1) >>> 0;
+        /* c8 ignore stop */
     }
 }

@@ -101,7 +101,9 @@ export default class WasmCurve {
             }
         } else if (a.byteLength == this.F.n8*2) {
             if (b.byteLength == this.F.n8*3) {
-                return this.op2("_subMixed", b, a);
+                // _subMixed computes (jacobian - affine): swap and negate to
+                // preserve a - b (subtraction is anticommutative)
+                return this.neg(this.op2("_subMixed", b, a));
             } else if (b.byteLength == this.F.n8*2) {
                 return this.op2("_subAffine", a, b);
             } else {

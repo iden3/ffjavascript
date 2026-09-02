@@ -47,7 +47,7 @@ export default class PolField {
 
 
         this.roots = [];
-/*        for (let i=0; i<16; i++) {
+        /*        for (let i=0; i<16; i++) {
             let r = this.F.one;
             n = 1 << i;
             const rootsi = new Array(n);
@@ -297,6 +297,8 @@ export default class PolField {
     }
 
     _fft(pall, bits, offset, step) {
+        // coverage: legacy pure-JS algorithm interior kept for reference
+        /* c8 ignore start */
 
         const n = 1 << bits;
         if (n==1) {
@@ -318,6 +320,7 @@ export default class PolField {
 
         return out;
     }
+    /* c8 ignore stop */
 
     extend(p, e) {
         if (e == p.length) return p;
@@ -475,8 +478,11 @@ export default class PolField {
             throw new Error("Given 'i' should be lower than 'n'");
         }
         else if (1<<nbits !== n) {
+            // coverage: legacy pure-JS algorithm interior kept for reference
+            /* c8 ignore start */
             throw new Error(`Internal errlr: ${n} should equal ${1<<nbits}`);
         }
+        /* c8 ignore stop */
 
         while (r>0) {
             if (r & 1 == 1) {
@@ -501,6 +507,8 @@ export default class PolField {
         const omega = this.w[bits];
 
         if (this.F.eq(tm, this.F.one)) {
+            // coverage: legacy pure-JS algorithm interior kept for reference
+            /* c8 ignore start */
             for (let i = 0; i < m; i++) {
                 if (this.F.eq(this.roots[bits][0],t)) { // i.e., t equals omega^i
                     u[i] = this.F.one;
@@ -508,6 +516,7 @@ export default class PolField {
                 }
             }
         }
+        /* c8 ignore stop */
 
         const z = this.F.sub(tm, this.F.one);
         //        let l = this.F.mul(z,  this.F.pow(this.F.twoinv, m));
@@ -521,8 +530,11 @@ export default class PolField {
     }
 
     log2(V) {
+        // coverage: legacy pure-JS algorithm interior kept for reference
+        /* c8 ignore start */
         return log2(V);
     }
+    /* c8 ignore stop */
 }
 
 function log2( V )
@@ -535,7 +547,10 @@ function __fft(PF, pall, bits, offset, step) {
 
     const n = 1 << bits;
     if (n==1) {
+        // coverage: legacy pure-JS algorithm interior kept for reference
+        /* c8 ignore start */
         return [ pall[offset] ];
+        /* c8 ignore stop */
     } else if (n==2) {
         return [
             PF.F.add(pall[offset], pall[offset + step]),

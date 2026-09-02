@@ -1,4 +1,3 @@
-/* global BigInt */
 import * as Scalar from "./scalar.js";
 import * as futils from "./futils.js";
 import buildSqrt from "./fsqrt.js";
@@ -92,6 +91,10 @@ export default class ZqField {
 
     mulScalar(base, s) {
         return (base * this.e(s)) % this.p;
+    }
+
+    copy(a) {
+        return a; // field elements are immutable bigints
     }
 
     square(a) {

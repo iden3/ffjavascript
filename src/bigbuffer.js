@@ -1,5 +1,8 @@
 
-const PAGE_SIZE = 1<<30;
+// 1 GiB page size: a deliberately conservative, fragmentation-friendly page -- not
+// the engine's max single-buffer length (~8 GiB+), which would defeat paging and
+// risk OOM on the multi-GiB G1/G2 buffers large circuits produce.
+const PAGE_SIZE = 1 << 30;
 
 export default class BigBuffer {
 
@@ -63,7 +66,10 @@ export default class BigBuffer {
 
         if (firstPage == lastPage) {
             if ((buff instanceof BigBuffer)&&(buff.buffers.length==1)) {
+                // coverage: BigBuffer output path requires >= 256 MiB of data
+                /* c8 ignore start */
                 return this.buffers[firstPage].set(buff.buffers[0], offset % PAGE_SIZE);
+                /* c8 ignore stop */
             } else {
                 return this.buffers[firstPage].set(buff, offset % PAGE_SIZE);
             }

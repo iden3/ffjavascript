@@ -249,32 +249,32 @@ export default class F3Field {
     fromRprLE(buff, o) {
         o = o || 0;
         const c0 = this.F.fromRprLE(buff, o);
-        const c1 = this.F.fromRprLE(buff, o+this.n8);
-        const c2 = this.F.fromRprLE(buff, o+this.n8*2);
+        const c1 = this.F.fromRprLE(buff, o+this.F.n8);
+        const c2 = this.F.fromRprLE(buff, o+this.F.n8*2);
         return [c0, c1, c2];
     }
 
     fromRprBE(buff, o) {
         o = o || 0;
         const c2 = this.F.fromRprBE(buff, o);
-        const c1 = this.F.fromRprBE(buff, o+this.n8);
-        const c0 = this.F.fromRprBE(buff, o+this.n8*2);
+        const c1 = this.F.fromRprBE(buff, o+this.F.n8);
+        const c0 = this.F.fromRprBE(buff, o+this.F.n8*2);
         return [c0, c1, c2];
     }
 
     fromRprLEM(buff, o) {
         o = o || 0;
         const c0 = this.F.fromRprLEM(buff, o);
-        const c1 = this.F.fromRprLEM(buff, o+this.n8);
-        const c2 = this.F.fromRprLEM(buff, o+this.n8*2);
+        const c1 = this.F.fromRprLEM(buff, o+this.F.n8);
+        const c2 = this.F.fromRprLEM(buff, o+this.F.n8*2);
         return [c0, c1, c2];
     }
 
     fromRprBEM(buff, o) {
         o = o || 0;
         const c2 = this.F.fromRprBEM(buff, o);
-        const c1 = this.F.fromRprBEM(buff, o+this.n8);
-        const c0 = this.F.fromRprBEM(buff, o+this.n8*2);
+        const c1 = this.F.fromRprBEM(buff, o+this.F.n8);
+        const c0 = this.F.fromRprBEM(buff, o+this.F.n8*2);
         return [c0, c1, c2];
     }
 

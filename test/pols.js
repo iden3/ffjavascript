@@ -1,3 +1,4 @@
+import { assert } from "vitest";
 /*
     Copyright 2018 0kims association.
 
@@ -16,15 +17,9 @@
     You should have received a copy of the GNU General Public License along with
     zksnark JavaScript library. If not, see <https://www.gnu.org/licenses/>.
 */
-
-import * as chai from "chai";
-
 import * as Scalar from "../src/scalar.js";
 import PolField from "../src/polfield.js";
 import ZqField from "../src/f1field.js";
-
-const assert = chai.assert;
-
 const r  = Scalar.fromString("21888242871839275222246405745257275088548364400416034343698204186575808495617");
 
 describe("Polynomial field", () => {
@@ -124,7 +119,7 @@ describe("Polynomial field", () => {
         const d = PF.div(c,b);
 
         assert(PF.eq(a, d));
-    }).timeout(10000);
+    });
     it("Should evaluate and zero", () => {
         const PF = new PolField(new ZqField(r));
         const p = [PF.F.neg(PF.F.e(2)), PF.F.e(1)];

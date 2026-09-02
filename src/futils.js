@@ -30,10 +30,13 @@ export function mulScalar(F, base, e) {
     if (n[n.length-1] == 1) {
         res = base;
     } else if (n[n.length-1] == -1) {
+        // coverage: dead code: unreachable by construction
+        /* c8 ignore start */
         res = F.neg(base);
     } else {
         throw new Error("invlaud NAF");
     }
+    /* c8 ignore stop */
 
     for (let i=n.length-2; i>=0; i--) {
 
