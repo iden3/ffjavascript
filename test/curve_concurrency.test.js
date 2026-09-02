@@ -23,7 +23,7 @@ describe("curve singleton and termination concurrency", function () {
     it("terminate() rejects a task in flight instead of hanging it", async () => {
         const wasm = {
             code: base64ToUint8Array(bn128wasmPrebuilt.code),
-            pq: bn128wasmPrebuilt.pq, pr: bn128wasmPrebuilt.pq,
+            pq: bn128wasmPrebuilt.pq, pr: bn128wasmPrebuilt.pr,
             pG1gen: bn128wasmPrebuilt.pG1gen, pG1zero: bn128wasmPrebuilt.pG1zero,
             pG2gen: bn128wasmPrebuilt.pG2gen, pG2zero: bn128wasmPrebuilt.pG2zero,
             pOneT: bn128wasmPrebuilt.pOneT, n8q: 32,
@@ -49,7 +49,7 @@ describe("curve singleton and termination concurrency", function () {
     it("terminate() rejects queued (undispatched) tasks", async () => {
         const wasm = {
             code: base64ToUint8Array(bn128wasmPrebuilt.code),
-            pq: bn128wasmPrebuilt.pq, pr: bn128wasmPrebuilt.pq,
+            pq: bn128wasmPrebuilt.pq, pr: bn128wasmPrebuilt.pr,
             pG1gen: bn128wasmPrebuilt.pG1gen, pG1zero: bn128wasmPrebuilt.pG1zero,
             pG2gen: bn128wasmPrebuilt.pG2gen, pG2zero: bn128wasmPrebuilt.pG2zero,
             pOneT: bn128wasmPrebuilt.pOneT, n8q: 32,
