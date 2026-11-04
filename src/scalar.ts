@@ -21,14 +21,15 @@ export function fromArray(a: number[], radix: number): bigint {
   let acc = BigInt(0);
   const r = BigInt(radix);
   for (let i = 0; i < a.length; i++) {
-    acc = acc * r + BigInt(a[i]);
+    acc = acc * r + BigInt(a[i]!);
   }
   return acc;
 }
 
 export function bitLength(a: bigint): number {
   const aS = a.toString(16);
-  return (aS.length - 1) * 4 + hexLen[parseInt(aS[0], 16)];
+  const lead = aS[0]!;
+  return (aS.length - 1) * 4 + hexLen[parseInt(lead, 16)]!;
 }
 
 export function isNegative(a: ScalarInput): boolean {

@@ -313,7 +313,7 @@ export default class ZqField {
     const nBytes = (this.bitLength * 2) / 8;
     let res = this.zero;
     for (let i = 0; i < nBytes; i++) {
-      res = (res << BigInt(8)) + BigInt(getRandomBytes(1)[0]);
+      res = (res << BigInt(8)) + BigInt(getRandomBytes(1)[0]!);
     }
     return res % this.p;
   }

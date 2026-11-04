@@ -73,8 +73,8 @@ export default class FFT {
 
     let n = s - 1;
     while (n >= 0) {
-      this.w[n] = this.F.square(this.w[n + 1]);
-      this.wi[n] = this.F.square(this.wi[n + 1]);
+      this.w[n] = this.F.square(this.w[n + 1]!);
+      this.wi[n] = this.F.square(this.wi[n + 1]!);
       n--;
     }
 
@@ -89,7 +89,7 @@ export default class FFT {
       const rootsi = new Array(nroots);
       for (let j = 0; j < nroots; j++) {
         rootsi[j] = r;
-        r = this.F.mul(r, this.w[i]);
+        r = this.F.mul(r, this.w[i]!);
       }
 
       this.roots[i] = rootsi;
@@ -121,7 +121,7 @@ export default class FFT {
     const twoinvm = this.F.inv(this.F.mulScalar(this.F.one, m));
     const resn = new Array(m);
     for (let i = 0; i < m; i++) {
-      resn[i] = this.opMulGF(res[(m - i) % m], twoinvm);
+      resn[i] = this.opMulGF(res[(m - i) % m]!, twoinvm);
     }
 
     return resn;
@@ -141,9 +141,9 @@ function log2(V: number): number {
 function __fft(PF: FFT, pall: bigint[], bits: number, offset: number, step: number): bigint[] {
   const n = 1 << bits;
   if (n == 1) {
-    return [pall[offset]];
+    return [pall[offset]!];
   } else if (n == 2) {
-    return [PF.G.add(pall[offset], pall[offset + step]), PF.G.sub(pall[offset], pall[offset + step])];
+    return [PF.G.add(pall[offset]!, pall[offset + step]!), PF.G.sub(pall[offset]!, pall[offset + step]!)];
   }
 
   const ndiv2 = n >> 1;
@@ -153,8 +153,8 @@ function __fft(PF: FFT, pall: bigint[], bits: number, offset: number, step: numb
   const out = new Array(n);
 
   for (let i = 0; i < ndiv2; i++) {
-    out[i] = PF.G.add(p1[i], PF.opMulGF(p2[i], PF.roots[bits][i]));
-    out[i + ndiv2] = PF.G.sub(p1[i], PF.opMulGF(p2[i], PF.roots[bits][i]));
+    out[i] = PF.G.add(p1[i]!, PF.opMulGF(p2[i]!, PF.roots[bits]![i]!));
+    out[i + ndiv2] = PF.G.sub(p1[i]!, PF.opMulGF(p2[i]!, PF.roots[bits]![i]!));
   }
 
   return out;
