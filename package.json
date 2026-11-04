@@ -16,6 +16,9 @@
     "lint": "vp lint --fix",
     "check": "vp check",
     "typecheck": "tsc --noEmit",
+    "changeset": "changeset",
+    "version-packages": "changeset version && npm install --package-lock-only --ignore-scripts",
+    "release-packages": "changeset publish",
     "prepack": "npm run build",
     "test": "npm run test:node && npm run test:browsers",
     "test:node": "vitest run --config test/configs/node.config.mts --coverage",
@@ -45,6 +48,7 @@
   },
   "devDependencies": {
     "@babel/runtime": "^7.28.6",
+    "@changesets/cli": "^3.0.3",
     "@lavamoat/harden": "^0.8.1",
     "@toruslabs/config": "^5.0.0",
     "@toruslabs/oxlint-config-typescript": "^1.0.0",
