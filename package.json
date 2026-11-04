@@ -62,7 +62,7 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=22.x",
-    "npm": ">=10.x"
+    "node": ">=24.22.0",
+    "npm": ">=12"
   }
 }
