@@ -45,6 +45,7 @@
   },
   "devDependencies": {
     "@babel/runtime": "^7.28.6",
+    "@lavamoat/harden": "^0.8.1",
     "@toruslabs/config": "^5.0.0",
     "@toruslabs/oxlint-config-typescript": "^1.0.0",
     "@toruslabs/torus-scripts": "^9.0.0",
@@ -64,5 +65,16 @@
   "engines": {
     "node": ">=24.22.0",
     "npm": ">=12"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11.17.0",
+      "onFail": "error"
+    }
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": false,
+    "fsevents@2.3.3": false
   }
 }

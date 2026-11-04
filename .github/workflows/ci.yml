@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check dependency hardening
+        run: npx --no-install harden check --package-manager npm --level moderate
+
       - name: Install playwright webkit
         run: npx playwright install-deps webkit
 
