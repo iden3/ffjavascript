@@ -6,12 +6,11 @@ on:
 
 name: Run Tests
 
-permissions:
-  contents: read
-
 jobs:
   test:
     name: run tests
+    permissions:
+      contents: read
     strategy:
       matrix:
         node: ["24.x", "26.x"]
