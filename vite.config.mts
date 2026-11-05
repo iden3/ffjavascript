@@ -15,7 +15,7 @@ export default defineConfig({
       cjs: { outDir: "dist/lib.cjs" },
     },
     outExtensions: () => ({ js: ".js", dts: ".d.ts" }),
-    sourcemap: true,
+    sourcemap: false,
   },
   fmt: formatPreset(),
   lint: {
