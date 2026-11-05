@@ -1,5 +1,4 @@
-// eslint-disable-next-line import/no-unresolved
-import { defineConfig } from "vitest/config";
+import { defineConfig } from "vite-plus/test/config";
 
 export default defineConfig({
   test: {
