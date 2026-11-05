@@ -6,7 +6,7 @@
   "module": "./dist/lib.esm/index.js",
   "unpkg": "./dist/lib.esm/index.js",
   "jsdelivr": "./dist/lib.esm/index.js",
-  "types": "./dist/lib.cjs/types/index.d.ts",
+  "types": "./dist/lib.cjs/index.d.ts",
   "files": [
     "dist"
   ],

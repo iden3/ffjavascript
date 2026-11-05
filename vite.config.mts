@@ -15,7 +15,6 @@ export default defineConfig({
       cjs: { outDir: "dist/lib.cjs" },
     },
     outExtensions: () => ({ js: ".js", dts: ".d.ts" }),
-    copy: [{ from: "dist/lib.cjs/index.d.ts", to: "dist/lib.cjs/types" }],
     sourcemap: true,
   },
   fmt: formatPreset(),
