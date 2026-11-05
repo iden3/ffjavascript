@@ -44,7 +44,6 @@
   },
   "homepage": "https://github.com/MetaMask/ffjs#readme",
   "devDependencies": {
-    "@babel/runtime": "^7.28.6",
     "@changesets/cli": "^3.0.3",
     "@lavamoat/harden": "^0.8.1",
     "@toruslabs/config": "^5.0.0",
